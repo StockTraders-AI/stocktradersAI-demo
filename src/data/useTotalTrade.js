@@ -1,0 +1,166 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const API_URL = "/api/total-trade";
+const CACHE_KEY = "total_trade_data_cache_v1";
+const DEFAULT_REFRESH_MS = 5 * 60_000;
+const CACHE_PERSIST_LIMIT = 45;
+
+let globalCache = null;
+
+function toNumber(value) {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeTicker(ticker) {
+  return ticker ? String(ticker).trim().toUpperCase() : "";
+}
+
+function normalize(reply) {
+  const data = reply?.TotalTradeReply || reply?.TotalTradeRequest || reply || {};
+  const stockTotals = Array.isArray(data.stockTotals) ? data.stockTotals : [];
+  const tickers = [];
+  const matrix = {};
+
+  for (const item of stockTotals) {
+    const ticker = normalizeTicker(item?.ticker || item?.code || item?.symbol);
+    if (!ticker) continue;
+    const row = {};
+    for (const point of item.totalDatas || []) {
+      const date = point?.date;
+      const close = toNumber(point?.close);
+      if (!date || close == null) continue;
+      row[date] = {
+        close,
+        price: close > 1000 ? close : close * 1000,
+        open: toNumber(point?.open),
+        high: toNumber(point?.high),
+        low: toNumber(point?.low),
+        vol: toNumber(point?.vol),
+      };
+    }
+    matrix[ticker] = row;
+    tickers.push({ ticker, type: item?.type || "" });
+  }
+
+  return { tickers: tickers.sort((a, b) => a.ticker.localeCompare(b.ticker)), matrix };
+}
+
+function getCachedData() {
+  if (globalCache) return globalCache;
+  try {
+    const serialized = localStorage.getItem(CACHE_KEY);
+    if (!serialized) return null;
+    const parsed = JSON.parse(serialized);
+    if (parsed?.matrix && parsed?.tickers) {
+      globalCache = {
+        tickers: parsed.tickers,
+        matrix: parsed.matrix,
+        updatedAt: parsed.updatedAt ? new Date(parsed.updatedAt) : null,
+      };
+      return globalCache;
+    }
+  } catch (e) {
+    console.warn("Failed to load TotalTrade cache:", e);
+  }
+  return null;
+}
+
+function setCachedData(data) {
+  const buildPayload = (limit) => {
+    const matrix = {};
+    for (const ticker in data.matrix) {
+      const row = data.matrix[ticker] || {};
+      const dates = Object.keys(row).sort().slice(-limit);
+      matrix[ticker] = {};
+      for (const date of dates) matrix[ticker][date] = row[date];
+    }
+    return JSON.stringify({
+      tickers: data.tickers,
+      matrix,
+      updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
+    });
+  };
+  try {
+    localStorage.setItem(CACHE_KEY, buildPayload(CACHE_PERSIST_LIMIT));
+  } catch (e) {
+    try {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.setItem(CACHE_KEY, buildPayload(12));
+    } catch (retryError) {
+      console.warn("Failed to save TotalTrade cache:", retryError);
+    }
+  }
+}
+
+function getRefreshMs() {
+  const configured = Number(import.meta.env.VITE_TOTAL_TRADE_REFRESH_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
+}
+
+export function useTotalTrade() {
+  const inFlightRef = useRef(null);
+  const cached = getCachedData();
+  const [state, setState] = useState(() => cached ? { tickers: cached.tickers, matrix: cached.matrix } : { tickers: [], matrix: {} });
+  const [status, setStatus] = useState(() => cached ? "ready" : "loading");
+  const [error, setError] = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(() => cached?.updatedAt || null);
+
+  const fetchSnapshot = useCallback(async ({ force = false, background = false } = {}) => {
+    if (inFlightRef.current && !force) return inFlightRef.current;
+
+    const request = (async () => {
+      if (!background) setStatus((s) => s === "ready" ? "ready" : "loading");
+      try {
+        const url = force ? `${API_URL}?fresh=1&_=${Date.now()}` : `${API_URL}?_=${Date.now()}`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const code = (json?.TotalTradeReply || json?.TotalTradeRequest)?.codeReply?.codeID;
+        if (code && code !== "S0000") throw new Error(`API ${code}`);
+
+        const normalized = normalize(json);
+        const now = new Date();
+        const cacheVal = { ...normalized, updatedAt: now };
+        setState(normalized);
+        setUpdatedAt(now);
+        setStatus("ready");
+        setError(null);
+        globalCache = cacheVal;
+        setCachedData(cacheVal);
+      } catch (e) {
+        console.error("TotalTrade Fetch error:", e);
+        const currentCache = getCachedData();
+        if (currentCache) {
+          setError(null);
+          setStatus("ready");
+        } else {
+          setError(e.message || "Lỗi tải dữ liệu");
+          setStatus("error");
+        }
+      } finally {
+        if (inFlightRef.current === request) inFlightRef.current = null;
+      }
+    })();
+
+    inFlightRef.current = request;
+    return request;
+  }, []);
+
+  useEffect(() => {
+    fetchSnapshot({ background: Boolean(cached) });
+    const refresh = () => {
+      if (document.visibilityState === "visible") fetchSnapshot({ background: true });
+    };
+    const timer = window.setInterval(refresh, getRefreshMs());
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [fetchSnapshot]);
+
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }) };
+}
