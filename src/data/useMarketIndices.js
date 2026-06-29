@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const API_URL = "/api/total-trade-real";
 const DEFAULT_REFRESH_MS = 10_000;
+const CACHE_KEY = "market_indices_real_cache_v1";
 
 const INDEX_CONFIG = [
   { name: "VNINDEX", aliases: ["VNINDEX", "VN-INDEX", "VN_INDEX"] },
   { name: "HNX", aliases: ["HNXINDEX", "HNX-INDEX", "HNX_INDEX"] },
   { name: "UPCOM", aliases: ["UPCOM", "UPCOMINDEX", "UPCOM-INDEX", "UPCOM_INDEX"] },
 ];
+
+let globalCache = null;
 
 function toNumber(value) {
   const n = typeof value === "number" ? value : Number(value);
@@ -74,6 +77,36 @@ function normalize(reply) {
   });
 }
 
+function getCachedData() {
+  if (globalCache) return globalCache;
+  try {
+    const serialized = localStorage.getItem(CACHE_KEY);
+    if (!serialized) return null;
+    const parsed = JSON.parse(serialized);
+    if (parsed && Array.isArray(parsed.indices)) {
+      globalCache = {
+        indices: parsed.indices,
+        updatedAt: parsed.updatedAt ? new Date(parsed.updatedAt) : null,
+      };
+      return globalCache;
+    }
+  } catch (error) {
+    console.warn("Failed to load MarketIndices cache:", error);
+  }
+  return null;
+}
+
+function setCachedData(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      indices: data.indices,
+      updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
+    }));
+  } catch (error) {
+    console.warn("Failed to save MarketIndices cache:", error);
+  }
+}
+
 function getRefreshMs() {
   const configured = Number(import.meta.env.VITE_TOTAL_TRADE_REAL_REFRESH_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
@@ -81,12 +114,12 @@ function getRefreshMs() {
 
 export function useMarketIndices() {
   const inFlightRef = useRef(null);
-  const [state, setState] = useState(() => ({
-    indices: INDEX_CONFIG.map(emptyIndex),
-    status: "loading",
-    error: null,
-    updatedAt: null,
-  }));
+  const cached = getCachedData();
+  const [state, setState] = useState(() =>
+    cached
+      ? { indices: cached.indices, status: "ready", error: null, updatedAt: cached.updatedAt }
+      : { indices: INDEX_CONFIG.map(emptyIndex), status: "loading", error: null, updatedAt: null }
+  );
 
   const fetchSnapshot = useCallback(async ({ force = false, background = false } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
@@ -103,18 +136,26 @@ export function useMarketIndices() {
         const code = (json?.TotalTradeRealReply || json?.TotalTradeRealRequest)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 
+        const indices = normalize(json);
+        const updatedAt = new Date();
+        const cacheVal = { indices, updatedAt };
+        globalCache = cacheVal;
+        setCachedData(cacheVal);
+
         setState({
-          indices: normalize(json),
+          indices,
           status: "ready",
           error: null,
-          updatedAt: new Date(),
+          updatedAt,
         });
       } catch (error) {
         console.error("TotalTradeReal Fetch error:", error);
+        const currentCache = getCachedData();
         setState((current) => ({
-          ...current,
-          status: current.status === "ready" ? "ready" : "error",
-          error: error.message || "Lỗi tải dữ liệu realtime",
+          indices: currentCache?.indices || current.indices,
+          updatedAt: currentCache?.updatedAt || current.updatedAt,
+          status: current.status === "ready" || currentCache ? "ready" : "error",
+          error: currentCache ? null : error.message || "Lỗi tải dữ liệu realtime",
         }));
       } finally {
         if (inFlightRef.current === request) inFlightRef.current = null;
@@ -126,7 +167,7 @@ export function useMarketIndices() {
   }, []);
 
   useEffect(() => {
-    fetchSnapshot();
+    fetchSnapshot({ background: Boolean(cached) });
     const refresh = () => {
       if (document.visibilityState === "visible") fetchSnapshot({ background: true });
     };

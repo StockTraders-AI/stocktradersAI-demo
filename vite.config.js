@@ -34,6 +34,17 @@ const API_ACCOUNT = "thao.dtt";
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 const CASH_FLOW_TICKER_REPLY_KEYS = ["CashFlowTickerReply", "CashFlowTickerRequest"];
 const SMDT_TICKER_REPLY_KEYS = ["SMDTTickerReply", "SMDTTickerRequest"];
+const MARKET_INDEX_TICKERS = new Set(["VNINDEX", "HNXINDEX", "UPCOM"]);
+
+function normalizeMarketTicker(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function filterMarketIndexRows(data) {
+  const reply = data?.TotalTradeRealReply || data?.TotalTradeRealRequest || {};
+  const rows = Array.isArray(reply.stockTotalReals) ? reply.stockTotalReals : [];
+  return rows.filter((row) => MARKET_INDEX_TICKERS.has(normalizeMarketTicker(row?.ticker)));
+}
 
 async function fetchStockWaveFromSource() {
   const payload = { StockWaveRequest: { account: API_ACCOUNT } };
@@ -489,14 +500,16 @@ function smdtDevPlugin() {
           const now = Date.now();
 
           try {
-            if (!totalTradeRealDevCache || wantsFresh || now - totalTradeRealDevLastFetched > TOTAL_TRADE_REAL_CACHE_DURATION) {
+            if (!totalTradeRealDevCache || wantsFresh) {
               await refreshTotalTradeRealDevCache();
+            } else if (now - totalTradeRealDevLastFetched > TOTAL_TRADE_REAL_CACHE_DURATION) {
+              refreshTotalTradeRealDevCache();
             }
             const reply = totalTradeRealDevCache?.TotalTradeRealReply || totalTradeRealDevCache?.TotalTradeRealRequest || {};
             const out = {
               TotalTradeRealReply: {
                 codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-                stockTotalReals: Array.isArray(reply.stockTotalReals) ? reply.stockTotalReals : []
+                stockTotalReals: filterMarketIndexRows(totalTradeRealDevCache)
               }
             };
             res.statusCode = 200;

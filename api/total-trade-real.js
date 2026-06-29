@@ -3,6 +3,17 @@ let lastFetched = 0;
 let refreshPromise = null;
 const CACHE_DURATION = 10 * 1000;
 const API_ACCOUNT = "thao.dtt";
+const INDEX_TICKERS = new Set(["VNINDEX", "HNXINDEX", "UPCOM"]);
+
+function normalizeTicker(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function filterIndexRows(data) {
+  const reply = data?.TotalTradeRealReply || data?.TotalTradeRealRequest || {};
+  const stockTotalReals = Array.isArray(reply.stockTotalReals) ? reply.stockTotalReals : [];
+  return stockTotalReals.filter((row) => INDEX_TICKERS.has(normalizeTicker(row?.ticker)));
+}
 
 async function fetchTotalTradeRealFromSource() {
   const response = await fetch("https://stocktraders.vn/service/data/getTotalTradeReal", {
@@ -60,19 +71,21 @@ export default async function handler(req, res) {
   const now = Date.now();
   const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
 
-  if (!serverCache || wantsFresh || now - lastFetched > CACHE_DURATION) {
+  if (!serverCache || wantsFresh) {
     try {
       await refreshCache();
     } catch (error) {
       return res.status(502).json({ error: "Failed to load realtime data from source", details: error.message });
     }
+  } else if (now - lastFetched > CACHE_DURATION) {
+    refreshCache();
   }
 
   const reply = serverCache?.TotalTradeRealReply || serverCache?.TotalTradeRealRequest || {};
   return res.status(200).json({
     TotalTradeRealReply: {
       codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-      stockTotalReals: Array.isArray(reply.stockTotalReals) ? reply.stockTotalReals : [],
+      stockTotalReals: filterIndexRows(serverCache),
     },
   });
 }
