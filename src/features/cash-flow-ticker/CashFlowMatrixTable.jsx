@@ -24,8 +24,10 @@ export function CashFlowMatrixTable({
   groups,
   matrix,
   pageDates,
-  safePage,
+  dateSort,
+  onToggleDateSort,
   activeDate,
+  latestDate,
   branchIndustrySigByDate,
   toggleCollapse,
   visibleTickers,
@@ -35,7 +37,11 @@ export function CashFlowMatrixTable({
       <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: Math.max(640, 150 + colCount * 96) }}>
         <thead>
           <tr>
-            <th rowSpan={2} style={{ ...cashFlowMatrixTh, position: "sticky", left: 0, zIndex: 4, width: 150, textAlign: "left" }}>NGÀY ↓</th>
+            <th rowSpan={2} style={{ ...cashFlowMatrixTh, position: "sticky", left: 0, zIndex: 4, width: 150, textAlign: "left" }}>
+              <button type="button" onClick={onToggleDateSort} title={dateSort === "desc" ? "Last date ở trên cùng" : "Last date ở dưới cùng"} style={dateSortBtn}>
+                NGÀY {dateSort === "desc" ? "↓" : "↑"}
+              </button>
+            </th>
             {groups.map((g) => {
               const collapsed = collapsedInd.has(g.industry);
               return (
@@ -70,7 +76,7 @@ export function CashFlowMatrixTable({
         </thead>
         <tbody>
           {pageDates.map((bucket, di) => {
-            const isLatest = di === 0 && safePage === 1;
+            const isLatest = toDateInputValue(bucket.date) === toDateInputValue(latestDate);
             const isActive = activeDate === toDateInputValue(bucket.date);
             const dateBg = isActive || isLatest ? "var(--elev)" : "var(--surf)";
             return (
@@ -105,3 +111,18 @@ export function CashFlowMatrixTable({
     </div>
   );
 }
+
+const dateSortBtn = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "flex-start",
+  width: "100%",
+  border: "none",
+  background: "transparent",
+  color: "inherit",
+  font: "inherit",
+  fontWeight: 800,
+  cursor: "pointer",
+  padding: 0,
+  textAlign: "left",
+};

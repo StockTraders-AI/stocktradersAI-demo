@@ -65,6 +65,7 @@ export function ModSMDTMa() {
   const [page, setPage] = useState(1);
   const [sessions, setSessions] = useState(12);
   const [selectedDate, setSelectedDate] = useState("");
+  const [dateSort, setDateSort] = useState("desc");
   const [hiddenInd, setHiddenInd] = useState(() => loadSet(HIDDEN_INDUSTRIES_KEY));
   const [collapsedInd, setCollapsedInd] = useState(() => loadSet(COLLAPSED_INDUSTRIES_KEY));
 
@@ -135,7 +136,12 @@ export function ModSMDTMa() {
 
   const totalPages = Math.max(1, Math.ceil(datesDesc.length / sessions));
   const safePage = Math.min(page, totalPages);
-  const pageDates = datesDesc.slice((safePage - 1) * sessions, safePage * sessions);
+  const orderedDates = useMemo(() => dateSort === "desc" ? datesDesc : [...datesDesc].reverse(), [dateSort, datesDesc]);
+  const activeDisplayIndex = useMemo(() => orderedDates.findIndex((date) => toDateInputValue(date) === dateInputValue), [dateInputValue, orderedDates]);
+  const pageStartIndex = selectedDate && activeDisplayIndex >= 0
+    ? dateSort === "desc" ? activeDisplayIndex : Math.max(0, activeDisplayIndex - sessions + 1)
+    : (safePage - 1) * sessions;
+  const pageDates = orderedDates.slice(pageStartIndex, pageStartIndex + sessions);
 
   useEffect(() => {
     if (!industries.length) return;
@@ -161,18 +167,38 @@ export function ModSMDTMa() {
   const goToDate = useCallback((dateValue) => {
     const targetIndex = findDateIndex(datesDesc, dateValue);
     if (targetIndex >= 0) {
-      setSelectedDate(toDateInputValue(datesDesc[targetIndex]));
-      setPage(Math.floor(targetIndex / sessions) + 1);
+      const targetValue = toDateInputValue(datesDesc[targetIndex]);
+      const displayIndex = orderedDates.findIndex((date) => toDateInputValue(date) === targetValue);
+      const startIndex = dateSort === "desc" ? displayIndex : Math.max(0, displayIndex - sessions + 1);
+      setSelectedDate(targetValue);
+      setPage(Math.floor(Math.max(0, startIndex) / sessions) + 1);
     }
-  }, [datesDesc, sessions]);
+  }, [dateSort, datesDesc, orderedDates, sessions]);
 
   const stepDate = useCallback((delta) => {
     if (datesDesc.length === 0) return;
     const currentIndex = activeDateIndex >= 0 ? activeDateIndex : 0;
     const targetIndex = Math.min(Math.max(currentIndex + delta, 0), datesDesc.length - 1);
-    setSelectedDate(toDateInputValue(datesDesc[targetIndex]));
-    setPage(Math.floor(targetIndex / sessions) + 1);
-  }, [activeDateIndex, datesDesc, sessions]);
+    const targetValue = toDateInputValue(datesDesc[targetIndex]);
+    const displayIndex = orderedDates.findIndex((date) => toDateInputValue(date) === targetValue);
+    const startIndex = dateSort === "desc" ? displayIndex : Math.max(0, displayIndex - sessions + 1);
+    setSelectedDate(targetValue);
+    setPage(Math.floor(Math.max(0, startIndex) / sessions) + 1);
+  }, [activeDateIndex, dateSort, datesDesc, orderedDates, sessions]);
+  const changePage = useCallback((nextPage) => {
+    setSelectedDate("");
+    setPage(nextPage);
+  }, []);
+  const toggleDateSort = useCallback(() => {
+    const next = dateSort === "desc" ? "asc" : "desc";
+    const nextOrderedDates = next === "desc" ? datesDesc : [...datesDesc].reverse();
+    const displayIndex = nextOrderedDates.findIndex((date) => toDateInputValue(date) === dateInputValue);
+    const startIndex = selectedDate && displayIndex >= 0
+      ? next === "desc" ? displayIndex : Math.max(0, displayIndex - sessions + 1)
+      : 0;
+    setDateSort(next);
+    setPage(Math.floor(Math.max(0, startIndex) / sessions) + 1);
+  }, [dateInputValue, dateSort, datesDesc, selectedDate, sessions]);
 
   const toggleInd = useCallback((ind) => {
     setHiddenInd((prev) => {
@@ -289,7 +315,7 @@ export function ModSMDTMa() {
         {narrow ? (
           <div style={{ display: "grid", gap: 10, padding: 12 }}>
             {pageDates.map((date, di) => {
-              const isLatest = di === 0 && safePage === 1;
+              const isLatest = toDateInputValue(date) === toDateInputValue(latestDate);
               const isActive = dateInputValue === toDateInputValue(date);
               return (
                 <div key={date} style={{ background: isActive || isLatest ? "var(--elev)" : "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 11, padding: "12px 13px" }}>
@@ -348,7 +374,11 @@ export function ModSMDTMa() {
             <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: Math.max(700, 150 + colCount * 76) }}>
               <thead>
                 <tr>
-                  <th rowSpan={2} style={{ ...cashFlowMatrixTh, position: "sticky", left: 0, zIndex: 4, width: 150, textAlign: "left" }}>NGÀY ↓</th>
+                  <th rowSpan={2} style={{ ...cashFlowMatrixTh, position: "sticky", left: 0, zIndex: 4, width: 150, textAlign: "left" }}>
+                    <button type="button" onClick={toggleDateSort} title={dateSort === "desc" ? "Last date ở trên cùng" : "Last date ở dưới cùng"} style={dateSortBtn}>
+                      NGÀY {dateSort === "desc" ? "↓" : "↑"}
+                    </button>
+                  </th>
                   {groups.map((g) => {
                     const collapsed = collapsedInd.has(g.industry);
                     return (
@@ -383,7 +413,7 @@ export function ModSMDTMa() {
               </thead>
               <tbody>
                 {pageDates.map((date, di) => {
-                  const isLatest = di === 0 && safePage === 1;
+                  const isLatest = toDateInputValue(date) === toDateInputValue(latestDate);
                   const isActive = dateInputValue === toDateInputValue(date);
                   const dateBg = isActive || isLatest ? "var(--elev)" : "var(--surf)";
                   return (
@@ -427,9 +457,24 @@ export function ModSMDTMa() {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <HeatLegend />
-        <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+        <Pagination page={safePage} totalPages={totalPages} onChange={changePage} />
       </div>
       <LiveFooter live={live} updatedAt={updatedAt} extra={`${fmtNum(visibleTickers.length)} / ${fmtNum(tickerPool.length)} mã · ${datesDesc.length}`} />
     </div>
   );
 }
+
+const dateSortBtn = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "flex-start",
+  width: "100%",
+  border: "none",
+  background: "transparent",
+  color: "inherit",
+  font: "inherit",
+  fontWeight: 800,
+  cursor: "pointer",
+  padding: 0,
+  textAlign: "left",
+};

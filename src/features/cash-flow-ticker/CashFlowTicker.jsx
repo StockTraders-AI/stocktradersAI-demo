@@ -93,6 +93,7 @@ export function ModDongTienCP() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [selectedDate, setSelectedDate] = useState("");
+  const [dateSort, setDateSort] = useState("desc");
   const [sessions, setSessions] = useState(12);
   const [hiddenInd, setHiddenInd] = useState(() => loadSet(HIDDEN_INDUSTRIES_KEY));
   const [collapsedInd, setCollapsedInd] = useState(() => loadSet(COLLAPSED_INDUSTRIES_KEY));
@@ -204,7 +205,12 @@ export function ModDongTienCP() {
 
   const totalPages = Math.max(1, Math.ceil(datesDesc.length / sessions));
   const safePage = Math.min(page, totalPages);
-  const pageDates = datesDesc.slice((safePage - 1) * sessions, safePage * sessions);
+  const orderedDates = useMemo(() => dateSort === "desc" ? datesDesc : [...datesDesc].reverse(), [dateSort, datesDesc]);
+  const activeDisplayIndex = useMemo(() => orderedDates.findIndex((bucket) => toDateInputValue(bucket.date) === dateInputValue), [dateInputValue, orderedDates]);
+  const pageStartIndex = selectedDate && activeDisplayIndex >= 0
+    ? dateSort === "desc" ? activeDisplayIndex : Math.max(0, activeDisplayIndex - sessions + 1)
+    : (safePage - 1) * sessions;
+  const pageDates = orderedDates.slice(pageStartIndex, pageStartIndex + sessions);
   const matrix = useMemo(() => {
     const map = {};
     for (const bucket of buckets) {
@@ -239,18 +245,38 @@ export function ModDongTienCP() {
   const goToDate = useCallback((dateValue) => {
     const targetIndex = findDateIndex(datesDesc, dateValue);
     if (targetIndex >= 0) {
-      setSelectedDate(toDateInputValue(datesDesc[targetIndex].date));
-      setPage(Math.floor(targetIndex / sessions) + 1);
+      const targetValue = toDateInputValue(datesDesc[targetIndex].date);
+      const displayIndex = orderedDates.findIndex((bucket) => toDateInputValue(bucket.date) === targetValue);
+      const startIndex = dateSort === "desc" ? displayIndex : Math.max(0, displayIndex - sessions + 1);
+      setSelectedDate(targetValue);
+      setPage(Math.floor(Math.max(0, startIndex) / sessions) + 1);
     }
-  }, [datesDesc, sessions]);
+  }, [dateSort, datesDesc, orderedDates, sessions]);
 
   const stepDate = useCallback((delta) => {
     if (datesDesc.length === 0) return;
     const currentIndex = activeDateIndex >= 0 ? activeDateIndex : 0;
     const targetIndex = Math.min(Math.max(currentIndex + delta, 0), datesDesc.length - 1);
-    setSelectedDate(toDateInputValue(datesDesc[targetIndex].date));
-    setPage(Math.floor(targetIndex / sessions) + 1);
-  }, [activeDateIndex, datesDesc, sessions]);
+    const targetValue = toDateInputValue(datesDesc[targetIndex].date);
+    const displayIndex = orderedDates.findIndex((bucket) => toDateInputValue(bucket.date) === targetValue);
+    const startIndex = dateSort === "desc" ? displayIndex : Math.max(0, displayIndex - sessions + 1);
+    setSelectedDate(targetValue);
+    setPage(Math.floor(Math.max(0, startIndex) / sessions) + 1);
+  }, [activeDateIndex, dateSort, datesDesc, orderedDates, sessions]);
+  const changePage = useCallback((nextPage) => {
+    setSelectedDate("");
+    setPage(nextPage);
+  }, []);
+  const toggleDateSort = useCallback(() => {
+    const next = dateSort === "desc" ? "asc" : "desc";
+    const nextOrderedDates = next === "desc" ? datesDesc : [...datesDesc].reverse();
+    const displayIndex = nextOrderedDates.findIndex((bucket) => toDateInputValue(bucket.date) === dateInputValue);
+    const startIndex = selectedDate && displayIndex >= 0
+      ? next === "desc" ? displayIndex : Math.max(0, displayIndex - sessions + 1)
+      : 0;
+    setDateSort(next);
+    setPage(Math.floor(Math.max(0, startIndex) / sessions) + 1);
+  }, [dateInputValue, dateSort, datesDesc, selectedDate, sessions]);
 
   const toggleInd = useCallback((ind) => {
     setHiddenInd((prev) => {
@@ -389,7 +415,7 @@ export function ModDongTienCP() {
         {narrow ? (
           <div style={{ display: "grid", gap: 10, padding: 12 }}>
             {pageDates.map((bucket, di) => {
-              const isLatest = di === 0 && safePage === 1;
+              const isLatest = toDateInputValue(bucket.date) === toDateInputValue(latestDate);
               const isActive = dateInputValue === toDateInputValue(bucket.date);
               return (
                 <div key={bucket.date} style={{ background: isActive || isLatest ? "var(--elev)" : "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 11, padding: "12px 13px" }}>
@@ -444,8 +470,10 @@ export function ModDongTienCP() {
             groups={groups}
             matrix={matrix}
             pageDates={pageDates}
-            safePage={safePage}
+            dateSort={dateSort}
+            onToggleDateSort={toggleDateSort}
             activeDate={dateInputValue}
+            latestDate={latestDate}
             branchIndustrySigByDate={branchIndustrySigByDate}
             toggleCollapse={toggleCollapse}
             visibleTickers={visibleTickers}
@@ -455,7 +483,7 @@ export function ModDongTienCP() {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <CashFlowLegend />
-        <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+        <Pagination page={safePage} totalPages={totalPages} onChange={changePage} />
       </div>
       <LiveFooter live={live} updatedAt={footerUpdatedAt} extra={`${fmtNum(activeTickers)} / ${fmtNum(tickerPool.length)} mã · ${datesDesc.length} phiên`} />
     </div>
