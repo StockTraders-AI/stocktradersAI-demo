@@ -57,7 +57,7 @@ const pickerActionStyle = {
   letterSpacing: 0,
 };
 
-export function IndustryPicker({ industries, hidden, industrySig, onToggle, onAll, onNone, onShowIndustries, onHideIndustries }) {
+export function IndustryPicker({ industries, hidden, industrySig, onToggle, onAll, onNone, onShowIndustries, onHideIndustries, style, buttonStyle }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
 
@@ -74,10 +74,10 @@ export function IndustryPicker({ industries, hidden, industrySig, onToggle, onAl
   const sections = splitIndustries(industries);
 
   return (
-    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+    <div ref={ref} style={{ position: "relative", flexShrink: 0, ...style }}>
       <button
         onClick={() => setOpen((o) => !o)}
-        style={{ minHeight: 30, display: "inline-flex", alignItems: "center", gap: 7, padding: "0 14px", borderRadius: 15, background: open ? "var(--Bs)" : "var(--surf)", border: `1px solid ${open ? "var(--Bb)" : "var(--bdr)"}`, color: "var(--B)", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}
+        style={{ minHeight: 30, display: "inline-flex", alignItems: "center", gap: 7, padding: "0 14px", borderRadius: 15, background: open ? "var(--Bs)" : "var(--surf)", border: `1px solid ${open ? "var(--Bb)" : "var(--bdr)"}`, color: "var(--B)", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", ...buttonStyle }}
       >
         <i className="ti ti-stack-2" style={{ fontSize: 14 }} />
         {selected} / {industries.length} ngành
