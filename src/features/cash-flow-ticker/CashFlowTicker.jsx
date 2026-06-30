@@ -403,12 +403,6 @@ export function ModDongTienCP() {
           active={filter}
           onChange={setFilter}
         />
-        <button
-          onClick={exportExcel}
-          style={{ marginLeft: narrow ? 0 : "auto", height: 32, padding: "0 12px", borderRadius: 9, background: "var(--B)", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}
-        >
-          <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} />Xuất Excel
-        </button>
       </div>
 
       <Card noPad>

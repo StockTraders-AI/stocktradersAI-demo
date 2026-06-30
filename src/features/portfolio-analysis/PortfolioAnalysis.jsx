@@ -133,11 +133,10 @@ function calcSignal(row) {
 }
 
 function calcEval(row) {
-  const buy = row.signal === "MUA";
-  const tickerIn = isPositiveSig(row.tickerSig);
-  const branchIn = isPositiveSig(row.branchSig);
-  if (buy && tickerIn && branchIn) return "DS_DN";
-  if (buy && tickerIn && !branchIn) return "DS_SN";
+  const branchOk = isPositiveSig(row.branchSig) && Number.isFinite(row.branchSmdt) && row.branchSmdt > 70;
+  const tickerOk = isPositiveSig(row.tickerSig) && Number.isFinite(row.smdt) && row.smdt > 70;
+  if (tickerOk && branchOk) return "DS_DN";
+  if (tickerOk && !branchOk) return "DS_SN";
   return "SS";
 }
 
