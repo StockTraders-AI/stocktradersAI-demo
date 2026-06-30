@@ -10,7 +10,7 @@ import { useCashFlowBranch, useRealtimeCashFlowFeed, contentToSig } from "../../
 import { useBranchPath } from "../../data/useBranchPath";
 import { useTotalTrade } from "../../data/useTotalTrade";
 import { Card, CardHeader, Pagination, Banner, LiveFooter } from "../../components/ui";
-import { SMDTSearchPill, SMDTToolbarPill, linkBtn } from "../../components/ui/ModuleControls";
+import { DateSessionSelect, SMDTSearchPill, SMDTToolbarPill, linkBtn } from "../../components/ui/ModuleControls";
 import { IndustryPicker } from "../cash-flow-ticker/IndustryPicker";
 import { CfBadge } from "../cash-flow-ticker/CfBadge";
 
@@ -436,8 +436,6 @@ export function ModTopMaManh() {
   const activeSmdtDate = activeDateIndex >= 0 ? datesDesc[activeDateIndex] : latestSmdtDate;
   const prevSmdtDate = activeDateIndex >= 0 ? datesDesc[activeDateIndex + 1] || "" : "";
   const prev2SmdtDate = activeDateIndex >= 0 ? datesDesc[activeDateIndex + 2] || "" : "";
-  const minDate = toDateInputValue(datesDesc[datesDesc.length - 1]);
-  const maxDate = toDateInputValue(latestSmdtDate);
   const dateInputValue = toDateInputValue(activeSmdtDate);
   const canGoNewer = activeDateIndex > 0;
   const canGoOlder = activeDateIndex >= 0 && activeDateIndex < datesDesc.length - 1;
@@ -674,19 +672,7 @@ export function ModTopMaManh() {
               >
                 <i className="ti ti-chevron-left" style={{ fontSize: 14 }} />
               </button>
-              <label style={{ cursor: "pointer", position: "relative", display: "inline-flex", alignItems: "center", gap: 5, minWidth: 96, justifyContent: "center" }}>
-                <i className="ti ti-calendar" style={{ fontSize: 13, color: "var(--t4)" }} />
-                {dateInputValue ? fmtFull(dateInputValue) : "—"}
-                <input
-                  type="date"
-                  value={dateInputValue}
-                  min={minDate}
-                  max={maxDate}
-                  onChange={(e) => goToDate(e.target.value)}
-                  onClick={(e) => e.currentTarget.showPicker?.()}
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
-                />
-              </label>
+              <DateSessionSelect value={dateInputValue} dates={datesDesc} onChange={goToDate} />
               <button
                 type="button"
                 onClick={() => stepDate(-1)}

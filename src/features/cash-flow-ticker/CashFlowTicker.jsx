@@ -5,7 +5,7 @@ import { useBranchPath } from "../../data/useBranchPath";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtFull, fmtNum } from "../../app/formatters";
 import { Card, Pagination, Banner, LiveFooter } from "../../components/ui";
-import { SMDTToolbarPill, SMDTSearchPill, InlineFilterChips, linkBtn } from "../../components/ui/ModuleControls";
+import { DateSessionSelect, SMDTToolbarPill, SMDTSearchPill, InlineFilterChips, linkBtn } from "../../components/ui/ModuleControls";
 import { CashFlowMatrixTable } from "./CashFlowMatrixTable";
 import { CfBadge } from "./CfBadge";
 import { IndustryPicker } from "./IndustryPicker";
@@ -123,8 +123,6 @@ export function ModDongTienCP() {
   const activeDateIndex = useMemo(() => findDateIndex(datesDesc, activeDateValue), [datesDesc, activeDateValue]);
   const activeBucket = activeDateIndex >= 0 ? datesDesc[activeDateIndex] : latest;
   const activeRows = activeBucket?.rows || rows;
-  const minDate = toDateInputValue(datesDesc[datesDesc.length - 1]?.date);
-  const maxDate = toDateInputValue(datesDesc[0]?.date || latestDate);
   const dateInputValue = toDateInputValue(activeBucket?.date || latestDate);
   const canGoNewer = activeDateIndex > 0;
   const canGoOlder = activeDateIndex >= 0 && activeDateIndex < datesDesc.length - 1;
@@ -335,7 +333,7 @@ export function ModDongTienCP() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {/* Thanh công cụ + bộ lọc */}
-      <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: narrow ? "wrap" : "nowrap", overflow: "visible", paddingBottom: 2 }}>
+      <div style={narrow ? { display: "grid", gridTemplateColumns: "minmax(102px, 1fr) minmax(124px, 1.08fr) minmax(72px, .72fr)", alignItems: "center", gap: 6, overflow: "visible", paddingBottom: 2 } : { display: "flex", alignItems: "center", gap: 7, flexWrap: "nowrap", overflow: "visible", paddingBottom: 2 }}>
         <IndustryPicker
           industries={industries}
           hidden={hiddenInd}
@@ -345,45 +343,35 @@ export function ModDongTienCP() {
           onNone={clearAllInd}
           onShowIndustries={showIndustries}
           onHideIndustries={hideIndustries}
+          style={narrow ? { width: "100%", minWidth: 0 } : undefined}
+          buttonStyle={narrow ? { width: "100%", minWidth: 0, justifyContent: "center", gap: 5, padding: "0 8px", overflow: "hidden" } : undefined}
         />
-        <SMDTToolbarPill style={{ gap: 3, padding: "0 6px", flexShrink: 0 }}>
+        <SMDTToolbarPill style={narrow ? { width: "100%", minWidth: 0, gap: 2, padding: "0 4px", flexShrink: 1, justifyContent: "center" } : { gap: 3, padding: "0 6px", flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => stepDate(1)}
             disabled={!canGoOlder}
             title="Lùi 1 phiên"
-            style={{ width: 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoOlder ? "var(--t2)" : "var(--t4)", cursor: canGoOlder ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+            style={{ width: narrow ? 16 : 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoOlder ? "var(--t2)" : "var(--t4)", cursor: canGoOlder ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}
           >
             <i className="ti ti-chevron-left" style={{ fontSize: 14 }} />
           </button>
-          <label style={{ cursor: "pointer", position: "relative", display: "inline-flex", alignItems: "center", gap: 5, minWidth: 96, justifyContent: "center" }}>
-            <i className="ti ti-calendar" style={{ fontSize: 13, color: "var(--t4)" }} />
-            {dateInputValue ? fmtFull(dateInputValue) : "—"}
-            <input
-              type="date"
-              value={dateInputValue}
-              min={minDate}
-              max={maxDate}
-              onChange={(e) => goToDate(e.target.value)}
-              onClick={(e) => e.currentTarget.showPicker?.()}
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
-            />
-          </label>
+          <DateSessionSelect value={dateInputValue} dates={datesDesc.map((bucket) => bucket.date)} onChange={goToDate} buttonStyle={narrow ? { minWidth: 74, gap: 4, fontSize: 11 } : undefined} />
           <button
             type="button"
             onClick={() => stepDate(-1)}
             disabled={!canGoNewer}
             title="Tiến 1 phiên"
-            style={{ width: 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoNewer ? "var(--t2)" : "var(--t4)", cursor: canGoNewer ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+            style={{ width: narrow ? 16 : 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoNewer ? "var(--t2)" : "var(--t4)", cursor: canGoNewer ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}
           >
             <i className="ti ti-chevron-right" style={{ fontSize: 14 }} />
           </button>
         </SMDTToolbarPill>
-        <SMDTToolbarPill as="label" style={{ cursor: "pointer", padding: "0 10px", flexShrink: 0 }}>
+        <SMDTToolbarPill as="label" style={narrow ? { width: "100%", minWidth: 0, cursor: "pointer", padding: "0 8px", flexShrink: 1, justifyContent: "center", gap: 4 } : { cursor: "pointer", padding: "0 10px", flexShrink: 0 }}>
           <select
             value={sessions}
             onChange={(e) => { setSessions(Number(e.target.value)); setPage(1); setSelectedDate(""); }}
-            style={{ border: "none", outline: "none", background: "transparent", color: "var(--t2)", font: "inherit", fontWeight: 700, cursor: "pointer", appearance: "none", padding: 0 }}
+            style={{ minWidth: 0, border: "none", outline: "none", background: "transparent", color: "var(--t2)", font: "inherit", fontWeight: 700, cursor: "pointer", appearance: "none", padding: 0 }}
           >
             {[12, 25, 50].map((n) => (
               <option key={n} value={n} style={{ background: "var(--surf)", color: "var(--t1)" }}>{n} phiên</option>
@@ -391,7 +379,7 @@ export function ModDongTienCP() {
           </select>
           <i className="ti ti-chevron-down" style={{ fontSize: 12, color: "var(--t4)" }} />
         </SMDTToolbarPill>
-        <SMDTSearchPill placeholder="Tìm mã..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: narrow ? "100%" : 118, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
+        <SMDTSearchPill placeholder="Tìm mã..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ gridColumn: narrow ? "1 / -1" : undefined, width: narrow ? "100%" : 118, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
         <InlineFilterChips
           options={[
             { id: "all", label: "Tất cả" },
@@ -402,6 +390,8 @@ export function ModDongTienCP() {
           ]}
           active={filter}
           onChange={setFilter}
+          style={narrow ? { gridColumn: "1 / -1", width: "100%", display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6, flexWrap: "nowrap" } : undefined}
+          buttonStyle={narrow ? { width: "100%", minWidth: 0, height: 32, padding: "0 6px", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis" } : undefined}
         />
       </div>
 
