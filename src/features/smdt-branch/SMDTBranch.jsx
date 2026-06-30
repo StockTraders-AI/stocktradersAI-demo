@@ -4,7 +4,7 @@ import { useSMDT, useRealtimeFeed } from "../../data/useSMDT";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtDay, fmtFull, fmtNum } from "../../app/formatters";
 import { Card, Pagination, HM, Banner, LiveFooter } from "../../components/ui";
-import { HeatLegend, SMDTToolbarPill, SMDTSearchPill, linkBtn } from "../../components/ui/ModuleControls";
+import { DateSessionSelect, HeatLegend, SMDTToolbarPill, SMDTSearchPill, linkBtn } from "../../components/ui/ModuleControls";
 import { IndustryPicker } from "../cash-flow-ticker/IndustryPicker";
 import { cashFlowMatrixDateTd, cashFlowMatrixTd, cashFlowMatrixTh } from "../cash-flow-ticker/cashFlowUtils";
 
@@ -79,8 +79,6 @@ export function ModSMDTNganh() {
   const activeDateValue = selectedDate || toDateInputValue(latestDate);
   const activeDateIndex = useMemo(() => findDateIndex(datesDesc, activeDateValue), [datesDesc, activeDateValue]);
   const activeDate = activeDateIndex >= 0 ? datesDesc[activeDateIndex] : latestDate;
-  const minDate = toDateInputValue(datesDesc[datesDesc.length - 1]);
-  const maxDate = toDateInputValue(latestDate);
   const dateInputValue = toDateInputValue(activeDate);
   const canGoNewer = activeDateIndex > 0;
   const canGoOlder = activeDateIndex >= 0 && activeDateIndex < datesDesc.length - 1;
@@ -174,7 +172,7 @@ export function ModSMDTNganh() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: narrow ? "wrap" : "nowrap", overflow: "visible", paddingBottom: 2 }}>
+      <div style={narrow ? { display: "grid", gridTemplateColumns: "minmax(102px, 1fr) minmax(124px, 1.08fr) minmax(72px, .72fr)", alignItems: "center", gap: 6, overflow: "visible", paddingBottom: 2 } : { display: "flex", alignItems: "center", gap: 7, flexWrap: "nowrap", overflow: "visible", paddingBottom: 2 }}>
         <IndustryPicker
           industries={industries}
           hidden={hiddenInd}
@@ -184,41 +182,31 @@ export function ModSMDTNganh() {
           onNone={clearAllInd}
           onShowIndustries={showIndustries}
           onHideIndustries={hideIndustries}
+          style={narrow ? { width: "100%", minWidth: 0 } : undefined}
+          buttonStyle={narrow ? { width: "100%", minWidth: 0, justifyContent: "center", gap: 5, padding: "0 8px", overflow: "hidden" } : undefined}
         />
-        <SMDTToolbarPill style={{ gap: 3, padding: "0 6px", flexShrink: 0 }}>
+        <SMDTToolbarPill style={narrow ? { width: "100%", minWidth: 0, gap: 2, padding: "0 4px", flexShrink: 1, justifyContent: "center" } : { gap: 3, padding: "0 6px", flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => stepDate(1)}
             disabled={!canGoOlder}
             title="Lùi 1 phiên"
-            style={{ width: 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoOlder ? "var(--t2)" : "var(--t4)", cursor: canGoOlder ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+            style={{ width: narrow ? 16 : 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoOlder ? "var(--t2)" : "var(--t4)", cursor: canGoOlder ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}
           >
             <i className="ti ti-chevron-left" style={{ fontSize: 14 }} />
           </button>
-          <label style={{ cursor: "pointer", position: "relative", display: "inline-flex", alignItems: "center", gap: 5, minWidth: 96, justifyContent: "center" }}>
-            <i className="ti ti-calendar" style={{ fontSize: 13, color: "var(--t4)" }} />
-            {dateInputValue ? fmtFull(dateInputValue) : "—"}
-            <input
-              type="date"
-              value={dateInputValue}
-              min={minDate}
-              max={maxDate}
-              onChange={(e) => goToDate(e.target.value)}
-              onClick={(e) => e.currentTarget.showPicker?.()}
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
-            />
-          </label>
+          <DateSessionSelect value={dateInputValue} dates={datesDesc} onChange={goToDate} buttonStyle={narrow ? { minWidth: 74, gap: 4, fontSize: 11 } : undefined} />
           <button
             type="button"
             onClick={() => stepDate(-1)}
             disabled={!canGoNewer}
             title="Tiến 1 phiên"
-            style={{ width: 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoNewer ? "var(--t2)" : "var(--t4)", cursor: canGoNewer ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+            style={{ width: narrow ? 16 : 18, height: 22, border: "none", borderRadius: 6, background: "transparent", color: canGoNewer ? "var(--t2)" : "var(--t4)", cursor: canGoNewer ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}
           >
             <i className="ti ti-chevron-right" style={{ fontSize: 14 }} />
           </button>
         </SMDTToolbarPill>
-        <SMDTToolbarPill as="label" style={{ cursor: "pointer", padding: "0 10px", flexShrink: 0 }}>
+        <SMDTToolbarPill as="label" style={narrow ? { width: "100%", minWidth: 0, cursor: "pointer", padding: "0 8px", flexShrink: 1, justifyContent: "center", gap: 4 } : { cursor: "pointer", padding: "0 10px", flexShrink: 0 }}>
           <select
             value={sessions}
             onChange={(e) => {
@@ -226,7 +214,7 @@ export function ModSMDTNganh() {
               setPage(1);
               setSelectedDate("");
             }}
-            style={{ border: "none", outline: "none", background: "transparent", color: "var(--t2)", font: "inherit", fontWeight: 700, cursor: "pointer", appearance: "none", padding: 0 }}
+            style={{ minWidth: 0, border: "none", outline: "none", background: "transparent", color: "var(--t2)", font: "inherit", fontWeight: 700, cursor: "pointer", appearance: "none", padding: 0 }}
           >
             {SMDT_SESSION_OPTIONS.map((n) => (
               <option key={n} value={n} style={{ background: "var(--surf)", color: "var(--t1)" }}>
@@ -236,7 +224,7 @@ export function ModSMDTNganh() {
           </select>
           <i className="ti ti-chevron-down" style={{ fontSize: 12, color: "var(--t4)" }} />
         </SMDTToolbarPill>
-        <SMDTSearchPill placeholder="Tìm ngành..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: narrow ? "100%" : 150, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
+        <SMDTSearchPill placeholder="Tìm ngành..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ gridColumn: narrow ? "1 / -1" : undefined, width: narrow ? "100%" : 150, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
       </div>
 
       {status === "loading" && !datesDesc.length && <Banner>Đang tải dữ liệu…</Banner>}

@@ -12,7 +12,7 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
  *   trỏ tới Realtime Core.
  * ─────────────────────────────────────────────────────────────────────── */
 
-const API_URL = "/api/smdt?limit=150";
+const API_URL = "/api/smdt?limit=500";
 const DEFAULT_REFRESH_MS = 15_000;
 
 function getRefreshMs() {
