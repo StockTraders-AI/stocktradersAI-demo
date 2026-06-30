@@ -715,13 +715,6 @@ export function ModTopMaManh() {
             />
             <StatusDropdown status={status} counts={statusCounts} onChange={(v) => { setStatus(v); setPage(1); }} />
             <SMDTSearchPill placeholder="Tìm mã/ngành..." value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} style={{ width: 150, padding: "0 10px", flexShrink: 0 }} />
-            <button
-              type="button"
-              onClick={exportCsv}
-              style={{ marginLeft: "auto", height: 32, padding: "0 12px", borderRadius: 9, background: "var(--B)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}
-            >
-              <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} />Xuất
-            </button>
           </div>
 
           {(hiddenInd.size > 0 || branchSigs.size < SIGS.length || tickerSigs.size < SIGS.length || status !== "all" || query) && (
