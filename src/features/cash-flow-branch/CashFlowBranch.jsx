@@ -248,12 +248,6 @@ export function ModDongTienNganh() {
           <i className="ti ti-chevron-down" style={{ fontSize: 12, color: "var(--t4)" }} />
         </SMDTToolbarPill>
         <SMDTSearchPill placeholder="Tìm ngành..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: narrow ? "100%" : 150, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
-        <button
-          onClick={exportExcel}
-          style={{ marginLeft: narrow ? 0 : "auto", height: 32, padding: "0 12px", borderRadius: 9, background: "var(--B)", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}
-        >
-          <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} />Xuất Excel
-        </button>
       </div>
 
       {status === "loading" && !datesDesc.length && <Banner>Đang tải dữ liệu…</Banner>}
