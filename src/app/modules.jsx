@@ -6,6 +6,8 @@ import { ModSMDTMa } from "../features/smdt-ticker/SMDTTicker";
 import { ModTopMaManh } from "../features/top-strong-tickers/TopStrongTickers";
 import { ModDongTienTT } from "../features/market-flow/MarketFlow";
 import { ModPhanTichDanhMuc } from "../features/portfolio-analysis/PortfolioAnalysis";
+import Timeline from "../features/timeline/Timeline";
+import { ModDoSong } from "../features/wave/ModDoSong";
 
 /* ─────────────────────────── MODULE REGISTRY ───────────────────────────
  * Mỗi module: tiêu đề + phụ đề cho topbar, render qua <ModuleView>.
@@ -24,7 +26,7 @@ export const MODULES = {
 };
 
 export const SIDEBAR_GROUPS = {
-  industry: ["dong-tien-nganh", "smdt-nganh"],
+  industry: ["dong-tien-nganh", "smdt-nganh", "lo-trinh-dan-song"],
   stocks: ["dong-tien-cp", "smdt-ma", "top-ma-manh"],
   portfolio: ["portfolio-analysis"],
 };
@@ -37,14 +39,27 @@ export const BOTTOM_TABS = [
 
 export function ModuleView({ id }) {
   switch (id) {
-    case "dashboard":       return <ModDashboard />;
-    case "smdt-nganh":      return <ModSMDTNganh />;
-    case "dong-tien-nganh": return <ModDongTienNganh />;
-    case "dong-tien-cp":    return <ModDongTienCP />;
-    case "smdt-ma":         return <ModSMDTMa />;
-    case "top-ma-manh":     return <ModTopMaManh />;
-    case "portfolio-analysis": return <ModPhanTichDanhMuc />;
-    case "dong-tien-tt":    return <ModDongTienTT />;
-    default:                return <ModDashboard />;
+    case "dashboard":
+      return <ModDashboard />;
+    case "do-song":
+      return <ModDoSong />;
+    case "smdt-nganh":
+      return <ModSMDTNganh />;
+    case "lo-trinh-dan-song":
+      return <Timeline />;
+    case "dong-tien-nganh":
+      return <ModDongTienNganh />;
+    case "dong-tien-cp":
+      return <ModDongTienCP />;
+    case "smdt-ma":
+      return <ModSMDTMa />;
+    case "top-ma-manh":
+      return <ModTopMaManh />;
+    case "portfolio-analysis":
+      return <ModPhanTichDanhMuc />;
+    case "dong-tien-tt":
+      return <ModDongTienTT />;
+    default:
+      return <ModDashboard />;
   }
 }

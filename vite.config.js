@@ -32,28 +32,40 @@ const TOTAL_TRADE_REAL_CACHE_DURATION = 10 * 1000;
 const CACHE_DURATION = 3 * 1000; // Realtime là đường chính; proxy chỉ phục vụ snapshot ban đầu + lưới dự phòng, giữ ngắn để tươi.
 const API_ACCOUNT = "thao.dtt";
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
-const CASH_FLOW_TICKER_REPLY_KEYS = ["CashFlowTickerReply", "CashFlowTickerRequest"];
+const CASH_FLOW_TICKER_REPLY_KEYS = [
+  "CashFlowTickerReply",
+  "CashFlowTickerRequest",
+];
 const SMDT_TICKER_REPLY_KEYS = ["SMDTTickerReply", "SMDTTickerRequest"];
 const MARKET_INDEX_TICKERS = new Set(["VNINDEX", "HNXINDEX", "UPCOM"]);
 
 function normalizeMarketTicker(value) {
-  return String(value || "").trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 }
 
 function filterMarketIndexRows(data) {
   const reply = data?.TotalTradeRealReply || data?.TotalTradeRealRequest || {};
-  const rows = Array.isArray(reply.stockTotalReals) ? reply.stockTotalReals : [];
-  return rows.filter((row) => MARKET_INDEX_TICKERS.has(normalizeMarketTicker(row?.ticker)));
+  const rows = Array.isArray(reply.stockTotalReals)
+    ? reply.stockTotalReals
+    : [];
+  return rows.filter((row) =>
+    MARKET_INDEX_TICKERS.has(normalizeMarketTicker(row?.ticker)),
+  );
 }
 
 async function fetchStockWaveFromSource() {
   const payload = { StockWaveRequest: { account: API_ACCOUNT } };
 
-  const response = await fetch("https://stocktraders.vn/service/data/getStockWave", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  const response = await fetch(
+    "https://stocktraders.vn/service/data/getStockWave",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const data = await response.json();
@@ -61,7 +73,8 @@ async function fetchStockWaveFromSource() {
   const code = reply?.codeReply?.codeID;
   const waveDatas = reply?.stockWaves?.waveDatas;
   if (code && code !== "S0000") throw new Error(`API response code ${code}`);
-  if (!Array.isArray(waveDatas)) throw new Error("API response missing waveDatas");
+  if (!Array.isArray(waveDatas))
+    throw new Error("API response missing waveDatas");
   return data;
 }
 
@@ -87,11 +100,16 @@ async function refreshCashFlowTickerDevCache() {
   if (cashFlowTickerDevRefreshPromise) return cashFlowTickerDevRefreshPromise;
 
   cashFlowTickerDevRefreshPromise = (async () => {
-    const response = await fetch("https://stocktraders.vn/service/data/getCashFlowTicker", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ CashFlowTickerRequest: { account: API_ACCOUNT } })
-    });
+    const response = await fetch(
+      "https://stocktraders.vn/service/data/getCashFlowTicker",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          CashFlowTickerRequest: { account: API_ACCOUNT },
+        }),
+      },
+    );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     const reply = getCashFlowTickerReply(data);
@@ -114,37 +132,47 @@ async function refreshCashFlowTickerDevCache() {
 }
 
 async function fetchTotalTradeFromSource() {
-  const response = await fetch("https://stocktraders.vn/service/data/getTotalTrade", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ TotalTradeRequest: { account: API_ACCOUNT } })
-  });
+  const response = await fetch(
+    "https://stocktraders.vn/service/data/getTotalTrade",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ TotalTradeRequest: { account: API_ACCOUNT } }),
+    },
+  );
   if (!response.ok) throw new Error(`TotalTrade HTTP ${response.status}`);
 
   const data = await response.json();
   const reply = data?.TotalTradeReply || data?.TotalTradeRequest || {};
   const code = reply?.codeReply?.codeID;
   const stockTotals = reply?.stockTotals;
-  if (code && code !== "S0000") throw new Error(`TotalTrade API response code ${code}`);
-  if (!Array.isArray(stockTotals)) throw new Error("TotalTrade API response missing stockTotals");
+  if (code && code !== "S0000")
+    throw new Error(`TotalTrade API response code ${code}`);
+  if (!Array.isArray(stockTotals))
+    throw new Error("TotalTrade API response missing stockTotals");
 
   return data;
 }
 
 async function fetchTotalTradeRealFromSource() {
-  const response = await fetch("https://stocktraders.vn/service/data/getTotalTradeReal", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ TotalTradeRealRequest: { account: API_ACCOUNT } })
-  });
+  const response = await fetch(
+    "https://stocktraders.vn/service/data/getTotalTradeReal",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ TotalTradeRealRequest: { account: API_ACCOUNT } }),
+    },
+  );
   if (!response.ok) throw new Error(`TotalTradeReal HTTP ${response.status}`);
 
   const data = await response.json();
   const reply = data?.TotalTradeRealReply || data?.TotalTradeRealRequest || {};
   const code = reply?.codeReply?.codeID;
   const stockTotalReals = reply?.stockTotalReals;
-  if (code && code !== "S0000") throw new Error(`TotalTradeReal API response code ${code}`);
-  if (!Array.isArray(stockTotalReals)) throw new Error("TotalTradeReal API response missing stockTotalReals");
+  if (code && code !== "S0000")
+    throw new Error(`TotalTradeReal API response code ${code}`);
+  if (!Array.isArray(stockTotalReals))
+    throw new Error("TotalTradeReal API response missing stockTotalReals");
 
   return data;
 }
@@ -160,7 +188,8 @@ async function fetchTotalTradeTickersFromSource() {
 }
 
 async function refreshTotalTradeTickersDevCache() {
-  if (totalTradeTickerDevRefreshPromise) return totalTradeTickerDevRefreshPromise;
+  if (totalTradeTickerDevRefreshPromise)
+    return totalTradeTickerDevRefreshPromise;
 
   totalTradeTickerDevRefreshPromise = fetchTotalTradeTickersFromSource()
     .then((tickers) => {
@@ -179,9 +208,16 @@ async function refreshTotalTradeTickersDevCache() {
   return totalTradeTickerDevRefreshPromise;
 }
 
-async function getTotalTradeTickers({ fresh = false, waitForInitial = false } = {}) {
+async function getTotalTradeTickers({
+  fresh = false,
+  waitForInitial = false,
+} = {}) {
   const now = Date.now();
-  if (!fresh && totalTradeTickerDevCache && (now - totalTradeTickerDevLastFetched <= TOTAL_TRADE_CACHE_DURATION)) {
+  if (
+    !fresh &&
+    totalTradeTickerDevCache &&
+    now - totalTradeTickerDevLastFetched <= TOTAL_TRADE_CACHE_DURATION
+  ) {
     return totalTradeTickerDevCache;
   }
 
@@ -240,11 +276,15 @@ function filterCashTickerDatas(datas, allowedTickerSet) {
   return datas
     .filter((item) => {
       const ticker = item?.ticker || item?.code || item?.symbol;
-      return ticker && allowedTickerSet.has(String(ticker).trim().toUpperCase());
+      return (
+        ticker && allowedTickerSet.has(String(ticker).trim().toUpperCase())
+      );
     })
     .map((item) => {
       const ticker = item?.ticker || item?.code || item?.symbol;
-      const normalizedTicker = String(ticker || "").trim().toUpperCase();
+      const normalizedTicker = String(ticker || "")
+        .trim()
+        .toUpperCase();
       return { ...item, ticker: normalizedTicker };
     });
 }
@@ -252,10 +292,16 @@ function filterCashTickerDatas(datas, allowedTickerSet) {
 function filterCashFlowTickerBucket(bucket, allowedTickerSet) {
   const filtered = { ...bucket };
   if (Array.isArray(bucket?.cashTickerDatas)) {
-    filtered.cashTickerDatas = filterCashTickerDatas(bucket.cashTickerDatas, allowedTickerSet);
+    filtered.cashTickerDatas = filterCashTickerDatas(
+      bucket.cashTickerDatas,
+      allowedTickerSet,
+    );
   }
   if (Array.isArray(bucket?.cashFlowTickerDatas)) {
-    filtered.cashFlowTickerDatas = filterCashTickerDatas(bucket.cashFlowTickerDatas, allowedTickerSet);
+    filtered.cashFlowTickerDatas = filterCashTickerDatas(
+      bucket.cashFlowTickerDatas,
+      allowedTickerSet,
+    );
   }
   return filtered;
 }
@@ -286,18 +332,27 @@ function smdtDevPlugin() {
           }
 
           const now = Date.now();
-          if (!smdtTickerDevCache || (now - smdtTickerDevLastFetched > CACHE_DURATION)) {
+          if (
+            !smdtTickerDevCache ||
+            now - smdtTickerDevLastFetched > CACHE_DURATION
+          ) {
             try {
-              const response = await fetch("https://stocktraders.vn/service/data/getSMDTTicker", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ SMDTTickerRequest: { account: API_ACCOUNT } })
-              });
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getSMDTTicker",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    SMDTTickerRequest: { account: API_ACCOUNT },
+                  }),
+                },
+              );
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const data = await response.json();
               const reply = getSMDTTickerReply(data);
               const code = reply?.codeReply?.codeID;
-              if (code && code !== "S0000") throw new Error(`API response code ${code}`);
+              if (code && code !== "S0000")
+                throw new Error(`API response code ${code}`);
               smdtTickerDevCache = data;
               smdtTickerDevLastFetched = now;
             } catch (err) {
@@ -312,17 +367,24 @@ function smdtDevPlugin() {
           }
 
           try {
-            const replyKey = SMDT_TICKER_REPLY_KEYS.find((key) => smdtTickerDevCache?.[key]) || "SMDTTickerReply";
+            const replyKey =
+              SMDT_TICKER_REPLY_KEYS.find((key) => smdtTickerDevCache?.[key]) ||
+              "SMDTTickerReply";
             const reply = getSMDTTickerReply(smdtTickerDevCache) || {};
             const datas = Array.isArray(reply.SMDTDatas) ? reply.SMDTDatas : [];
             const out = {
               [replyKey]: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
                 SMDTDatas: datas.map((item) => ({
                   ...item,
-                  smdts: Array.isArray(item.smdts) ? item.smdts.slice(-limit) : []
-                }))
-              }
+                  smdts: Array.isArray(item.smdts)
+                    ? item.smdts.slice(-limit)
+                    : [],
+                })),
+              },
             };
 
             res.statusCode = 200;
@@ -344,13 +406,18 @@ function smdtDevPlugin() {
           }
 
           const now = Date.now();
-          if (!devCache || (now - devLastFetched > CACHE_DURATION)) {
+          if (!devCache || now - devLastFetched > CACHE_DURATION) {
             try {
-              const response = await fetch("https://stocktraders.vn/service/data/getSMDTBranch", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ SMDTBranchRequest: { account: API_ACCOUNT } })
-              });
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getSMDTBranch",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    SMDTBranchRequest: { account: API_ACCOUNT },
+                  }),
+                },
+              );
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const data = await response.json();
               devCache = data;
@@ -368,7 +435,7 @@ function smdtDevPlugin() {
 
           try {
             const originalDatas = devCache?.SMDTBranchReply?.SMDTDatas || [];
-            const slicedDatas = originalDatas.map(branch => {
+            const slicedDatas = originalDatas.map((branch) => {
               const originalSmdts = branch.smdts || [];
               const slicedSmdts = originalSmdts.slice(-limit);
               return { ...branch, smdts: slicedSmdts };
@@ -376,9 +443,12 @@ function smdtDevPlugin() {
 
             const reply = {
               SMDTBranchReply: {
-                codeReply: devCache?.SMDTBranchReply?.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-                SMDTDatas: slicedDatas
-              }
+                codeReply: devCache?.SMDTBranchReply?.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
+                SMDTDatas: slicedDatas,
+              },
             };
 
             res.statusCode = 200;
@@ -400,7 +470,10 @@ function smdtDevPlugin() {
           }
 
           const now = Date.now();
-          if (!stockWaveDevCache || (now - stockWaveDevLastFetched > CACHE_DURATION)) {
+          if (
+            !stockWaveDevCache ||
+            now - stockWaveDevLastFetched > CACHE_DURATION
+          ) {
             try {
               stockWaveDevCache = await fetchStockWaveFromSource();
               stockWaveDevLastFetched = now;
@@ -416,18 +489,25 @@ function smdtDevPlugin() {
           }
 
           try {
-            const replyKey = STOCK_WAVE_REPLY_KEYS.find((key) => stockWaveDevCache?.[key]) || "StockWaveReply";
+            const replyKey =
+              STOCK_WAVE_REPLY_KEYS.find((key) => stockWaveDevCache?.[key]) ||
+              "StockWaveReply";
             const stockWaveReply = getStockWaveReply(stockWaveDevCache) || {};
             const stockWaves = stockWaveReply.stockWaves || {};
-            const waveDatas = Array.isArray(stockWaves.waveDatas) ? stockWaves.waveDatas : [];
+            const waveDatas = Array.isArray(stockWaves.waveDatas)
+              ? stockWaves.waveDatas
+              : [];
             const reply = {
               [replyKey]: {
-                codeReply: stockWaveReply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
+                codeReply: stockWaveReply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
                 stockWaves: {
                   ...stockWaves,
-                  waveDatas: waveDatas.slice(-limit)
-                }
-              }
+                  waveDatas: waveDatas.slice(-limit),
+                },
+              },
             };
 
             res.statusCode = 200;
@@ -449,13 +529,21 @@ function smdtDevPlugin() {
           }
 
           const now = Date.now();
-          if (!cashFlowDevCache || (now - cashFlowDevLastFetched > CACHE_DURATION)) {
+          if (
+            !cashFlowDevCache ||
+            now - cashFlowDevLastFetched > CACHE_DURATION
+          ) {
             try {
-              const response = await fetch("https://stocktraders.vn/service/data/getCashFlowBranch", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ CashFlowBranchRequest: { account: API_ACCOUNT } })
-              });
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getCashFlowBranch",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    CashFlowBranchRequest: { account: API_ACCOUNT },
+                  }),
+                },
+              );
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const data = await response.json();
               cashFlowDevCache = data;
@@ -473,15 +561,20 @@ function smdtDevPlugin() {
 
           try {
             const reply = cashFlowDevCache?.CashFlowBranchReply || {};
-            const originalBuckets = Array.isArray(reply.cashFlowBranchs) ? reply.cashFlowBranchs : [];
+            const originalBuckets = Array.isArray(reply.cashFlowBranchs)
+              ? reply.cashFlowBranchs
+              : [];
             // Mỗi bucket là 1 phiên (ngày); slice giữ `limit` phiên gần nhất.
             const slicedBuckets = originalBuckets.slice(-limit);
 
             const out = {
               CashFlowBranchReply: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-                cashFlowBranchs: slicedBuckets
-              }
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
+                cashFlowBranchs: slicedBuckets,
+              },
             };
 
             res.statusCode = 200;
@@ -496,21 +589,32 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/total-trade-real")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const wantsFresh = parsedUrl.searchParams.get("fresh") === "1" || parsedUrl.searchParams.get("fresh") === "true";
+          const wantsFresh =
+            parsedUrl.searchParams.get("fresh") === "1" ||
+            parsedUrl.searchParams.get("fresh") === "true";
           const now = Date.now();
 
           try {
             if (!totalTradeRealDevCache || wantsFresh) {
               await refreshTotalTradeRealDevCache();
-            } else if (now - totalTradeRealDevLastFetched > TOTAL_TRADE_REAL_CACHE_DURATION) {
+            } else if (
+              now - totalTradeRealDevLastFetched >
+              TOTAL_TRADE_REAL_CACHE_DURATION
+            ) {
               refreshTotalTradeRealDevCache();
             }
-            const reply = totalTradeRealDevCache?.TotalTradeRealReply || totalTradeRealDevCache?.TotalTradeRealRequest || {};
+            const reply =
+              totalTradeRealDevCache?.TotalTradeRealReply ||
+              totalTradeRealDevCache?.TotalTradeRealRequest ||
+              {};
             const out = {
               TotalTradeRealReply: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-                stockTotalReals: filterMarketIndexRows(totalTradeRealDevCache)
-              }
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
+                stockTotalReals: filterMarketIndexRows(totalTradeRealDevCache),
+              },
             };
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
@@ -524,23 +628,42 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/total-trade")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const wantsFresh = parsedUrl.searchParams.get("fresh") === "1" || parsedUrl.searchParams.get("fresh") === "true";
+          const wantsFresh =
+            parsedUrl.searchParams.get("fresh") === "1" ||
+            parsedUrl.searchParams.get("fresh") === "true";
           const now = Date.now();
 
           try {
-            if (!totalTradeDevCache || wantsFresh || now - totalTradeDevLastFetched > TOTAL_TRADE_CACHE_DURATION) {
+            if (
+              !totalTradeDevCache ||
+              wantsFresh ||
+              now - totalTradeDevLastFetched > TOTAL_TRADE_CACHE_DURATION
+            ) {
               await refreshTotalTradeDevCache();
             }
-            const reply = totalTradeDevCache?.TotalTradeReply || totalTradeDevCache?.TotalTradeRequest || {};
+            const reply =
+              totalTradeDevCache?.TotalTradeReply ||
+              totalTradeDevCache?.TotalTradeRequest ||
+              {};
             const out = {
               TotalTradeReply: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-                stockTotals: Array.isArray(reply.stockTotals) ? reply.stockTotals : []
-              }
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
+                stockTotals: Array.isArray(reply.stockTotals)
+                  ? reply.stockTotals
+                  : [],
+              },
             };
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
-            res.setHeader("Cache-Control", wantsFresh ? "no-store, max-age=0" : "public, max-age=0, s-maxage=300, stale-while-revalidate=600");
+            res.setHeader(
+              "Cache-Control",
+              wantsFresh
+                ? "no-store, max-age=0"
+                : "public, max-age=0, s-maxage=300, stale-while-revalidate=600",
+            );
             res.end(JSON.stringify(out));
           } catch (err) {
             res.statusCode = 502;
@@ -551,7 +674,9 @@ function smdtDevPlugin() {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
           const limitParam = parsedUrl.searchParams.get("limit");
-          const wantsFresh = parsedUrl.searchParams.get("fresh") === "1" || parsedUrl.searchParams.get("fresh") === "true";
+          const wantsFresh =
+            parsedUrl.searchParams.get("fresh") === "1" ||
+            parsedUrl.searchParams.get("fresh") === "true";
           let limit = parseInt(limitParam || "150", 10);
           if (isNaN(limit) || limit <= 0) {
             limit = 150;
@@ -566,13 +691,22 @@ function smdtDevPlugin() {
           try {
             if (needSnapshot || needTickers) {
               [, allowedTickers] = await Promise.all([
-                needSnapshot ? refreshCashFlowTickerDevCache() : Promise.resolve(cashFlowTickerDevCache),
-                getTotalTradeTickers({ fresh: wantsFresh, waitForInitial: true }),
+                needSnapshot
+                  ? refreshCashFlowTickerDevCache()
+                  : Promise.resolve(cashFlowTickerDevCache),
+                getTotalTradeTickers({
+                  fresh: wantsFresh,
+                  waitForInitial: true,
+                }),
               ]);
             } else {
               // Cache nóng: trả ngay, làm tươi ở nền nếu đã cũ (stale-while-revalidate).
-              if (now - cashFlowTickerDevLastFetched > CACHE_DURATION) refreshCashFlowTickerDevCache();
-              allowedTickers = await getTotalTradeTickers({ fresh: false, waitForInitial: false });
+              if (now - cashFlowTickerDevLastFetched > CACHE_DURATION)
+                refreshCashFlowTickerDevCache();
+              allowedTickers = await getTotalTradeTickers({
+                fresh: false,
+                waitForInitial: false,
+              });
             }
           } catch (err) {
             res.statusCode = 502;
@@ -582,16 +716,31 @@ function smdtDevPlugin() {
           }
 
           try {
-            const replyKey = CASH_FLOW_TICKER_REPLY_KEYS.find((key) => cashFlowTickerDevCache?.[key]) || "CashFlowTickerReply";
+            const replyKey =
+              CASH_FLOW_TICKER_REPLY_KEYS.find(
+                (key) => cashFlowTickerDevCache?.[key],
+              ) || "CashFlowTickerReply";
             const reply = getCashFlowTickerReply(cashFlowTickerDevCache) || {};
-            const buckets = Array.isArray(reply.cashFlowTickers) ? reply.cashFlowTickers : [];
+            const buckets = Array.isArray(reply.cashFlowTickers)
+              ? reply.cashFlowTickers
+              : [];
             const allowedTickerSet = new Set(allowedTickers);
             const out = {
               [replyKey]: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
                 allowedTickers,
-                cashFlowTickers: allowedTickerSet.size > 0 ? buckets.slice(-limit).map((bucket) => filterCashFlowTickerBucket(bucket, allowedTickerSet)) : buckets.slice(-limit)
-              }
+                cashFlowTickers:
+                  allowedTickerSet.size > 0
+                    ? buckets
+                        .slice(-limit)
+                        .map((bucket) =>
+                          filterCashFlowTickerBucket(bucket, allowedTickerSet),
+                        )
+                    : buckets.slice(-limit),
+              },
             };
 
             res.statusCode = 200;
@@ -613,18 +762,27 @@ function smdtDevPlugin() {
           }
 
           const now = Date.now();
-          if (!smdtTickerDevCache || (now - smdtTickerDevLastFetched > CACHE_DURATION)) {
+          if (
+            !smdtTickerDevCache ||
+            now - smdtTickerDevLastFetched > CACHE_DURATION
+          ) {
             try {
-              const response = await fetch("https://stocktraders.vn/service/data/getSMDTTicker", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ SMDTTickerRequest: { account: API_ACCOUNT } })
-              });
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getSMDTTicker",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    SMDTTickerRequest: { account: API_ACCOUNT },
+                  }),
+                },
+              );
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const data = await response.json();
               const reply = getSMDTTickerReply(data);
               const code = reply?.codeReply?.codeID;
-              if (code && code !== "S0000") throw new Error(`API response code ${code}`);
+              if (code && code !== "S0000")
+                throw new Error(`API response code ${code}`);
               smdtTickerDevCache = data;
               smdtTickerDevLastFetched = now;
             } catch (err) {
@@ -639,18 +797,23 @@ function smdtDevPlugin() {
           }
 
           try {
-            const replyKey = SMDT_TICKER_REPLY_KEYS.find((key) => smdtTickerDevCache?.[key]) || "SMDTTickerReply";
+            const replyKey =
+              SMDT_TICKER_REPLY_KEYS.find((key) => smdtTickerDevCache?.[key]) ||
+              "SMDTTickerReply";
             const reply = getSMDTTickerReply(smdtTickerDevCache) || {};
             const datas = Array.isArray(reply.SMDTDatas) ? reply.SMDTDatas : [];
             const out = {
               [replyKey]: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
                 // Mỗi cổ phiếu có chuỗi smdts theo ngày; slice giữ `limit` phiên gần nhất.
                 SMDTDatas: datas.map((d) => ({
                   ...d,
-                  smdts: Array.isArray(d.smdts) ? d.smdts.slice(-limit) : []
-                }))
-              }
+                  smdts: Array.isArray(d.smdts) ? d.smdts.slice(-limit) : [],
+                })),
+              },
             };
 
             res.statusCode = 200;
@@ -672,18 +835,27 @@ function smdtDevPlugin() {
           }
 
           const now = Date.now();
-          if (!smdtTickerDevCache || (now - smdtTickerDevLastFetched > CACHE_DURATION)) {
+          if (
+            !smdtTickerDevCache ||
+            now - smdtTickerDevLastFetched > CACHE_DURATION
+          ) {
             try {
-              const response = await fetch("https://stocktraders.vn/service/data/getSMDTTicker", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ SMDTTickerRequest: { account: API_ACCOUNT } })
-              });
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getSMDTTicker",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    SMDTTickerRequest: { account: API_ACCOUNT },
+                  }),
+                },
+              );
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const data = await response.json();
               const reply = getSMDTTickerReply(data);
               const code = reply?.codeReply?.codeID;
-              if (code && code !== "S0000") throw new Error(`API response code ${code}`);
+              if (code && code !== "S0000")
+                throw new Error(`API response code ${code}`);
               smdtTickerDevCache = data;
               smdtTickerDevLastFetched = now;
             } catch (err) {
@@ -698,17 +870,24 @@ function smdtDevPlugin() {
           }
 
           try {
-            const replyKey = SMDT_TICKER_REPLY_KEYS.find((key) => smdtTickerDevCache?.[key]) || "SMDTTickerReply";
+            const replyKey =
+              SMDT_TICKER_REPLY_KEYS.find((key) => smdtTickerDevCache?.[key]) ||
+              "SMDTTickerReply";
             const reply = getSMDTTickerReply(smdtTickerDevCache) || {};
             const datas = Array.isArray(reply.SMDTDatas) ? reply.SMDTDatas : [];
             const out = {
               [replyKey]: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
                 SMDTDatas: datas.map((item) => ({
                   ...item,
-                  smdts: Array.isArray(item.smdts) ? item.smdts.slice(-limit) : []
-                }))
-              }
+                  smdts: Array.isArray(item.smdts)
+                    ? item.smdts.slice(-limit)
+                    : [],
+                })),
+              },
             };
 
             res.statusCode = 200;
@@ -722,17 +901,28 @@ function smdtDevPlugin() {
           }
         } else if (reqUrl.startsWith("/api/stock-signal")) {
           const now = Date.now();
-          if (!stockSignalDevCache || (now - stockSignalDevLastFetched > CACHE_DURATION)) {
+          if (
+            !stockSignalDevCache ||
+            now - stockSignalDevLastFetched > CACHE_DURATION
+          ) {
             try {
-              const response = await fetch("https://stocktraders.vn/service/data/getStockSignal", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ StockSignalRequest: { account: API_ACCOUNT } })
-              });
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getStockSignal",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    StockSignalRequest: { account: API_ACCOUNT },
+                  }),
+                },
+              );
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const data = await response.json();
-              const code = data?.StockSignalReply?.codeReply?.codeID || data?.StockSignalRequest?.codeReply?.codeID;
-              if (code && code !== "S0000") throw new Error(`API response code ${code}`);
+              const code =
+                data?.StockSignalReply?.codeReply?.codeID ||
+                data?.StockSignalRequest?.codeReply?.codeID;
+              if (code && code !== "S0000")
+                throw new Error(`API response code ${code}`);
               stockSignalDevCache = data;
               stockSignalDevLastFetched = now;
             } catch (err) {
@@ -752,18 +942,28 @@ function smdtDevPlugin() {
           res.end(JSON.stringify(stockSignalDevCache));
         } else if (reqUrl.startsWith("/api/branch-path")) {
           const now = Date.now();
-          if (!branchPathDevCache || (now - branchPathDevLastFetched > BRANCH_PATH_CACHE_DURATION)) {
+          if (
+            !branchPathDevCache ||
+            now - branchPathDevLastFetched > BRANCH_PATH_CACHE_DURATION
+          ) {
             try {
-              const response = await fetch("https://stocktraders.vn/service/data/getBranchPath", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ BranchPathRequest: { account: API_ACCOUNT } })
-              });
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getBranchPath",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    BranchPathRequest: { account: API_ACCOUNT },
+                  }),
+                },
+              );
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const data = await response.json();
               const code = data?.BranchPathReply?.codeReply?.codeID;
-              if (code && code !== "S0000") throw new Error(`API response code ${code}`);
-              if (!Array.isArray(data?.BranchPathReply?.branchs)) throw new Error("API response missing branchs");
+              if (code && code !== "S0000")
+                throw new Error(`API response code ${code}`);
+              if (!Array.isArray(data?.BranchPathReply?.branchs))
+                throw new Error("API response missing branchs");
               branchPathDevCache = data;
               branchPathDevLastFetched = now;
             } catch (err) {
@@ -781,9 +981,12 @@ function smdtDevPlugin() {
             const reply = branchPathDevCache?.BranchPathReply || {};
             const out = {
               BranchPathReply: {
-                codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-                branchs: Array.isArray(reply.branchs) ? reply.branchs : []
-              }
+                codeReply: reply.codeReply || {
+                  codeID: "S0000",
+                  codeName: "SUCSESS",
+                },
+                branchs: Array.isArray(reply.branchs) ? reply.branchs : [],
+              },
             };
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
@@ -798,7 +1001,7 @@ function smdtDevPlugin() {
           next();
         }
       });
-    }
+    },
   };
 }
 
@@ -814,6 +1017,12 @@ export default defineConfig({
         target: "https://stocktraders.vn",
         changeOrigin: true,
         secure: true,
+      },
+      "/stocktraders-api": {
+        target: "https://stocktraders.vn",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/stocktraders-api/, ""),
       },
     },
   },
