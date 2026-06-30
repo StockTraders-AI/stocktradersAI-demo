@@ -57,7 +57,11 @@ function getCachedData() {
     if (!serialized) return null;
     const parsed = JSON.parse(serialized);
     if (parsed && parsed.tickerToBranch) {
-      globalCache = { branches: parsed.branches || [], tickerToBranch: parsed.tickerToBranch };
+      globalCache = {
+        branches: parsed.branches || [],
+        tickerToBranch: parsed.tickerToBranch,
+        updatedAt: parsed.updatedAt ? new Date(parsed.updatedAt) : null,
+      };
       return globalCache;
     }
   } catch (e) {
@@ -81,6 +85,7 @@ export function useBranchPath() {
   const [state, setState] = useState(() => cached || { branches: [], tickerToBranch: {} });
   const [status, setStatus] = useState(() => (cached ? "ready" : "loading"));
   const [error, setError] = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(() => cached?.updatedAt || null);
 
   const fetchSnapshot = useCallback(async ({ force = false } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
@@ -94,11 +99,14 @@ export function useBranchPath() {
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 
         const normalized = normalize(json);
+        const now = new Date();
+        const cacheVal = { ...normalized, updatedAt: now };
         setState(normalized);
+        setUpdatedAt(now);
         setStatus("ready");
         setError(null);
-        globalCache = normalized;
-        setCachedData(normalized);
+        globalCache = cacheVal;
+        setCachedData(cacheVal);
       } catch (e) {
         console.error("BranchPath Fetch error:", e);
         if (getCachedData()) {
@@ -121,5 +129,5 @@ export function useBranchPath() {
     fetchSnapshot();
   }, [fetchSnapshot]);
 
-  return { ...state, status, error, refresh: () => fetchSnapshot({ force: true }) };
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }) };
 }

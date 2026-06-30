@@ -22,6 +22,10 @@ function topDate(datesAsc) {
   return datesAsc[datesAsc.length - 1] || "";
 }
 
+function latestUpdatedAt(...items) {
+  return items.filter(Boolean).sort((a, b) => b.getTime() - a.getTime())[0] || null;
+}
+
 function tickerScore(smdt, sig, branchSmdt) {
   const sigBonus = { si: 18, sn: 9, so: -6, st: -14 }[sig] || 0;
   return smdt + sigBonus + (Number.isFinite(branchSmdt) ? branchSmdt * 0.18 : 0);
@@ -78,7 +82,7 @@ export function ModDashboard() {
   const cashBranchDate = topDate(cashBranch.datesAsc);
   const smdtTickerDate = topDate(smdtTicker.datesAsc);
   const cashTickerDate = cashTicker.latest?.date || "";
-  const updatedAt = smdt.updatedAt || cashBranch.updatedAt || smdtTicker.updatedAt || cashTicker.updatedAt;
+  const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt);
   const live = liveSmdtBranch.connected || liveCashBranch.connected || liveSmdtTicker.connected || liveCashTicker.connected;
 
   const branchSmdtRows = useMemo(() => {

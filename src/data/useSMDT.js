@@ -342,6 +342,8 @@ export function useSMDT() {
       return nextState;
     });
     setUpdatedAt(now);
+    setStatus("ready");
+    setError(null);
   }, []);
 
   return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }), applyTick };

@@ -70,17 +70,24 @@ function findDateIndex(datesDesc, dateValue) {
   return previousIndex === -1 ? datesDesc.length - 1 : previousIndex;
 }
 
+function latestUpdatedAt(...items) {
+  return items.filter(Boolean).sort((a, b) => b.getTime() - a.getTime())[0] || null;
+}
+
 export function ModDongTienCP() {
   const narrow = useNarrow();
   const { latest, buckets, allowedTickers, status, error, updatedAt, refresh, applyTick } = useCashFlowTicker();
-  const { connected: live } = useRealtimeCashFlowTickerFeed(applyTick);
+  const liveCashTicker = useRealtimeCashFlowTickerFeed(applyTick);
   const {
     branches: signalBranches,
     datesAsc: signalDatesAsc,
     matrix: signalMatrix,
+    updatedAt: signalUpdatedAt,
     applyTick: applySignalTick,
   } = useCashFlowBranch();
-  useRealtimeCashFlowFeed(applySignalTick);
+  const liveCashBranch = useRealtimeCashFlowFeed(applySignalTick);
+  const footerUpdatedAt = latestUpdatedAt(updatedAt, signalUpdatedAt);
+  const live = liveCashTicker.connected || liveCashBranch.connected;
   const { tickerToBranch, status: branchPathStatus, error: branchPathError, refresh: refreshBranchPath } = useBranchPath();
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -450,7 +457,7 @@ export function ModDongTienCP() {
         <CashFlowLegend />
         <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
-      <LiveFooter live={live} updatedAt={updatedAt} extra={`${fmtNum(activeTickers)} / ${fmtNum(tickerPool.length)} mã · ${datesDesc.length} phiên`} />
+      <LiveFooter live={live} updatedAt={footerUpdatedAt} extra={`${fmtNum(activeTickers)} / ${fmtNum(tickerPool.length)} mã · ${datesDesc.length} phiên`} />
     </div>
   );
 }

@@ -92,12 +92,9 @@ function classifyTicker(smdt, prevSmdt, prev2Smdt, tickerSig, branchSmdt, branch
   const hasPrev = Number.isFinite(prevSmdt);
   const momentum = Number.isFinite(prevSmdt) ? smdt - prevSmdt : 0;
   const prevMomentum = Number.isFinite(prevSmdt) && Number.isFinite(prev2Smdt) ? prevSmdt - prev2Smdt : 0;
-  const crossedStrong = hasPrev && prevSmdt < 70 && smdt >= 70;
-  const crossedHot = hasPrev && prevSmdt < 100 && smdt >= 100;
-  const acceleratedStrong = smdt >= 70 && momentum >= 8;
+  const crossedStrong = hasPrev && prevSmdt < 70 && smdt > 70;
 
-  if (crossedStrong || crossedHot || acceleratedStrong) return "vm";
-  if (!hasPrev && smdt >= 100) return "vm";
+  if (crossedStrong) return "vm";
   if (smdt >= 70) return "dt";
 
   const rising = momentum > 0;
@@ -137,6 +134,10 @@ function findTradePoint(tradeRow, dateValue) {
   const dates = Object.keys(tradeRow).sort().reverse();
   const target = dates.find((date) => toDateInputValue(date) <= dateValue);
   return target ? tradeRow[target] : null;
+}
+
+function latestUpdatedAt(...items) {
+  return items.filter(Boolean).sort((a, b) => b.getTime() - a.getTime())[0] || null;
 }
 
 function SmdtBadge({ value }) {
@@ -453,7 +454,7 @@ export function ModTopMaManh() {
   const activeBranchCashIndex = useMemo(() => findDateIndex(cashBranchDatesDesc, dateInputValue), [cashBranchDatesDesc, dateInputValue]);
   const activeBranchSmdtDate = activeBranchSmdtIndex >= 0 ? smdtBranchDatesDesc[activeBranchSmdtIndex] : "";
   const activeBranchCashDate = activeBranchCashIndex >= 0 ? cashBranchDatesDesc[activeBranchCashIndex] : "";
-  const updatedAt = smdtTicker.updatedAt || cashTicker.updatedAt || smdtBranch.updatedAt || cashBranch.updatedAt || totalTrade.updatedAt || branchPath.updatedAt;
+  const updatedAt = latestUpdatedAt(smdtTicker.updatedAt, cashTicker.updatedAt, smdtBranch.updatedAt, cashBranch.updatedAt, totalTrade.updatedAt, branchPath.updatedAt);
   const live = liveSmdtTicker.connected || liveCashTicker.connected || liveSmdtBranch.connected || liveCashBranch.connected;
 
   const cashByTicker = useMemo(() => {

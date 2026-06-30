@@ -344,84 +344,84 @@ export function ModSMDTMa() {
             {visibleTickers.length === 0 && <div style={{ padding: 28, textAlign: "center", color: "var(--t3)" }}>Không tìm thấy mã phù hợp.</div>}
           </div>
         ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: Math.max(700, 150 + colCount * 76) }}>
-            <thead>
-              <tr>
-                <th rowSpan={2} style={{ ...cashFlowMatrixTh, position: "sticky", left: 0, zIndex: 4, width: 150, textAlign: "left" }}>NGÀY ↓</th>
-                {groups.map((g) => {
-                  const collapsed = collapsedInd.has(g.industry);
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: Math.max(700, 150 + colCount * 76) }}>
+              <thead>
+                <tr>
+                  <th rowSpan={2} style={{ ...cashFlowMatrixTh, position: "sticky", left: 0, zIndex: 4, width: 150, textAlign: "left" }}>NGÀY ↓</th>
+                  {groups.map((g) => {
+                    const collapsed = collapsedInd.has(g.industry);
+                    return (
+                      <th
+                        key={g.industry}
+                        colSpan={collapsed ? 1 : g.tickers.length}
+                        onClick={() => toggleCollapse(g.industry)}
+                        title={collapsed ? "Mở rộng nhóm" : "Thu gọn nhóm"}
+                        style={{ ...cashFlowGroupTh, cursor: "pointer", borderLeft: "1px solid var(--bdr)" }}
+                      >
+                        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                          <span>{g.industry.toUpperCase()}</span>
+                          {!collapsed && (
+                            <span style={{ fontSize: 9, fontWeight: 800, color: "var(--B)", background: "var(--Bs)", borderRadius: 4, padding: "1px 5px" }}>{g.tickers.length}</span>
+                          )}
+                          <span style={{ color: "var(--t4)", fontSize: 12 }}>{collapsed ? "›" : "‹"}</span>
+                        </span>
+                      </th>
+                    );
+                  })}
+                </tr>
+                <tr>
+                  {groups.map((g) => {
+                    if (collapsedInd.has(g.industry)) {
+                      return <th key={g.industry} style={{ ...cashFlowMatrixTh, borderLeft: "1px solid var(--bdr)" }}>Tổng hợp</th>;
+                    }
+                    return g.tickers.map((tk) => (
+                      <th key={tk.key} title={tk.name} style={{ ...cashFlowMatrixTh, borderLeft: groupStarts.has(tk.key) ? "1px solid var(--bdr)" : cashFlowMatrixTh.borderRight }}>{tk.key}</th>
+                    ));
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {pageDates.map((date, di) => {
+                  const isLatest = di === 0 && safePage === 1;
+                  const isActive = dateInputValue === toDateInputValue(date);
+                  const dateBg = isActive || isLatest ? "var(--elev)" : "var(--surf)";
                   return (
-                    <th
-                      key={g.industry}
-                      colSpan={collapsed ? 1 : g.tickers.length}
-                      onClick={() => toggleCollapse(g.industry)}
-                      title={collapsed ? "Mở rộng nhóm" : "Thu gọn nhóm"}
-                      style={{ ...cashFlowGroupTh, cursor: "pointer", borderLeft: "1px solid var(--bdr)" }}
-                    >
-                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                        <span>{g.industry.toUpperCase()}</span>
-                        {!collapsed && (
-                          <span style={{ fontSize: 9, fontWeight: 800, color: "var(--B)", background: "var(--Bs)", borderRadius: 4, padding: "1px 5px" }}>{g.tickers.length}</span>
-                        )}
-                        <span style={{ color: "var(--t4)", fontSize: 12 }}>{collapsed ? "›" : "‹"}</span>
-                      </span>
-                    </th>
+                    <tr key={date}>
+                      <td style={{ ...cashFlowMatrixDateTd, position: "sticky", left: 0, zIndex: 2, background: dateBg, fontWeight: isActive || isLatest ? 800 : 700 }}>
+                        {fmtDay(date)}
+                        {isLatest && <span style={{ fontSize: 8, background: "var(--Bs)", color: "var(--B)", borderRadius: 3, padding: "1px 5px", marginLeft: 5, fontWeight: 800 }}>HN</span>}
+                      </td>
+                      {groups.map((g) => {
+                        if (collapsedInd.has(g.industry)) {
+                          const values = g.tickers.map((tk) => matrix[tk.key]?.[date]).filter(Number.isFinite);
+                          const value = values.length ? values.reduce((a, v) => a + v, 0) / values.length : null;
+                          const cls = valToHmCls(value);
+                          return (
+                            <td key={g.industry} style={{ ...cashFlowMatrixTd, borderLeft: "1px solid var(--bdr)", background: isActive || isLatest ? "var(--elev)" : cashFlowMatrixTd.background }}>
+                              {cls ? <HM cls={cls} val={value.toFixed(2)} /> : <span style={{ color: "var(--t4)" }}>—</span>}
+                            </td>
+                          );
+                        }
+                        return g.tickers.map((tk) => {
+                          const v = matrix[tk.key]?.[date];
+                          const cls = valToHmCls(v);
+                          return (
+                            <td key={tk.key} style={{ ...cashFlowMatrixTd, borderLeft: groupStarts.has(tk.key) ? "1px solid var(--bdr)" : cashFlowMatrixTd.borderRight, background: isActive || isLatest ? "var(--elev)" : cashFlowMatrixTd.background }}>
+                              {cls ? <HM cls={cls} val={v.toFixed(2)} /> : <span style={{ color: "var(--t4)" }}>—</span>}
+                            </td>
+                          );
+                        });
+                      })}
+                    </tr>
                   );
                 })}
-              </tr>
-              <tr>
-                {groups.map((g) => {
-                  if (collapsedInd.has(g.industry)) {
-                    return <th key={g.industry} style={{ ...cashFlowMatrixTh, borderLeft: "1px solid var(--bdr)" }}>Tổng hợp</th>;
-                  }
-                  return g.tickers.map((tk) => (
-                    <th key={tk.key} title={tk.name} style={{ ...cashFlowMatrixTh, borderLeft: groupStarts.has(tk.key) ? "1px solid var(--bdr)" : cashFlowMatrixTh.borderRight }}>{tk.key}</th>
-                  ));
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {pageDates.map((date, di) => {
-                const isLatest = di === 0 && safePage === 1;
-                const isActive = dateInputValue === toDateInputValue(date);
-                const dateBg = isActive || isLatest ? "var(--elev)" : "var(--surf)";
-                return (
-                  <tr key={date}>
-                    <td style={{ ...cashFlowMatrixDateTd, position: "sticky", left: 0, zIndex: 2, background: dateBg, fontWeight: isActive || isLatest ? 800 : 700 }}>
-                      {fmtDay(date)}
-                      {isLatest && <span style={{ fontSize: 8, background: "var(--Bs)", color: "var(--B)", borderRadius: 3, padding: "1px 5px", marginLeft: 5, fontWeight: 800 }}>HN</span>}
-                    </td>
-                    {groups.map((g) => {
-                      if (collapsedInd.has(g.industry)) {
-                        const values = g.tickers.map((tk) => matrix[tk.key]?.[date]).filter(Number.isFinite);
-                        const value = values.length ? values.reduce((a, v) => a + v, 0) / values.length : null;
-                        const cls = valToHmCls(value);
-                        return (
-                          <td key={g.industry} style={{ ...cashFlowMatrixTd, borderLeft: "1px solid var(--bdr)", background: isActive || isLatest ? "var(--elev)" : cashFlowMatrixTd.background }}>
-                            {cls ? <HM cls={cls} val={value.toFixed(2)} /> : <span style={{ color: "var(--t4)" }}>—</span>}
-                          </td>
-                        );
-                      }
-                      return g.tickers.map((tk) => {
-                        const v = matrix[tk.key]?.[date];
-                        const cls = valToHmCls(v);
-                        return (
-                          <td key={tk.key} style={{ ...cashFlowMatrixTd, borderLeft: groupStarts.has(tk.key) ? "1px solid var(--bdr)" : cashFlowMatrixTd.borderRight, background: isActive || isLatest ? "var(--elev)" : cashFlowMatrixTd.background }}>
-                            {cls ? <HM cls={cls} val={v.toFixed(2)} /> : <span style={{ color: "var(--t4)" }}>—</span>}
-                          </td>
-                        );
-                      });
-                    })}
-                  </tr>
-                );
-              })}
-              {visibleTickers.length === 0 && (
-                <tr><td colSpan={2} style={{ padding: 28, textAlign: "center", color: "var(--t3)" }}>Không tìm thấy mã phù hợp.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                {visibleTickers.length === 0 && (
+                  <tr><td colSpan={2} style={{ padding: 28, textAlign: "center", color: "var(--t3)" }}>Không tìm thấy mã phù hợp.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
 
@@ -429,7 +429,7 @@ export function ModSMDTMa() {
         <HeatLegend />
         <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
-      <LiveFooter live={live} updatedAt={updatedAt} extra={`${fmtNum(visibleTickers.length)} / ${fmtNum(tickerPool.length)} mã · ${datesDesc.length} phiên · channel smdt-ticker-cross`} />
+      <LiveFooter live={live} updatedAt={updatedAt} extra={`${fmtNum(visibleTickers.length)} / ${fmtNum(tickerPool.length)} mã · ${datesDesc.length}`} />
     </div>
   );
 }

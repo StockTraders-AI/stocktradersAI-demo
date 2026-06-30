@@ -182,8 +182,14 @@ function getStockSignalForDate(stockSig, dateValue) {
   const points = Array.isArray(stockSig?.points) ? stockSig.points : [];
   if (!points.length) return stockSig;
   const eligible = points.filter((point) => !dateValue || toDateInputValue(point.date) <= dateValue);
-  const target = eligible[eligible.length - 1];
-  return target || points[points.length - 1] || stockSig;
+  const latestHoldPoint = eligible[eligible.length - 1] || points[points.length - 1] || stockSig;
+  const tradePoint = dateValue ? eligible.findLast((point) => toDateInputValue(point.date) === dateValue && (point.trade === 1 || point.trade === 2)) : latestHoldPoint;
+  const trade = tradePoint?.trade;
+  const signal = trade === 1 ? "MUA" : trade === 2 ? "BAN" : "Nắm giữ";
+  const hold = Number.isFinite(latestHoldPoint?.hold) ? latestHoldPoint.hold : Number.isFinite(latestHoldPoint?.weight) ? latestHoldPoint.weight : null;
+  const percent = Number.isFinite(tradePoint?.percent) ? tradePoint.percent : null;
+  const weight = trade === 1 && Number.isFinite(hold) && Number.isFinite(percent) ? hold + percent : hold;
+  return { ...latestHoldPoint, signal, weight, hold, trade, tradePoint };
 }
 
 function EvalBadge({ value, full }) {
@@ -203,14 +209,15 @@ function SignalBadge({ value }) {
     : sell
       ? { bg: "var(--Rs)", border: "var(--Rb)", color: "var(--R)", label: "BÁN" }
       : { bg: "var(--As)", border: "var(--Ab)", color: "var(--A)", label: value || "—" };
-  return <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 58, padding: "5px 10px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: 11, fontWeight: 800 }}>{tone.label}</span>;
+  return <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 58, padding: "5px 10px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{tone.label}</span>;
 }
 
-function ScoreDonut({ dn, sn, ss, total }) {
+function ScoreDonut({ dn, sn, ss, total, mobile }) {
   const { t } = useTheme();
-  const size = 118;
+  const size = mobile ? 88 : 118;
   const c = size / 2;
-  const r = 43;
+  const r = mobile ? 34 : 43;
+  const stroke = mobile ? 12 : 15;
   const circ = 2 * Math.PI * r;
   let offset = 0;
   const items = [
@@ -221,57 +228,77 @@ function ScoreDonut({ dn, sn, ss, total }) {
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={c} cy={c} r={r} fill="none" stroke="var(--elev)" strokeWidth="15" />
+        <circle cx={c} cy={c} r={r} fill="none" stroke="var(--elev)" strokeWidth={stroke} />
         {items.map((item) => {
           const len = total ? (item.value / total) * circ : 0;
-          const node = <circle key={item.key} cx={c} cy={c} r={r} fill="none" stroke={item.color} strokeWidth="15" strokeDasharray={`${len} ${circ}`} strokeDashoffset={-offset} strokeLinecap="round" transform={`rotate(-90 ${c} ${c})`} />;
+          const node = <circle key={item.key} cx={c} cy={c} r={r} fill="none" stroke={item.color} strokeWidth={stroke} strokeDasharray={`${len} ${circ}`} strokeDashoffset={-offset} strokeLinecap="round" transform={`rotate(-90 ${c} ${c})`} />;
           offset += len;
           return node;
         })}
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 25, fontWeight: 900, color: "var(--t1)", lineHeight: 1, ...mono }}>{fmtNum(total)}</div>
+        <div style={{ fontSize: mobile ? 20 : 25, fontWeight: 900, color: "var(--t1)", lineHeight: 1, ...mono }}>{fmtNum(total)}</div>
         <div style={{ color: "var(--t4)", fontSize: 10, fontWeight: 700 }}>mã</div>
       </div>
     </div>
   );
 }
 
-function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, dateLabel }) {
+function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, dateLabel, mobile }) {
+  const shellStyle = mobile
+    ? { padding: compact ? "10px 12px" : "20px 16px 18px", borderRadius: compact ? 10 : 14 }
+    : { padding: compact ? "15px 16px" : "32px 28px 26px", maxWidth: compact ? undefined : 520 };
   return (
-    <Card style={{ padding: compact ? "15px 16px" : "32px 28px 26px", width: "100%", maxWidth: compact ? undefined : 520 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, color: "var(--t1)", fontSize: compact ? 13 : 15, fontWeight: 800 }}>
+    <Card style={{ width: "100%", ...shellStyle }}>
+      <div style={{ display: compact && mobile ? "none" : "flex", alignItems: "center", gap: 8, marginBottom: 5, color: "var(--t1)", fontSize: compact ? 13 : 15, fontWeight: 800 }}>
         <i className="ti ti-clipboard-list" style={{ color: "var(--B)", fontSize: compact ? 15 : 18 }} />
         Nhập danh mục của bạn
       </div>
-      <div style={{ color: "var(--t3)", fontSize: compact ? 11 : 12, lineHeight: 1.7, marginBottom: compact ? 12 : 22 }}>
+      <div style={{ display: compact && mobile ? "none" : "block", color: "var(--t3)", fontSize: compact ? 11 : 12, lineHeight: 1.7, marginBottom: compact ? 12 : 22 }}>
         Nhập tối đa {MAX_CODES} mã cổ phiếu, cách nhau bởi dấu phẩy.
         {!compact && <><br />Hệ thống kiểm tra SMDT ngành và mã, dòng tiền, tín hiệu từ StockTraders API.</>}
       </div>
-      <div style={{ minHeight: compact ? 38 : 46, display: "flex", alignItems: "center", gap: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "0 13px", marginBottom: 8 }}>
-        <i className="ti ti-writing" style={{ color: "var(--t3)", fontSize: 14, flexShrink: 0 }} />
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onAnalyze()}
-          placeholder="VD: NVL, LPB, PC1, CII, PLX"
-          style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t1)", fontSize: compact ? 13 : 13.5, padding: "10px 0" }}
-        />
-        {input && <button type="button" onClick={() => setInput("")} style={{ border: "none", background: "transparent", color: "var(--t4)", cursor: "pointer", fontSize: 18 }}>×</button>}
+      <div style={{ display: compact && mobile ? "flex" : "block", alignItems: "center", gap: 8 }}>
+        <div style={{ minHeight: compact ? 36 : 46, display: "flex", alignItems: "center", gap: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: compact && mobile ? 8 : 9, padding: "0 13px", marginBottom: compact && mobile ? 0 : 8, flex: 1, minWidth: 0 }}>
+          <i className="ti ti-writing" style={{ color: "var(--t3)", fontSize: 14, flexShrink: 0 }} />
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && onAnalyze()}
+            placeholder={compact ? "Thêm hoặc đổi mã..." : "VD: NVL, LPB, PC1, CII, PLX"}
+            autoCorrect="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t1)", fontSize: compact ? 13 : 13.5, padding: compact && mobile ? "8px 0" : "10px 0" }}
+          />
+          {input && <button type="button" onClick={() => setInput("")} style={{ border: "none", background: "transparent", color: "var(--t4)", cursor: "pointer", fontSize: 18 }}>×</button>}
+        </div>
+        {compact && mobile && (
+          <button
+            type="button"
+            onClick={onAnalyze}
+            disabled={loading || !codes.length}
+            style={{ minHeight: 36, border: "none", borderRadius: 8, background: "var(--B)", color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: loading || !codes.length ? "not-allowed" : "pointer", opacity: loading || !codes.length ? 0.5 : 1, padding: "0 14px", flexShrink: 0 }}
+          >
+            {loading ? "..." : "Phân tích"}
+          </button>
+        )}
       </div>
-      <div style={{ color: "var(--t3)", fontSize: 11, marginBottom: compact ? 10 : 22 }}>
+      <div style={{ color: "var(--t3)", fontSize: 11, marginBottom: compact ? 10 : 22, display: compact && mobile ? "none" : "block" }}>
         {codes.length ? `${codes.length} mã đã nhập` : "Ví dụ: NVL, LPB, PC1, CII, PLX"}
       </div>
-      <button
-        type="button"
-        onClick={onAnalyze}
-        disabled={loading || !codes.length}
-        style={{ width: "100%", minHeight: compact ? 40 : 46, border: "none", borderRadius: 10, background: "var(--B)", color: "#fff", fontSize: compact ? 12.5 : 14, fontWeight: 800, cursor: loading || !codes.length ? "not-allowed" : "pointer", opacity: loading || !codes.length ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}
-      >
-        <i className="ti ti-sparkles" />
-        {loading ? "Đang phân tích..." : "Phân tích danh mục"}
-      </button>
-      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 10, color: "var(--t4)", fontSize: 10.5 }}>
+      {(!compact || !mobile) && (
+        <button
+          type="button"
+          onClick={onAnalyze}
+          disabled={loading || !codes.length}
+          style={{ width: "100%", minHeight: compact ? 40 : 46, border: "none", borderRadius: 10, background: "var(--B)", color: "#fff", fontSize: compact ? 12.5 : 14, fontWeight: 800, cursor: loading || !codes.length ? "not-allowed" : "pointer", opacity: loading || !codes.length ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}
+        >
+          <i className="ti ti-sparkles" />
+          {loading ? "Đang phân tích..." : "Phân tích danh mục"}
+        </button>
+      )}
+      <div style={{ display: compact && mobile ? "none" : "flex", alignItems: "center", gap: 5, marginTop: 10, color: "var(--t4)", fontSize: 10.5 }}>
         <i className="ti ti-clock" style={{ fontSize: 12 }} />
         Dữ liệu: StockTraders API · {dateLabel}
       </div>
@@ -279,33 +306,31 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
   );
 }
 
-function OverviewPanel({ foundRows, dn, sn, ss, score, scoreName }) {
+function OverviewPanel({ foundRows, dn, sn, ss, score, scoreName, mobile }) {
   const total = foundRows.length || 1;
   return (
-    <Card style={{ padding: "15px 16px", display: "flex", flexDirection: "column", gap: 11 }}>
+    <Card style={{ padding: mobile ? 16 : "15px 16px", borderRadius: mobile ? 14 : 12, display: "flex", flexDirection: "column", gap: mobile ? 14 : 11 }}>
       <div style={{ color: "var(--t1)", fontSize: 13, fontWeight: 800 }}>Tổng quan danh mục</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <ScoreDonut dn={dn} sn={sn} ss={ss} total={foundRows.length} />
-        <div style={{ flex: 1, minWidth: 190, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: mobile ? 14 : 16, flexWrap: mobile ? "nowrap" : "wrap" }}>
+        <ScoreDonut dn={dn} sn={sn} ss={ss} total={foundRows.length} mobile={mobile} />
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: mobile ? 7 : 8 }}>
           {[
             { color: "var(--G)", label: "Đúng sóng, đúng ngành", count: dn },
             { color: "var(--A)", label: "Đúng sóng, sai ngành", count: sn },
             { color: "var(--R)", label: "Sai sóng", count: ss },
           ].map((item) => (
-            <div key={item.label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, flexShrink: 0, marginTop: 4 }} />
-              <div>
-                <div style={{ color: "var(--t2)", fontSize: 11.5, fontWeight: 700 }}>{item.label}</div>
-                <div style={{ color: "var(--t3)", fontSize: 10.5 }}>{item.count} mã ({Math.round(pct(item.count, total))}%)</div>
-              </div>
+            <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0, color: "var(--t2)", fontSize: mobile ? 11 : 11.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</div>
+              <div style={{ color: "var(--t3)", fontSize: 11, whiteSpace: "nowrap" }}>{item.count} ({Math.round(pct(item.count, total))}%)</div>
             </div>
           ))}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "11px 12px" }}>
-        <div style={{ minWidth: 78 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: mobile ? 10 : 12, background: "var(--elev)", border: mobile ? "none" : "0.5px solid var(--bdr)", borderRadius: mobile ? 10 : 9, padding: mobile ? 12 : "11px 12px" }}>
+        <div style={{ minWidth: mobile ? 72 : 78, textAlign: mobile ? "center" : "left" }}>
           <div style={{ color: "var(--t3)", fontSize: 10, fontWeight: 700, marginBottom: 4 }}>Điểm phù hợp</div>
-          <div style={{ color: scoreName[1], fontSize: 28, fontWeight: 900, lineHeight: 1, ...mono }}>{score}<span style={{ color: "var(--t3)", fontSize: 13 }}>/100</span></div>
+          <div style={{ color: scoreName[1], fontSize: mobile ? 26 : 28, fontWeight: 900, lineHeight: 1, ...mono }}>{score}<span style={{ color: "var(--t3)", fontSize: 13 }}>/100</span></div>
           <div style={{ color: "var(--t3)", fontSize: 10, marginTop: 4 }}>{scoreName[0]}</div>
         </div>
         <div style={{ width: 1, alignSelf: "stretch", background: "var(--bdr)" }} />
@@ -383,55 +408,76 @@ function DetailTable({ rows, codes, dateLabel }) {
   );
 }
 
-function DetailCards({ rows, codes, dateLabel }) {
+function DetailCards({ rows, codes, dateLabel, expanded, onToggle }) {
   return (
-    <Card noPad>
-      <div style={{ padding: "13px 15px", borderBottom: "0.5px solid var(--bdr)" }}>
-        <div style={{ color: "var(--t1)", fontSize: 13, fontWeight: 800 }}>Phân tích chi tiết</div>
-        <div style={{ color: "var(--t3)", fontSize: 11, marginTop: 2 }}>{codes.length} mã · {dateLabel}</div>
+    <div>
+      <div style={{ color: "var(--t3)", fontSize: 11, marginBottom: 10 }}>
+        {codes.length} mã · Ấn vào mã để xem chi tiết · {dateLabel}
       </div>
-      <div style={{ display: "grid", gap: 9, padding: 12 }}>
+      <div style={{ display: "grid", gap: 8 }}>
         {rows.map((row) => {
           if (!row.found) {
-            return <div key={row.ticker} style={{ background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 10, padding: 12, color: "var(--t3)" }}><b style={{ color: "var(--B)" }}>{row.ticker}</b> · Không tìm thấy dữ liệu.</div>;
+            return (
+              <div key={row.ticker} style={{ background: "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ color: "var(--B)", fontSize: 15, fontWeight: 900 }}>{row.ticker}</span>
+                <span style={{ color: "var(--t4)", fontSize: 11 }}>Không tìm thấy dữ liệu.</span>
+              </div>
+            );
           }
           const c = changePct(row.tradePoint);
+          const open = expanded === row.ticker;
           return (
-            <div key={row.ticker} style={{ background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 10, padding: 12, minWidth: 0, overflow: "hidden" }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ color: "var(--B)", fontSize: 16, fontWeight: 900 }}>{row.ticker}</div>
-                  <div style={{ color: "var(--t4)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.name}</div>
+            <div key={row.ticker} style={{ background: "var(--surf)", border: `0.5px solid ${open ? "var(--Bb)" : "var(--bdr)"}`, borderRadius: 12, overflow: "hidden", transition: "border-color .18s" }}>
+              <button
+                type="button"
+                onClick={() => onToggle(row.ticker)}
+                style={{ width: "100%", border: "none", background: "transparent", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer", textAlign: "left", color: "inherit" }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, marginBottom: 3 }}>
+                    <span style={{ color: "var(--B)", fontSize: 15, fontWeight: 900, ...mono }}>{row.ticker}</span>
+                    <EvalBadge value={row.evalKey} />
+                  </div>
+                  <div style={{ color: "var(--t3)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.name}</div>
+                  <div style={{ color: "var(--t4)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{row.industry || "Chưa rõ ngành"}</div>
                 </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 11, paddingTop: 11, borderTop: "0.5px solid var(--bdrs)" }}>
-                <Metric label="Giá" value={priceText(row.tradePoint)} color="var(--G)" />
-                <Metric label="+/-%" value={c == null ? "—" : `${c >= 0 ? "+" : ""}${c.toFixed(2)}%`} color={c == null ? "var(--t4)" : c >= 0 ? "var(--G)" : "var(--R)"} />
-                <Metric label="SMDT mã" value={Number.isFinite(row.smdt) ? row.smdt.toFixed(2) : "—"} />
-                <Metric label="SMDT ngành" value={Number.isFinite(row.branchSmdt) ? row.branchSmdt.toFixed(2) : "—"} />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginTop: 11, minWidth: 0 }}>
-                <CfBadge sig={row.tickerSig} compact />
-                <CfBadge sig={row.branchSig} compact />
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ color: "var(--G)", fontSize: 15, fontWeight: 900, ...mono }}>{priceText(row.tradePoint)}</div>
+                  <div style={{ color: c == null ? "var(--t4)" : c >= 0 ? "var(--G)" : "var(--R)", fontSize: 12, fontWeight: 800, ...mono }}>{c == null ? "—" : `${c >= 0 ? "+" : ""}${c.toFixed(2)}%`}</div>
+                </div>
                 <SignalBadge value={row.signal} />
-                <span style={{ color: "var(--t3)", fontSize: 11, marginLeft: "auto", whiteSpace: "nowrap" }}>Tỷ trọng {row.weight}%</span>
-              </div>
-              <div style={{ marginTop: 9, minWidth: 0 }}>
-                <EvalBadge value={row.evalKey} full />
-              </div>
+                <i className="ti ti-chevron-down" style={{ color: "var(--t4)", fontSize: 15, flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .18s" }} />
+              </button>
+
+              {open && (
+                <div style={{ borderTop: "0.5px solid var(--bdr)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <MetricBox label="SMDT Ngành" value={Number.isFinite(row.branchSmdt) ? row.branchSmdt.toFixed(2) : "—"} />
+                    <MetricBox label="SMDT Mã" value={Number.isFinite(row.smdt) ? row.smdt.toFixed(2) : "—"} />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <MetricBox label="Dòng tiền mã"><CfBadge sig={row.tickerSig} compact /></MetricBox>
+                    <MetricBox label="Dòng tiền ngành"><CfBadge sig={row.branchSig} compact /></MetricBox>
+                  </div>
+                  <div style={{ background: "var(--elev)", borderRadius: 8, padding: "9px 11px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <span style={{ color: "var(--t3)", fontSize: 11 }}>Tỷ trọng nắm giữ</span>
+                    <span style={{ color: "var(--t1)", fontSize: 14, fontWeight: 900, ...mono }}>{row.weight}%</span>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
-    </Card>
+    </div>
   );
 }
 
-function Metric({ label, value, color = "var(--t2)" }) {
+function MetricBox({ label, value, children }) {
   return (
-    <div>
-      <div style={{ color: "var(--t4)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em" }}>{label}</div>
-      <div style={{ color, fontSize: 13, fontWeight: 800, marginTop: 3, ...mono }}>{value}</div>
+    <div style={{ background: "var(--elev)", borderRadius: 8, padding: "9px 11px", minWidth: 0 }}>
+      <div style={{ color: "var(--t4)", fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 5 }}>{label}</div>
+      {children || <div style={{ color: "var(--t1)", fontSize: 18, fontWeight: 900, ...mono }}>{value}</div>}
     </div>
   );
 }
@@ -442,6 +488,7 @@ export function ModPhanTichDanhMuc() {
   const [input, setInput] = useState(saved.input);
   const [analyzedCodes, setAnalyzedCodes] = useState(saved.analyzedCodes);
   const [loading, setLoading] = useState(false);
+  const [expandedTicker, setExpandedTicker] = useState(null);
   const smdtTicker = useSMDTTicker();
   const cashTicker = useCashFlowTicker();
   const smdtBranch = useSMDT();
@@ -516,6 +563,7 @@ export function ModPhanTichDanhMuc() {
     setLoading(true);
     window.setTimeout(() => {
       setAnalyzedCodes(codes);
+      setExpandedTicker(null);
       setLoading(false);
     }, 180);
   };
@@ -525,7 +573,7 @@ export function ModPhanTichDanhMuc() {
   if (!analyzedCodes.length) {
     return (
       <div style={{ minHeight: narrow ? "auto" : "calc(100vh - 150px)", display: "flex", alignItems: "center", justifyContent: "center", padding: narrow ? "18px 0" : 0 }}>
-        <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} dateLabel={dateLabel} />
+        <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} dateLabel={dateLabel} mobile={narrow} />
       </div>
     );
   }
@@ -535,11 +583,28 @@ export function ModPhanTichDanhMuc() {
       {(smdtTicker.error || cashTicker.error || smdtBranch.error || cashBranch.error || totalTrade.error || branchPath.error || stockSignal.error) && (
         <Banner tone="error">Một số nguồn dữ liệu chưa tải được, kết quả có thể thiếu ô.</Banner>
       )}
-      <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "minmax(0,1fr) minmax(360px,1fr)", gap: 12 }}>
-        <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} />
-        <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ss={ss} score={score} scoreName={scoreName} />
-      </div>
-      {narrow ? <DetailCards rows={rows} codes={analyzedCodes} dateLabel={dateLabel} /> : <DetailTable rows={rows} codes={analyzedCodes} dateLabel={dateLabel} />}
+      {narrow ? (
+        <>
+          <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ss={ss} score={score} scoreName={scoreName} mobile />
+          <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} mobile />
+        </>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(360px,1fr)", gap: 12 }}>
+          <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} />
+          <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ss={ss} score={score} scoreName={scoreName} />
+        </div>
+      )}
+      {narrow ? (
+        <DetailCards
+          rows={rows}
+          codes={analyzedCodes}
+          dateLabel={dateLabel}
+          expanded={expandedTicker}
+          onToggle={(ticker) => setExpandedTicker((current) => (current === ticker ? null : ticker))}
+        />
+      ) : (
+        <DetailTable rows={rows} codes={analyzedCodes} dateLabel={dateLabel} />
+      )}
       <div style={{ color: "var(--t4)", fontSize: 11 }}>
         Tín hiệu và tỷ trọng lấy từ StockSignal API khi có dữ liệu; các mã thiếu tín hiệu tạm dùng suy luận từ SMDT và dòng tiền.
       </div>

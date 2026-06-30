@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_URL = "/api/stock-signal";
-const CACHE_KEY = "stock_signal_data_cache_v1";
+const CACHE_KEY = "stock_signal_data_cache_v2";
 const DEFAULT_REFRESH_MS = 15_000;
 const REPLY_KEYS = ["StockSignalReply", "StockSignalRequest"];
 
@@ -146,6 +146,18 @@ function setCachedData(data) {
     weight: row.weight,
     percent: row.percent,
     date: row.date,
+    points: Array.isArray(row.points)
+      ? row.points.map((point) => ({
+          date: point.date,
+          signal: point.signal,
+          weight: point.weight,
+          hold: point.hold,
+          percent: point.percent,
+          price: point.price,
+          smdt: point.smdt,
+          trade: point.trade,
+        }))
+      : [],
   }));
   const signalByTicker = {};
   for (const row of rows) signalByTicker[row.ticker] = row;

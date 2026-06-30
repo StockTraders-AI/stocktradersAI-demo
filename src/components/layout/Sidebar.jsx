@@ -11,7 +11,7 @@ const CP_IDS = SIDEBAR_GROUPS.stocks;
 const PORTFOLIO_IDS = SIDEBAR_GROUPS.portfolio;
 
 export function Sidebar({ curMod, onNav, compact }) {
-  const { t } = useTheme();
+  const { t, dark } = useTheme();
   const [nganhOpen, setNganhOpen] = useState(false);
   const [cpOpen, setCpOpen] = useState(false);
   const [portfolioOpen, setPortfolioOpen] = useState(false);
@@ -111,7 +111,7 @@ export function Sidebar({ curMod, onNav, compact }) {
 
       {/* Premium */}
       <div style={{ marginTop: "auto", padding: 12 }}>
-        <div style={{ background: "linear-gradient(135deg,#2D1B69,#1A0E40)", border: `0.5px solid ${t.Bb}`, borderRadius: 10, padding: 12 }}>
+        <div style={{ background: dark ? "linear-gradient(135deg,#2D1B69,#1A0E40)" : t.Bs, border: `0.5px solid ${t.Bb}`, borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 9, fontWeight: 800, color: t.B, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 4 }}>⭐ Premium</div>
           <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.5, marginBottom: 10 }}>Mở khóa toàn bộ tính năng &amp; dữ liệu lịch sử</div>
           <button style={{ width: "100%", background: t.B, border: "none", borderRadius: 7, padding: 7, fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit" }}>
