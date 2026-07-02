@@ -481,7 +481,8 @@ function EventDot({ row, event, color, d0, totalMs, onOpen }) {
   const [hover, setHover] = useState(false);
   const left = pctPos(event.date, d0, totalMs);
   const big = event.smdt >= SUPER_THRESHOLD;
-  const size = big ? 13 : 10;
+  const markerSize = big ? 20 : 15;
+  const markerColor = big ? "var(--MU)" : color;
 
   return (
     <button
@@ -497,8 +498,8 @@ function EventDot({ row, event, color, d0, totalMs, onOpen }) {
         top: "50%",
         left: `${left}%`,
         transform: "translate(-50%,-50%)",
-        width: 22,
-        height: 22,
+        width: 28,
+        height: 28,
         border: "none",
         background: "transparent",
         cursor: "pointer",
@@ -509,7 +510,24 @@ function EventDot({ row, event, color, d0, totalMs, onOpen }) {
       }}
       title={`${row.label} · ${fmtDate(event.date)} · ${event.smdt.toFixed(1)}%`}
     >
-      <span style={{ width: size, height: size, borderRadius: "50%", background: big ? "var(--MU)" : color, border: "1.5px solid var(--bg)", boxShadow: hover ? `0 0 0 5px ${color}25` : "none", display: "block" }} />
+      <span
+        style={{
+          width: markerSize,
+          height: markerSize,
+          borderRadius: "50%",
+          background: markerColor,
+          border: "1.5px solid var(--bg)",
+          boxShadow: hover ? `0 0 0 5px ${markerColor}25` : "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontSize: big ? 10 : 8,
+          lineHeight: 1,
+        }}
+      >
+        {big && <i className="ti ti-star-filled" style={{ fontSize: 10 }} />}
+      </span>
       {hover && (
         <span style={styles.tooltip}>
           <span>{fmtDate(event.date)}</span>
@@ -522,22 +540,23 @@ function EventDot({ row, event, color, d0, totalMs, onOpen }) {
 
 function TimelineRow({ row, active, d0, totalMs, labelWidth, onOpen, onSelect }) {
   const pinned = row.pinned;
+  const rowHeight = labelWidth < 180 ? 56 : 46;
   return (
     <div
       onClick={() => onSelect(row.key)}
       style={{
         display: "flex",
-        minHeight: 40,
+        minHeight: rowHeight,
         cursor: "pointer",
         background: active ? "var(--Bs)" : "transparent",
         borderBottom: "0.5px solid var(--bdr)",
       }}
     >
-      <div style={{ ...styles.timelineLabel, width: labelWidth, color: pinned ? row.color : "var(--t2)", fontWeight: pinned ? 800 : 600 }}>
-        {pinned && <i className="ti ti-star-filled" style={{ fontSize: 10, marginRight: 4, color: "var(--A)" }} />}
-        {row.label}
+      <div style={{ ...styles.timelineLabel, width: labelWidth, minHeight: rowHeight, color: pinned ? row.color : "var(--t2)", fontWeight: pinned ? 800 : 600 }}>
+        {pinned && <i className="ti ti-star-filled" style={{ fontSize: 10, color: "var(--A)", flexShrink: 0 }} />}
+        <span title={row.key} style={styles.timelineLabelText}>{row.label}</span>
       </div>
-      <div style={styles.timelineTrack}>
+      <div style={{ ...styles.timelineTrack, height: rowHeight }}>
         <div style={styles.timelineLine} />
         {row.events.map((event) => (
           <EventDot key={`${row.key}-${event.date}`} row={row} event={event} color={row.color} d0={d0} totalMs={totalMs} onOpen={onOpen} />
@@ -1311,7 +1330,7 @@ export function ModLoTrinhDanSong() {
   }, [bounds.maxDate, filteredRows]);
 
   const selectedRow = filteredRows.find((row) => row.key === selectedKey) || null;
-  const labelWidth = narrow ? 122 : 174;
+  const labelWidth = narrow ? 168 : 210;
   const loading = smdt.status === "loading" && !allRows.length;
   const error = smdt.status === "error" && !allRows.length;
 
@@ -1334,9 +1353,12 @@ export function ModLoTrinhDanSong() {
 
       <div style={styles.controls}>
         <button type="button" onClick={() => setYear(0)} style={{ ...styles.chip, ...(year === 0 ? styles.activeChip : null) }}>Tất cả</button>
-        <select value={year || latestYear || ""} onChange={(e) => setYear(Number(e.target.value))} style={styles.select}>
-          {years.map((item) => <option key={item} value={item}>{item}</option>)}
-        </select>
+        <div style={styles.selectWrap}>
+          <select value={year || latestYear || ""} onChange={(e) => setYear(Number(e.target.value))} style={styles.select}>
+            {years.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+          <i className="ti ti-chevron-down" style={styles.selectIcon} />
+        </div>
         <div style={styles.searchBox}>
           <i className="ti ti-search" style={{ color: "var(--t4)", fontSize: 14 }} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm ngành..." style={styles.searchInput} />
@@ -1409,14 +1431,34 @@ const styles = {
   controls: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
   chip: { height: 31, padding: "0 14px", borderRadius: 18, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   activeChip: { background: "var(--Bs)", borderColor: "var(--Bb)", color: "var(--B)" },
-  select: { height: 31, borderRadius: 18, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", padding: "0 12px", outline: "none", fontSize: 12, fontWeight: 700 },
+  selectWrap: { position: "relative", height: 31, minWidth: 86, flexShrink: 0 },
+  select: {
+    width: "100%",
+    height: "100%",
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    borderRadius: 8,
+    border: "0.5px solid var(--bdr)",
+    background: "var(--surf)",
+    boxShadow: "none",
+    WebkitBoxShadow: "none",
+    color: "var(--t2)",
+    padding: "0 28px 0 12px",
+    outline: "none",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  selectIcon: { position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--t4)", fontSize: 13, pointerEvents: "none" },
   searchBox: { height: 31, minWidth: 190, maxWidth: 260, flex: "1 1 190px", display: "flex", alignItems: "center", gap: 7, padding: "0 10px", background: "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 8 },
   searchInput: { width: "100%", minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t2)", fontSize: 12 },
   clearBtn: { width: 20, height: 20, border: "none", background: "transparent", color: "var(--t4)", cursor: "pointer" },
   manageBtn: { height: 31, marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "0 13px", borderRadius: 18, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   timelinePanel: { background: "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 12, padding: "8px 12px 10px" },
   monthLabel: { fontSize: 9, color: "var(--t4)", fontWeight: 800, textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" },
-  timelineLabel: { flexShrink: 0, padding: "0 12px 0 0", display: "flex", alignItems: "center", justifyContent: "flex-end", textAlign: "right", fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  timelineLabel: { flexShrink: 0, padding: "0 12px 0 0", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, textAlign: "right", fontSize: 11 },
+  timelineLabelText: { minWidth: 0, lineHeight: 1.22, whiteSpace: "normal", overflowWrap: "break-word" },
   timelineTrack: { minWidth: 480, flex: 1, position: "relative", height: 40 },
   timelineLine: { position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "var(--bdr)", transform: "translateY(-50%)" },
   tooltip: { position: "absolute", left: "50%", bottom: 24, transform: "translateX(-50%)", display: "flex", flexDirection: "column", gap: 2, padding: "6px 9px", borderRadius: 7, background: "var(--surf)", border: "0.5px solid var(--bdr)", color: "var(--t2)", fontSize: 10, whiteSpace: "nowrap", boxShadow: "0 8px 24px rgba(0,0,0,.25)" },

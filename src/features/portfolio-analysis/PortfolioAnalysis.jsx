@@ -12,6 +12,7 @@ import { useTotalTrade } from "../../data/useTotalTrade";
 import { useStockSignal } from "../../data/useStockSignal";
 import { Banner, Card } from "../../components/ui";
 import { CfBadge } from "../cash-flow-ticker/CfBadge";
+import { FOUR_KEY_META, evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "./stock4KeyEvaluator";
 
 const MAX_CODES = 15;
 const STORAGE_KEY = "portfolio_analysis_state_v1";
@@ -79,6 +80,15 @@ function lookupIndustry(map, industry) {
   return map.get(normalizeName(industry)) ?? null;
 }
 
+function findIndustryBranch(branches, industry) {
+  if (!industry) return null;
+  const targetAliases = aliasesOf(industry).map(normalizeName);
+  return branches.find((branch) => {
+    const branchAliases = [branch.key, branch.label, ...aliasesOf(branch.key), ...aliasesOf(branch.label)].map(normalizeName);
+    return targetAliases.some((target) => branchAliases.includes(target));
+  }) || null;
+}
+
 function findTradePoint(tradeRow, dateValue) {
   if (!tradeRow || !dateValue) return null;
   const dates = Object.keys(tradeRow).sort().reverse();
@@ -140,17 +150,7 @@ function calcSignal(row) {
 function calcEval(row) {
   const branchOk = isPositiveSig(row.branchSig) && Number.isFinite(row.branchSmdt) && row.branchSmdt > 70;
   const tickerOk = isPositiveSig(row.tickerSig) && Number.isFinite(row.smdt) && row.smdt > 70;
-  if (tickerOk && branchOk) return "DS_DN";
-  if (tickerOk && !branchOk) return "DS_SN";
-  return "SS";
-}
-
-function scoreCalc(rows) {
-  const n = rows.length || 1;
-  const dn = rows.filter((row) => row.evalKey === "DS_DN").length;
-  const sn = rows.filter((row) => row.evalKey === "DS_SN").length;
-  const ss = rows.filter((row) => row.evalKey === "SS").length;
-  return { dn, sn, ss, score: Math.round((dn / n) * 85 + (sn / n) * 45 + (ss / n) * 15) };
+  return fallbackEvalKey({ tickerOk, industryOk: branchOk });
 }
 
 function scoreLabel(score) {
@@ -161,12 +161,14 @@ function scoreLabel(score) {
   return ["Cần cải thiện", "var(--R)"];
 }
 
-function getTip(dn, sn, ss, total) {
+function getTip(dn, sn, ns, ss, total) {
   const pS = ss / total;
   const pSN = sn / total;
+  const pNS = ns / total;
   const pD = dn / total;
   if (pS > 0.5) return "Phần lớn mã đang ngược sóng. Ưu tiên cắt giảm và tái cơ cấu sang ngành có dòng tiền đổ vào.";
   if (pSN > 0.4) return "Nhiều mã chưa thuộc ngành dẫn sóng. Cân nhắc chuyển dịch sang ngành có dòng tiền đổ vào mạnh hơn.";
+  if (pNS > 0.35) return "Nhiều ngành đã thuận nhưng mã trong danh mục chưa xác nhận sóng. Theo dõi điểm kích hoạt trước khi tăng tỷ trọng.";
   if (pD >= 0.6) return "Danh mục đang tốt, hầu hết mã đúng sóng đúng ngành. Duy trì và theo dõi chặt stop-loss.";
   return "Danh mục ở mức trung bình. Tăng tỷ trọng các mã đúng ngành dẫn dắt.";
 }
@@ -187,22 +189,27 @@ function getStockSignalForDate(stockSig, dateValue) {
   if (!points.length) return stockSig;
   const eligible = points.filter((point) => !dateValue || toDateInputValue(point.date) <= dateValue);
   const latestHoldPoint = eligible[eligible.length - 1] || points[points.length - 1] || stockSig;
-  const tradePoint = dateValue ? eligible.findLast((point) => toDateInputValue(point.date) === dateValue && (point.trade === 1 || point.trade === 2)) : latestHoldPoint;
-  const trade = tradePoint?.trade;
+  const tradePoint = dateValue ? eligible.findLast((point) => toDateInputValue(point.date) === dateValue && (Number(point.trade) === 1 || Number(point.trade) === 2)) : latestHoldPoint;
+  const trade = Number.isFinite(Number(tradePoint?.trade)) ? Number(tradePoint.trade) : null;
   const signal = trade === 1 ? "MUA" : trade === 2 ? "BAN" : "Nắm giữ";
   const hold = Number.isFinite(latestHoldPoint?.hold) ? latestHoldPoint.hold : Number.isFinite(latestHoldPoint?.weight) ? latestHoldPoint.weight : null;
   const percent = Number.isFinite(tradePoint?.percent) ? tradePoint.percent : null;
-  const weight = trade === 1 && Number.isFinite(hold) && Number.isFinite(percent) ? hold + percent : hold;
+  const weight = trade === 1 && Number.isFinite(hold) && Number.isFinite(percent)
+    ? hold + percent
+    : hold;
   return { ...latestHoldPoint, signal, weight, hold, trade, tradePoint };
 }
 
-function EvalBadge({ value, full }) {
-  const meta = {
-    DS_DN: { label: "Đúng sóng, đúng ngành", bg: "var(--Gs)", border: "var(--Gb)", color: "var(--G)" },
-    DS_SN: { label: "Đúng sóng, sai ngành", bg: "var(--As)", border: "var(--Ab)", color: "var(--A)" },
-    SS: { label: "Sai sóng", bg: "var(--Rs)", border: "var(--Rb)", color: "var(--R)" },
+function EvalBadge({ value, full, title }) {
+  const tone = {
+    DS_DN: { bg: "var(--Gs)", border: "var(--Gb)", color: "var(--G)" },
+    DS_SN: { bg: "var(--As)", border: "var(--Ab)", color: "var(--A)" },
+    DN_SS: { bg: "var(--Bs)", border: "var(--Bb)", color: "var(--B)" },
+    SS: { bg: "var(--Rs)", border: "var(--Rb)", color: "var(--R)" },
   }[value];
-  return <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: full ? "100%" : undefined, maxWidth: "100%", minWidth: full ? 0 : 96, padding: "5px 10px", borderRadius: 7, background: meta.bg, border: `0.5px solid ${meta.border}`, color: meta.color, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta.label}</span>;
+  const meta = FOUR_KEY_META[value];
+  if (!meta || !tone) return <span style={{ color: "var(--t4)" }}>—</span>;
+  return <span title={title} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: full ? "100%" : undefined, maxWidth: "100%", minWidth: full ? 0 : 96, padding: "5px 10px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta.label}</span>;
 }
 
 function SignalBadge({ value }) {
@@ -216,7 +223,7 @@ function SignalBadge({ value }) {
   return <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 58, padding: "5px 10px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{tone.label}</span>;
 }
 
-function ScoreDonut({ dn, sn, ss, total, mobile }) {
+function ScoreDonut({ dn, sn, ns, ss, total, mobile }) {
   const { t } = useTheme();
   const size = mobile ? 88 : 118;
   const c = size / 2;
@@ -227,6 +234,7 @@ function ScoreDonut({ dn, sn, ss, total, mobile }) {
   const items = [
     { key: "dn", value: dn, color: t.G },
     { key: "sn", value: sn, color: t.A },
+    { key: "ns", value: ns, color: t.B },
     { key: "ss", value: ss, color: t.R },
   ];
   return (
@@ -310,18 +318,19 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
   );
 }
 
-function OverviewPanel({ foundRows, dn, sn, ss, score, scoreName, mobile }) {
+function OverviewPanel({ foundRows, dn, sn, ns, ss, score, scoreName, mobile }) {
   const total = foundRows.length || 1;
   return (
     <Card style={{ padding: mobile ? 16 : "15px 16px", borderRadius: mobile ? 14 : 12, display: "flex", flexDirection: "column", gap: mobile ? 14 : 11 }}>
       <div style={{ color: "var(--t1)", fontSize: 13, fontWeight: 800 }}>Tổng quan danh mục</div>
       <div style={{ display: "flex", alignItems: "center", gap: mobile ? 14 : 16, flexWrap: mobile ? "nowrap" : "wrap" }}>
-        <ScoreDonut dn={dn} sn={sn} ss={ss} total={foundRows.length} mobile={mobile} />
+        <ScoreDonut dn={dn} sn={sn} ns={ns} ss={ss} total={foundRows.length} mobile={mobile} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: mobile ? 7 : 8 }}>
           {[
-            { color: "var(--G)", label: "Đúng sóng, đúng ngành", count: dn },
-            { color: "var(--A)", label: "Đúng sóng, sai ngành", count: sn },
-            { color: "var(--R)", label: "Sai sóng", count: ss },
+            { color: "var(--G)", label: FOUR_KEY_META.DS_DN.label, count: dn },
+            { color: "var(--A)", label: FOUR_KEY_META.DS_SN.label, count: sn },
+            { color: "var(--B)", label: FOUR_KEY_META.DN_SS.label, count: ns },
+            { color: "var(--R)", label: FOUR_KEY_META.SS.label, count: ss },
           ].map((item) => (
             <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
@@ -349,7 +358,7 @@ function OverviewPanel({ foundRows, dn, sn, ss, score, scoreName, mobile }) {
             </div>
           </div>
           <div style={{ color: "var(--t2)", fontSize: 11.5, lineHeight: 1.7, fontStyle: "italic", paddingLeft: 9, borderLeft: "2px solid var(--Bb)" }}>
-            {getTip(dn, sn, ss, total)}
+            {getTip(dn, sn, ns, ss, total)}
           </div>
         </div>
       </div>
@@ -401,7 +410,7 @@ function DetailTable({ rows, codes, dateLabel }) {
                   <td style={{ ...td, textAlign: "center" }}><CfBadge sig={row.branchSig} compact /></td>
                   <td style={{ ...td, textAlign: "center" }}><SignalBadge value={row.signal} /></td>
                   <td style={{ ...td, textAlign: "center", color: "var(--t2)", ...mono }}>{row.weight}%</td>
-                  <td style={{ ...td, textAlign: "center", paddingRight: 14 }}><EvalBadge value={row.evalKey} /></td>
+                  <td style={{ ...td, textAlign: "center", paddingRight: 14 }}><EvalBadge value={row.evalKey} title={row.evalReason} /></td>
                 </tr>
               );
             })}
@@ -440,7 +449,7 @@ function DetailCards({ rows, codes, dateLabel, expanded, onToggle }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, marginBottom: 3 }}>
                     <span style={{ color: "var(--B)", fontSize: 15, fontWeight: 900, ...mono }}>{row.ticker}</span>
-                    <EvalBadge value={row.evalKey} />
+                    <EvalBadge value={row.evalKey} title={row.evalReason} />
                   </div>
                   <div style={{ color: "var(--t3)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.name}</div>
                   <div style={{ color: "var(--t4)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{row.industry || "Chưa rõ ngành"}</div>
@@ -530,10 +539,18 @@ export function ModPhanTichDanhMuc() {
       const tickerSig = tickerContentToSig(cash?.content || "");
       const branchSig = lookupIndustry(branchSigLookup, industry);
       const branchSmdt = lookupIndustry(branchSmdtLookup, industry);
+      const branch = findIndustryBranch(smdtBranch.branches, industry);
+      const fourKey = evaluateFourKey({
+        ticker,
+        industry,
+        date: activeDate,
+        tickerSeries: seriesFromMatrix(smdtTicker.matrix, smdtTicker.datesAsc, ticker, activeDate),
+        industrySeries: branch ? seriesFromMatrix(smdtBranch.matrix, smdtBranch.datesAsc, branch.key, branchSmdtDate || activeDate) : [],
+      });
       const tradePoint = findTradePoint(totalTrade.matrix[ticker], activeDateValue);
       const stockSig = getStockSignalForDate(stockSignal.signalByTicker[ticker], activeDateValue);
       const apiSignal = stockSig?.signal || null;
-      const apiWeight = Number.isFinite(stockSig?.hold) ? stockSig.hold : Number.isFinite(stockSig?.weight) ? stockSig.weight : null;
+      const apiWeight = Number.isFinite(stockSig?.weight) ? stockSig.weight : Number.isFinite(stockSig?.hold) ? stockSig.hold : null;
       const row = {
         ticker,
         found: true,
@@ -541,6 +558,9 @@ export function ModPhanTichDanhMuc() {
         industry,
         smdt,
         branchSmdt,
+        tickerMomentum: fourKey?.tickerMomentum || null,
+        branchMomentum: fourKey?.industryMomentum || null,
+        fourKey,
         tickerSig,
         branchSig,
         tradePoint,
@@ -548,13 +568,14 @@ export function ModPhanTichDanhMuc() {
         signalSource: apiSignal ? "api" : "fallback",
       };
       row.signal = apiSignal || calcSignal(row);
-      row.evalKey = calcEval(row);
+      row.evalKey = fourKey?.evalKey || calcEval(row);
+      row.evalReason = fourKey?.reason || "Thiếu lịch sử 3 phiên, tạm suy luận từ SMDT hiện tại và dòng tiền";
       return row;
     });
-  }, [activeDate, activeDateValue, analyzedCodes, branchPath.tickerToBranch, branchSigLookup, branchSmdtLookup, cashByTicker, smdtTicker.matrix, stockSignal.signalByTicker, tickerNameByKey, totalTrade.matrix]);
+  }, [activeDate, activeDateValue, analyzedCodes, branchPath.tickerToBranch, branchSigLookup, branchSmdtDate, branchSmdtLookup, cashByTicker, smdtBranch.branches, smdtBranch.datesAsc, smdtBranch.matrix, smdtTicker.datesAsc, smdtTicker.matrix, stockSignal.signalByTicker, tickerNameByKey, totalTrade.matrix]);
 
   const foundRows = useMemo(() => rows.filter((row) => row.found), [rows]);
-  const { dn, sn, ss, score } = useMemo(() => scoreCalc(foundRows), [foundRows]);
+  const { dn, sn, ns, ss, score } = useMemo(() => scorePortfolio4Key(foundRows), [foundRows]);
   const scoreName = scoreLabel(score);
   const hasBlockingLoad = smdtTicker.status === "loading" && !smdtTicker.datesAsc.length;
 
@@ -589,13 +610,13 @@ export function ModPhanTichDanhMuc() {
       )}
       {narrow ? (
         <>
-          <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ss={ss} score={score} scoreName={scoreName} mobile />
+          <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ns={ns} ss={ss} score={score} scoreName={scoreName} mobile />
           <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} mobile />
         </>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(360px,1fr)", gap: 12 }}>
           <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} />
-          <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ss={ss} score={score} scoreName={scoreName} />
+          <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ns={ns} ss={ss} score={score} scoreName={scoreName} />
         </div>
       )}
       {narrow ? (
@@ -610,7 +631,7 @@ export function ModPhanTichDanhMuc() {
         <DetailTable rows={rows} codes={analyzedCodes} dateLabel={dateLabel} />
       )}
       <div style={{ color: "var(--t4)", fontSize: 11 }}>
-        Tín hiệu và tỷ trọng lấy từ StockSignal API khi có dữ liệu; các mã thiếu tín hiệu tạm dùng suy luận từ SMDT và dòng tiền.
+        Tín hiệu và tỷ trọng lấy từ StockSignal API khi có dữ liệu; cột Đánh giá dùng logic 4-key theo động lượng SMDT 3 phiên của mã và ngành.
       </div>
     </div>
   );

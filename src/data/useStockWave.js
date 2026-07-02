@@ -12,6 +12,7 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
 
 const API_BASE_URL = "/api/stock-wave";
 const INITIAL_LIMIT = 150;
+const FULL_LIMIT = "full";
 const CACHE_PERSIST_LIMIT = 150;
 const DEFAULT_REFRESH_MS = 15_000;
 const CACHE_KEY = "stock_wave_data_cache";
@@ -23,6 +24,14 @@ let globalCache = null;
 function getRefreshMs() {
   const configured = Number(import.meta.env.VITE_STOCK_WAVE_REFRESH_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
+}
+
+function applyLimitParam(params, limit) {
+  if (limit === FULL_LIMIT) {
+    params.set("limit", FULL_LIMIT);
+  } else if (Number.isFinite(limit) && limit > 0) {
+    params.set("limit", String(limit));
+  }
 }
 
 function toNumber(value, fallback = 0) {
@@ -84,6 +93,16 @@ function overlayFreshTicks(normalized, touchedMap, sinceMs) {
 
   if (!changed) return normalized;
   return { ...normalized, rows: sortRows([...rowMap.values()]) };
+}
+
+function mergeSnapshots(base, patch) {
+  const rowMap = new Map((base?.rows || []).map((row) => [row.date, row]));
+  for (const row of patch?.rows || []) rowMap.set(row.date, row);
+
+  return {
+    name: patch?.name || base?.name || "ALL",
+    rows: sortRows([...rowMap.values()]),
+  };
 }
 
 function toRealtimeTick(item) {
@@ -176,7 +195,7 @@ export function useStockWave() {
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(() => getCachedData()?.updatedAt || null);
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
 
     const request = (async () => {
@@ -187,7 +206,7 @@ export function useStockWave() {
       const startedAt = Date.now();
       try {
         const params = new URLSearchParams({ _: String(startedAt) });
-        if (Number.isFinite(limit) && limit > 0) params.set("limit", String(limit));
+        applyLimitParam(params, limit);
         const res = await fetch(`${API_BASE_URL}?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -198,14 +217,16 @@ export function useStockWave() {
         const normalized = overlayFreshTicks(normalize(json), realtimeTouchedRef.current, startedAt);
         const now = new Date();
 
-        setState(normalized);
+        setState((prev) => {
+          const nextState = merge ? mergeSnapshots(prev, normalized) : normalized;
+          const cacheVal = { ...nextState, updatedAt: now };
+          globalCache = cacheVal;
+          setCachedData(cacheVal);
+          return nextState;
+        });
         setUpdatedAt(now);
         setStatus("ready");
         setError(null);
-
-        const cacheVal = { ...normalized, updatedAt: now };
-        globalCache = cacheVal;
-        setCachedData(cacheVal);
       } catch (e) {
         console.error("Stock wave fetch error:", e);
         const cached = getCachedData();
@@ -230,13 +251,13 @@ export function useStockWave() {
   useEffect(() => {
     let cancelled = false;
     const cached = getCachedData();
-    fetchSnapshot({ background: Boolean(cached), limit: cached ? null : INITIAL_LIMIT }).then(() => {
-      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true });
+    fetchSnapshot({ background: Boolean(cached), limit: cached ? FULL_LIMIT : INITIAL_LIMIT }).then(() => {
+      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true, limit: FULL_LIMIT });
     });
 
     const refresh = () => {
       if (document.visibilityState === "visible") {
-        fetchSnapshot({ background: true });
+        fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
       }
     };
 
@@ -283,7 +304,7 @@ export function useStockWave() {
     setError(null);
   }, []);
 
-  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }), applyTick };
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, limit: FULL_LIMIT }), applyTick };
 }
 
 function getRealtimeUrl() {
