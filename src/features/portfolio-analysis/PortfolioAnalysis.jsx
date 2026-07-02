@@ -86,9 +86,13 @@ function findTradePoint(tradeRow, dateValue) {
   return target ? tradeRow[target] : null;
 }
 
+function sortCodes(codes) {
+  return [...codes].sort((a, b) => a.localeCompare(b));
+}
+
 function parseCodes(input) {
   const seen = new Set();
-  return input
+  const codes = input
     .split(/[,\s]+/)
     .map((item) => item.trim().toUpperCase())
     .filter(Boolean)
@@ -98,6 +102,7 @@ function parseCodes(input) {
       return [code];
     })
     .slice(0, MAX_CODES);
+  return sortCodes(codes);
 }
 
 function loadSavedPortfolio() {
@@ -107,7 +112,7 @@ function loadSavedPortfolio() {
     const analyzedCodes = Array.isArray(parsed?.analyzedCodes)
       ? parsed.analyzedCodes.map((code) => String(code || "").trim().toUpperCase()).filter(Boolean).slice(0, MAX_CODES)
       : [];
-    return { input, analyzedCodes };
+    return { input, analyzedCodes: sortCodes(analyzedCodes) };
   } catch {
     return { input: "", analyzedCodes: [] };
   }
@@ -515,7 +520,7 @@ export function ModPhanTichDanhMuc() {
   const tickerNameByKey = useMemo(() => new Map(smdtTicker.tickers.map((tk) => [tk.key, tk.name || tk.key])), [smdtTicker.tickers]);
 
   const rows = useMemo(() => {
-    const validCodes = analyzedCodes.length ? analyzedCodes : [];
+    const validCodes = analyzedCodes.length ? sortCodes(analyzedCodes) : [];
     const foundCount = validCodes.filter((ticker) => Number.isFinite(smdtTicker.matrix[ticker]?.[activeDate])).length || 1;
     return validCodes.map((ticker) => {
       const smdt = smdtTicker.matrix[ticker]?.[activeDate];

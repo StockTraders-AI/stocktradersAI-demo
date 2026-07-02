@@ -10,10 +10,11 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
  * - Có cache RAM + localStorage để giữ giao diện ổn định khi remount.
  * ─────────────────────────────────────────────────────────────────────── */
 
-const API_URL = "/api/stock-wave?limit=150";
+const API_BASE_URL = "/api/stock-wave";
+const INITIAL_LIMIT = 150;
+const CACHE_PERSIST_LIMIT = 150;
 const DEFAULT_REFRESH_MS = 15_000;
 const CACHE_KEY = "stock_wave_data_cache";
-const MAX_ROWS = 150;
 const STOCK_WAVE_CHANNELS = ["smdt-stock"];
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 
@@ -61,8 +62,8 @@ function normalize(reply) {
   };
 }
 
-function sortAndTrimRows(rows) {
-  return [...rows].sort((a, b) => a.date.localeCompare(b.date)).slice(-MAX_ROWS);
+function sortRows(rows) {
+  return [...rows].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function overlayFreshTicks(normalized, touchedMap, sinceMs) {
@@ -82,7 +83,7 @@ function overlayFreshTicks(normalized, touchedMap, sinceMs) {
   }
 
   if (!changed) return normalized;
-  return { ...normalized, rows: sortAndTrimRows([...rowMap.values()]) };
+  return { ...normalized, rows: sortRows([...rowMap.values()]) };
 }
 
 function toRealtimeTick(item) {
@@ -153,7 +154,7 @@ function setCachedData(data) {
       CACHE_KEY,
       JSON.stringify({
         name: data.name,
-        rows: data.rows,
+        rows: Array.isArray(data.rows) ? data.rows.slice(-CACHE_PERSIST_LIMIT) : [],
         updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
       })
     );
@@ -175,7 +176,7 @@ export function useStockWave() {
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(() => getCachedData()?.updatedAt || null);
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
 
     const request = (async () => {
@@ -185,8 +186,9 @@ export function useStockWave() {
 
       const startedAt = Date.now();
       try {
-        const separator = API_URL.includes("?") ? "&" : "?";
-        const res = await fetch(`${API_URL}${separator}_=${startedAt}`, { cache: "no-store" });
+        const params = new URLSearchParams({ _: String(startedAt) });
+        if (Number.isFinite(limit) && limit > 0) params.set("limit", String(limit));
+        const res = await fetch(`${API_BASE_URL}?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();
@@ -226,7 +228,11 @@ export function useStockWave() {
   }, []);
 
   useEffect(() => {
-    fetchSnapshot();
+    let cancelled = false;
+    const cached = getCachedData();
+    fetchSnapshot({ background: Boolean(cached), limit: cached ? null : INITIAL_LIMIT }).then(() => {
+      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true });
+    });
 
     const refresh = () => {
       if (document.visibilityState === "visible") {
@@ -239,6 +245,7 @@ export function useStockWave() {
     document.addEventListener("visibilitychange", refresh);
 
     return () => {
+      cancelled = true;
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
@@ -262,7 +269,7 @@ export function useStockWave() {
 
       const nextState = {
         ...prev,
-        rows: sortAndTrimRows([...rowMap.values()]),
+        rows: sortRows([...rowMap.values()]),
       };
 
       const cacheVal = { ...nextState, updatedAt: now };

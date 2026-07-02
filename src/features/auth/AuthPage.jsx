@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMarketIndices } from "../../data/useMarketIndices";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
+import { loginUser } from "./authApi";
 
 const NAV_ITEMS = [
   { icon: "ti-layout-dashboard", label: "Dashboard", dim: false },
@@ -124,7 +125,7 @@ function TextField({ label, ...props }) {
   );
 }
 
-function LoginForm({ onSubmit }) {
+function LoginForm({ onSubmit, isSubmitting, error }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -140,18 +141,27 @@ function LoginForm({ onSubmit }) {
       </button>
       <div style={styles.divider}><span>hoặc</span></div>
 
-      <TextField label="Email hoặc số điện thoại" type="text" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
-      <TextField label="Mật khẩu" type="password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <TextField label="Email hoặc số điện thoại" type="text" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Mật khẩu" type="password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
 
       <div style={styles.helperRow}>
         <label style={styles.checkboxLabel}>
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} disabled={isSubmitting} />
           Ghi nhớ đăng nhập
         </label>
         <button type="button" style={styles.linkBtn}>Quên mật khẩu?</button>
       </div>
 
-      <button type="submit" style={styles.submitBtn}>Đăng nhập</button>
+      {error && (
+        <div role="alert" style={styles.errorBox}>
+          <i className="ti ti-alert-circle" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
+        {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
+      </button>
     </form>
   );
 }
@@ -160,11 +170,16 @@ function RegisterForm({ onSubmit }) {
   const [fullName, setFullName] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
 
   return (
     <form onSubmit={(e) => {
       e.preventDefault();
-      onSubmit?.({ fullName, identifier, password });
+      if (onSubmit) {
+        onSubmit({ fullName, identifier, password });
+        return;
+      }
+      setMessage("Chức năng đăng ký chưa được cấu hình API.");
     }}>
       <button type="button" style={styles.socialBtn}>
         <i className="ti ti-brand-google" />
@@ -175,6 +190,13 @@ function RegisterForm({ onSubmit }) {
       <TextField label="Họ và tên" type="text" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} />
       <TextField label="Email hoặc số điện thoại" type="text" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
       <TextField label="Mật khẩu" type="password" placeholder="Tối thiểu 8 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} />
+
+      {message && (
+        <div role="status" style={styles.noticeBox}>
+          <i className="ti ti-info-circle" />
+          <span>{message}</span>
+        </div>
+      )}
 
       <button type="submit" style={styles.submitBtn}>Tạo tài khoản</button>
       <div style={styles.note}>
@@ -188,7 +210,18 @@ function RegisterForm({ onSubmit }) {
 function AuthCard({ onLogin, onRegister }) {
   const { t } = useTheme();
   const [tab, setTab] = useState("login");
+  const [loginState, setLoginState] = useState({ loading: false, error: "" });
   const isLogin = tab === "login";
+
+  const handleLogin = async (credentials) => {
+    setLoginState({ loading: true, error: "" });
+    try {
+      const session = await loginUser(credentials);
+      onLogin?.({ ...session, remember: credentials.remember });
+    } catch (error) {
+      setLoginState({ loading: false, error: error?.message || "Không thể đăng nhập. Vui lòng thử lại." });
+    }
+  };
 
   return (
     <section style={styles.card}>
@@ -209,7 +242,11 @@ function AuthCard({ onLogin, onRegister }) {
         </button>
       </div>
 
-      {isLogin ? <LoginForm onSubmit={onLogin} /> : <RegisterForm onSubmit={onRegister} />}
+      {isLogin ? (
+        <LoginForm onSubmit={handleLogin} isSubmitting={loginState.loading} error={loginState.error} />
+      ) : (
+        <RegisterForm onSubmit={onRegister} />
+      )}
     </section>
   );
 }
@@ -425,6 +462,32 @@ const styles = {
   helperRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 7, fontSize: 11, color: "var(--t3)" },
   checkboxLabel: { display: "flex", alignItems: "center", gap: 7, minWidth: 0 },
   linkBtn: { border: "none", background: "transparent", color: "var(--B)", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
+  errorBox: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 7,
+    marginTop: 14,
+    padding: "9px 10px",
+    borderRadius: 8,
+    background: "rgba(239,68,68,.09)",
+    border: "0.5px solid rgba(239,68,68,.32)",
+    color: "var(--R)",
+    fontSize: 11,
+    lineHeight: 1.45,
+  },
+  noticeBox: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 7,
+    marginTop: 14,
+    padding: "9px 10px",
+    borderRadius: 8,
+    background: "rgba(59,130,246,.09)",
+    border: "0.5px solid rgba(59,130,246,.3)",
+    color: "var(--B)",
+    fontSize: 11,
+    lineHeight: 1.45,
+  },
   submitBtn: {
     width: "100%",
     height: 42,
@@ -436,6 +499,10 @@ const styles = {
     fontSize: 13,
     fontWeight: 850,
     cursor: "pointer",
+  },
+  disabledBtn: {
+    opacity: 0.68,
+    cursor: "not-allowed",
   },
   note: {
     display: "flex",
