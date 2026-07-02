@@ -22,21 +22,52 @@ export function Sidebar({ curMod, onNav, compact }) {
     if (PORTFOLIO_IDS.includes(curMod)) setPortfolioOpen(true);
   }, [curMod]);
 
-  const item = (id, icon, label, { onClick, isParent, isOpen, subIds } = {}) => {
+  const item = (
+    id,
+    icon,
+    label,
+    { onClick, isParent, isOpen, subIds } = {},
+  ) => {
     const active = subIds ? subIds.includes(curMod) : curMod === id;
     return (
       <div
         onClick={onClick || (id ? () => onNav(id) : undefined)}
         style={{
-          display: "flex", alignItems: "center", gap: 13, padding: "13px 16px", cursor: "pointer",
-          color: active ? t.B : "var(--t2)", background: active ? t.Bs : "transparent",
+          display: "flex",
+          alignItems: "center",
+          gap: 13,
+          padding: "13px 16px",
+          cursor: "pointer",
+          color: active ? t.B : "var(--t2)",
+          background: active ? t.Bs : "transparent",
           borderLeft: `3px solid ${active ? t.B : "transparent"}`,
-          fontSize: 14, fontWeight: active ? 600 : 500, transition: "all .12s", userSelect: "none",
+          fontSize: 14,
+          fontWeight: active ? 600 : 500,
+          transition: "all .12s",
+          userSelect: "none",
         }}
       >
-        <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+        <span
+          style={{
+            flex: 1,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </span>
         {isParent && (
-          <i className="ti ti-chevron-right" style={{ fontSize: 13, color: "var(--t4)", flexShrink: 0, transform: isOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform .2s" }} />
+          <i
+            className="ti ti-chevron-right"
+            style={{
+              fontSize: 13,
+              color: "var(--t4)",
+              flexShrink: 0,
+              transform: isOpen ? "rotate(90deg)" : "rotate(0)",
+              transition: "transform .2s",
+            }}
+          />
         )}
       </div>
     );
@@ -49,10 +80,17 @@ export function Sidebar({ curMod, onNav, compact }) {
         key={id}
         onClick={() => onNav(id)}
         style={{
-          display: "flex", alignItems: "center", gap: 10, padding: "9px 16px 9px 32px", cursor: "pointer",
-          color: active ? t.B : "var(--t3)", background: active ? t.Bs : "transparent",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "9px 16px 9px 32px",
+          cursor: "pointer",
+          color: active ? t.B : "var(--t3)",
+          background: active ? t.Bs : "transparent",
           borderLeft: `3px solid ${active ? t.B : "transparent"}`,
-          fontSize: 13, fontWeight: active ? 600 : 400, transition: "all .12s",
+          fontSize: 13,
+          fontWeight: active ? 600 : 400,
+          transition: "all .12s",
         }}
       >
         {label}
@@ -75,11 +113,45 @@ export function Sidebar({ curMod, onNav, compact }) {
       }}
     >
       {/* Logo */}
-      <div style={{ height: 52, display: "flex", alignItems: "center", padding: "0 16px", gap: 10, borderBottom: "0.5px solid var(--bdr)", flexShrink: 0 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg,#7C3AED,#4F46E5)" }}>
-          <i className="ti ti-chart-candle" style={{ color: "#fff", fontSize: 16 }} />
+      <div
+        style={{
+          height: 52,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 16px",
+          gap: 10,
+          borderBottom: "0.5px solid var(--bdr)",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "linear-gradient(135deg,#7C3AED,#4F46E5)",
+          }}
+        >
+          <i
+            className="ti ti-chart-candle"
+            style={{ color: "#fff", fontSize: 16 }}
+          />
         </div>
-        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span
+          style={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: "var(--t1)",
+            letterSpacing: "-.2px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
           StockTraders AI
         </span>
       </div>
