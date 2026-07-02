@@ -4,6 +4,7 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
 
 const API_BASE_URL = "/api/cashflow-ticker";
 const INITIAL_LIMIT = 25;
+const FULL_LIMIT = "full";
 // Giữ đủ dữ liệu trong RAM (để lịch lùi sâu hơn), nhưng chỉ lưu localStorage ít phiên
 // gần nhất — tránh QuotaExceededError. Lần mở lại sẽ refetch full ngay nên không mất gì.
 const CACHE_PERSIST_LIMIT = 30;
@@ -29,7 +30,11 @@ let globalCache = null;
 
 function getApiUrl(limit, { fresh = false, bust = false } = {}) {
   const params = new URLSearchParams();
-  if (Number.isFinite(limit) && limit > 0) params.set("limit", String(limit));
+  if (limit === FULL_LIMIT) {
+    params.set("limit", FULL_LIMIT);
+  } else if (Number.isFinite(limit) && limit > 0) {
+    params.set("limit", String(limit));
+  }
   if (fresh) params.set("fresh", "1");
   if (bust) params.set("_", String(Date.now()));
   const query = params.toString();
@@ -146,6 +151,27 @@ function mergeTicks(state, ticks) {
     .sort((a, b) => toDateSortKey(a.date).localeCompare(toDateSortKey(b.date)));
 
   return { ...state, buckets };
+}
+
+function mergeSnapshots(base, patch) {
+  const bucketMap = new Map(
+    (base?.buckets || []).map((bucket) => [bucket.date, new Map(bucket.rows.map((row) => [row.ticker, row]))])
+  );
+
+  for (const bucket of patch?.buckets || []) {
+    if (!bucketMap.has(bucket.date)) bucketMap.set(bucket.date, new Map());
+    const rows = bucketMap.get(bucket.date);
+    for (const row of bucket.rows || []) rows.set(row.ticker, row);
+  }
+
+  const buckets = [...bucketMap.entries()]
+    .map(([date, rows]) => ({ date, rows: sortRows([...rows.values()]) }))
+    .sort((a, b) => toDateSortKey(a.date).localeCompare(toDateSortKey(b.date)));
+
+  return {
+    buckets,
+    allowedTickers: patch?.allowedTickers?.length ? patch.allowedTickers : base?.allowedTickers || [],
+  };
 }
 
 function overlayFreshTicks(normalized, touchedMap, sinceMs) {
@@ -268,7 +294,7 @@ export function useCashFlowTicker() {
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(() => cached?.updatedAt || null);
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false, fresh = false, limit = null } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, fresh = false, limit = null, merge = false } = {}) => {
     if (inFlightRef.current) return inFlightRef.current;
 
     const request = (async () => {
@@ -284,14 +310,17 @@ export function useCashFlowTicker() {
 
         const normalized = overlayFreshTicks(normalize(json), realtimeTouchedRef.current, startedAt);
         const now = new Date();
-        const cacheVal = { ...normalized, updatedAt: now };
 
-        setState(normalized);
+        setState((prev) => {
+          const nextState = merge ? mergeSnapshots(prev, normalized) : normalized;
+          const cacheVal = { ...nextState, updatedAt: now };
+          globalCache = cacheVal;
+          setCachedData(cacheVal);
+          return nextState;
+        });
         setUpdatedAt(now);
         setStatus("ready");
         setError(null);
-        globalCache = cacheVal;
-        setCachedData(cacheVal);
       } catch (e) {
         console.error("CashFlowTicker Fetch error:", e);
         const currentCache = getCachedData();
@@ -314,22 +343,22 @@ export function useCashFlowTicker() {
   useEffect(() => {
     let cancelled = false;
     const warmupTimers = [];
-    const firstLimit = cached ? null : INITIAL_LIMIT;
+    const firstLimit = cached ? FULL_LIMIT : INITIAL_LIMIT;
     fetchSnapshot({ background: Boolean(cached), fresh: Boolean(cached), limit: firstLimit }).then(() => {
       if (cancelled) return;
       if (!cached) {
-        fetchSnapshot({ background: true, force: true, fresh: true });
+        fetchSnapshot({ background: true, force: true, fresh: true, limit: FULL_LIMIT });
       }
 
       for (const delay of WARMUP_REFRESH_DELAYS) {
         const timer = window.setTimeout(() => {
-          fetchSnapshot({ background: true, force: true, fresh: true });
+          fetchSnapshot({ background: true, force: true, fresh: true, limit: INITIAL_LIMIT, merge: true });
         }, delay);
         warmupTimers.push(timer);
       }
     });
     const refresh = () => {
-      if (document.visibilityState === "visible") fetchSnapshot({ background: true });
+      if (document.visibilityState === "visible") fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
     };
     const timer = window.setInterval(refresh, getRefreshMs());
     window.addEventListener("focus", refresh);
@@ -368,7 +397,7 @@ export function useCashFlowTicker() {
   }, [state.allowedTickers, state.buckets]);
 
   const latest = state.buckets[state.buckets.length - 1] || null;
-  return { ...state, latest, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, fresh: true }), applyTick };
+  return { ...state, latest, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, fresh: true, limit: FULL_LIMIT }), applyTick };
 }
 
 function getRealtimeUrl() {

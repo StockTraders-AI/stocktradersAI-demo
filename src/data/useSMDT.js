@@ -14,6 +14,7 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
 
 const API_BASE_URL = "/api/smdt";
 const INITIAL_LIMIT = 500;
+const FULL_LIMIT = "full";
 const DEFAULT_REFRESH_MS = 15_000;
 
 function getRefreshMs() {
@@ -47,6 +48,14 @@ function sortBranches(branches) {
   });
 }
 
+function applyLimitParam(params, limit) {
+  if (limit === FULL_LIMIT) {
+    params.set("limit", FULL_LIMIT);
+  } else if (Number.isFinite(limit) && limit > 0) {
+    params.set("limit", String(limit));
+  }
+}
+
 /** Chuẩn hoá payload API -> { branches, datesAsc, matrix }. */
 function normalize(reply) {
   const datas = reply?.SMDTBranchReply?.SMDTDatas ?? [];
@@ -73,6 +82,19 @@ function normalize(reply) {
   sortBranches(branches);
 
   return { branches, datesAsc, matrix };
+}
+
+function mergeSnapshots(base, patch) {
+  const dateSet = new Set([...(base?.datesAsc || []), ...(patch?.datesAsc || [])]);
+  const branchMap = new Map((base?.branches || []).map((branch) => [branch.key, branch]));
+  for (const branch of patch?.branches || []) branchMap.set(branch.key, branch);
+
+  const matrix = { ...(base?.matrix || {}) };
+  for (const keyName in patch?.matrix || {}) {
+    matrix[keyName] = { ...(matrix[keyName] || {}), ...patch.matrix[keyName] };
+  }
+
+  return { branches: sortBranches([...branchMap.values()]), datesAsc: [...dateSet].sort(), matrix };
 }
 
 /** Khoá ô (ngành × ngày) cho map theo dõi giá trị realtime. */
@@ -224,7 +246,7 @@ export function useSMDT() {
     return cached ? cached.updatedAt : null;
   });
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
 
     let request;
@@ -235,7 +257,7 @@ export function useSMDT() {
       const startedAt = Date.now();
       try {
         const params = new URLSearchParams({ _: String(startedAt) });
-        if (Number.isFinite(limit) && limit > 0) params.set("limit", String(limit));
+        applyLimitParam(params, limit);
         const res = await fetch(`${API_BASE_URL}?${params.toString()}`, {
           cache: "no-store",
         });
@@ -248,15 +270,16 @@ export function useSMDT() {
         const normalized = overlayFreshTicks(normalize(json), realtimeTouchedRef.current, startedAt);
         const now = new Date();
 
-        setState(normalized);
+        setState((prev) => {
+          const nextState = merge ? mergeSnapshots(prev, normalized) : normalized;
+          const cacheVal = { ...nextState, updatedAt: now };
+          globalCache = cacheVal;
+          setCachedData(cacheVal);
+          return nextState;
+        });
         setUpdatedAt(now);
         setStatus("ready");
         setError(null);
-
-        // Save to global and localStorage cache
-        const cacheVal = { ...normalized, updatedAt: now };
-        globalCache = cacheVal;
-        setCachedData(cacheVal);
       } catch (e) {
         console.error("SMDT Fetch error:", e);
         const cached = getCachedData();
@@ -281,13 +304,13 @@ export function useSMDT() {
   useEffect(() => {
     let cancelled = false;
     const cached = getCachedData();
-    fetchSnapshot({ background: Boolean(cached), limit: cached ? null : INITIAL_LIMIT }).then(() => {
-      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true });
+    fetchSnapshot({ background: Boolean(cached), limit: cached ? FULL_LIMIT : INITIAL_LIMIT }).then(() => {
+      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true, limit: FULL_LIMIT });
     });
 
     const refresh = () => {
       if (document.visibilityState === "visible") {
-        fetchSnapshot({ background: true });
+        fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
       }
     };
 
@@ -353,7 +376,7 @@ export function useSMDT() {
     setError(null);
   }, []);
 
-  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }), applyTick };
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, limit: FULL_LIMIT }), applyTick };
 }
 
 function getRealtimeUrl() {
