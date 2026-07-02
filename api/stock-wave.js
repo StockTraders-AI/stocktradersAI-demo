@@ -4,6 +4,12 @@ const CACHE_DURATION = 3 * 1000;
 const API_ACCOUNT = "thao.dtt";
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 
+function parseLimit(value) {
+  if (value == null || value === "" || value === "all" || value === "full") return null;
+  const limit = parseInt(value, 10);
+  return Number.isFinite(limit) && limit > 0 ? limit : 150;
+}
+
 async function fetchStockWaveFromSource() {
   const payload = { StockWaveRequest: { account: API_ACCOUNT } };
 
@@ -49,7 +55,7 @@ function sliceReply(data, limit) {
       codeReply: sourceReply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
       stockWaves: {
         ...stockWaves,
-        waveDatas: waveDatas.slice(-limit),
+        waveDatas: limit ? waveDatas.slice(-limit) : waveDatas,
       },
     },
   };
@@ -66,10 +72,7 @@ export default async function handler(req, res) {
   }
 
   const now = Date.now();
-  let limit = parseInt(req.query.limit || "150", 10);
-  if (isNaN(limit) || limit <= 0) {
-    limit = 150;
-  }
+  const limit = parseLimit(req.query.limit);
 
   if (!serverCache || now - lastFetched > CACHE_DURATION) {
     try {

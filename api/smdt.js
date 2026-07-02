@@ -4,6 +4,12 @@ let lastFetched = 0;
 const CACHE_DURATION = 3 * 1000; // Realtime là đường chính; proxy chỉ phục vụ snapshot ban đầu + lưới dự phòng, giữ ngắn để tươi.
 const API_ACCOUNT = "thao.dtt";
 
+function parseLimit(value) {
+  if (value == null || value === "" || value === "all" || value === "full") return null;
+  const limit = parseInt(value, 10);
+  return Number.isFinite(limit) && limit > 0 ? limit : 150;
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -16,10 +22,7 @@ export default async function handler(req, res) {
   }
 
   const now = Date.now();
-  let limit = parseInt(req.query.limit || "150", 10);
-  if (isNaN(limit) || limit <= 0) {
-    limit = 150;
-  }
+  const limit = parseLimit(req.query.limit);
 
   // Fetch from target if cache is missing or expired
   if (!serverCache || (now - lastFetched > CACHE_DURATION)) {
@@ -57,8 +60,7 @@ export default async function handler(req, res) {
     const originalDatas = serverCache?.SMDTBranchReply?.SMDTDatas || [];
     const slicedDatas = originalDatas.map(branch => {
       const originalSmdts = branch.smdts || [];
-      // Keep only the last 'limit' items (newest data points)
-      const slicedSmdts = originalSmdts.slice(-limit);
+      const slicedSmdts = limit ? originalSmdts.slice(-limit) : originalSmdts;
       return {
         ...branch,
         smdts: slicedSmdts

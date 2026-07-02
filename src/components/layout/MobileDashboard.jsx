@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { MODULES, ModuleView } from "../../app/modules";
-import { BottomNav } from "./BottomNav";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
-/* ─────────────────────────── MOBILE LAYOUT ─────────────────────────────
- * Topbar + nội dung cuộn + thanh tab dưới. Menu đầy đủ trong drawer trượt.
- * ─────────────────────────────────────────────────────────────────────── */
 export function MobileDashboard() {
   const [curMod, setCurMod] = useState("dashboard");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -43,14 +39,12 @@ export function MobileDashboard() {
 
       <Topbar mod={mod} isMobile onMenuToggle={() => setDrawerOpen((o) => !o)} />
 
-      <div style={{ padding: "14px 13px", display: "flex", flexDirection: "column", gap: 13, paddingBottom: "calc(80px + env(safe-area-inset-bottom,0px))" }}>
+      <div style={{ padding: "14px 13px calc(18px + env(safe-area-inset-bottom,0px))", display: "flex", flexDirection: "column", gap: 13 }}>
         <ModuleView id={curMod} />
         <div style={{ textAlign: "center", fontSize: 11, color: "var(--t3)" }}>
           Dữ liệu chỉ mang tính tham khảo, không phải lời khuyên đầu tư.
         </div>
       </div>
-
-      <BottomNav curMod={curMod} onNav={sw} />
     </div>
   );
 }
