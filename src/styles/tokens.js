@@ -91,6 +91,7 @@ export const GLOBAL_CSS = `
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 3px; }
+  .st-sidebar-nav::-webkit-scrollbar { width: 0; height: 0; display: none; }
   @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.8)} }
   @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
 `;
