@@ -58,8 +58,8 @@ export function valToHmCls(v) {
 /* Tín hiệu dòng tiền: si / sn / so / st. */
 export function sigStyle(type, t) {
   return {
-    si: { bg: t.Gs, color: t.G, label: "Tiếp tục đổ vào" },
-    sn: { bg: t.Bs, color: t.B, label: "Nhen nhóm đổ vào" },
+    si: { bg: "rgba(61,214,140,.16)", color: t.G, label: "Tiếp tục đổ vào" },
+    sn: { bg: "rgba(61,214,140,.045)", color: t.G, label: "Nhen nhóm đổ vào" },
     so: { bg: t.As, color: t.A, label: "Đang thoát ra" },
     st: { bg: t.Rs, color: t.R, label: "Tiếp tục thoát ra" },
   }[type];

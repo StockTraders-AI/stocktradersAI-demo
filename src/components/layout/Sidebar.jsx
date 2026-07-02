@@ -175,7 +175,7 @@ export function Sidebar({ curMod, onNav, compact }) {
       >
         {sub("dong-tien-nganh", "ti-trending-up", "Dòng tiền ngành")}
         {sub("smdt-nganh", "ti-table", "SMDT ngành")}
-        {sub("lo-trinh-dan-song", "ti-timeline", "Lộ trình dẫn sóng")}
+        {sub("lo-trinh-dan-song", "ti-route", "Lộ trình dẫn sóng")}
       </div>
 
       {item(null, "ti-building-store", "Cổ phiếu", {

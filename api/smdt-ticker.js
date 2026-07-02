@@ -4,6 +4,12 @@ const CACHE_DURATION = 3 * 1000;
 const API_ACCOUNT = "thao.dtt";
 const REPLY_KEYS = ["SMDTTickerReply", "SMDTTickerRequest"];
 
+function parseLimit(value) {
+  if (value == null || value === "" || value === "all" || value === "full") return null;
+  const limit = parseInt(value, 10);
+  return Number.isFinite(limit) && limit > 0 ? limit : 150;
+}
+
 function getReply(data) {
   for (const key of REPLY_KEYS) {
     if (data?.[key]) return data[key];
@@ -47,7 +53,7 @@ function sliceReply(data, limit) {
       codeReply: sourceReply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
       SMDTDatas: datas.map((d) => ({
         ...d,
-        smdts: Array.isArray(d.smdts) ? d.smdts.slice(-limit) : [],
+        smdts: Array.isArray(d.smdts) ? (limit ? d.smdts.slice(-limit) : d.smdts) : [],
       })),
     },
   };
@@ -64,10 +70,7 @@ export default async function handler(req, res) {
   }
 
   const now = Date.now();
-  let limit = parseInt(req.query.limit || "150", 10);
-  if (isNaN(limit) || limit <= 0) {
-    limit = 150;
-  }
+  const limit = parseLimit(req.query.limit);
 
   if (!serverCache || now - lastFetched > CACHE_DURATION) {
     try {

@@ -12,7 +12,8 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
  *   trỏ tới Realtime Core.
  * ─────────────────────────────────────────────────────────────────────── */
 
-const API_URL = "/api/smdt?limit=500";
+const API_BASE_URL = "/api/smdt";
+const INITIAL_LIMIT = 500;
 const DEFAULT_REFRESH_MS = 15_000;
 
 function getRefreshMs() {
@@ -223,7 +224,7 @@ export function useSMDT() {
     return cached ? cached.updatedAt : null;
   });
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
 
     let request;
@@ -233,8 +234,9 @@ export function useSMDT() {
       }
       const startedAt = Date.now();
       try {
-        const separator = API_URL.includes("?") ? "&" : "?";
-        const res = await fetch(`${API_URL}${separator}_=${startedAt}`, {
+        const params = new URLSearchParams({ _: String(startedAt) });
+        if (Number.isFinite(limit) && limit > 0) params.set("limit", String(limit));
+        const res = await fetch(`${API_BASE_URL}?${params.toString()}`, {
           cache: "no-store",
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -277,7 +279,11 @@ export function useSMDT() {
   }, []);
 
   useEffect(() => {
-    fetchSnapshot();
+    let cancelled = false;
+    const cached = getCachedData();
+    fetchSnapshot({ background: Boolean(cached), limit: cached ? null : INITIAL_LIMIT }).then(() => {
+      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true });
+    });
 
     const refresh = () => {
       if (document.visibilityState === "visible") {
@@ -290,6 +296,7 @@ export function useSMDT() {
     document.addEventListener("visibilitychange", refresh);
 
     return () => {
+      cancelled = true;
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);

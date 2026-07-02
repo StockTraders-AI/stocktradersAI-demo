@@ -3,6 +3,12 @@ let lastFetched = 0;
 const CACHE_DURATION = 3 * 1000;
 const API_ACCOUNT = "thao.dtt";
 
+function parseLimit(value) {
+  if (value == null || value === "" || value === "all" || value === "full") return null;
+  const limit = parseInt(value, 10);
+  return Number.isFinite(limit) && limit > 0 ? limit : 150;
+}
+
 async function fetchCashFlowBranchFromSource() {
   const response = await fetch("https://stocktraders.vn/service/data/getCashFlowBranch", {
     method: "POST",
@@ -35,7 +41,7 @@ function sliceReply(data, limit) {
   return {
     CashFlowBranchReply: {
       codeReply: sourceReply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
-      cashFlowBranchs: buckets.slice(-limit),
+      cashFlowBranchs: limit ? buckets.slice(-limit) : buckets,
     },
   };
 }
@@ -51,10 +57,7 @@ export default async function handler(req, res) {
   }
 
   const now = Date.now();
-  let limit = parseInt(req.query.limit || "150", 10);
-  if (isNaN(limit) || limit <= 0) {
-    limit = 150;
-  }
+  const limit = parseLimit(req.query.limit);
 
   if (!serverCache || now - lastFetched > CACHE_DURATION) {
     try {

@@ -1,11 +1,20 @@
 export const CF_SIG = {
-  sn: { cls: "70", label: "Nhen nhóm" },
-  si: { cls: "100", label: "Đổ vào" },
+  sn: { label: "Nhen nhóm" },
+  si: { label: "Đổ vào" },
   so: { cls: "50", label: "Đang thoát" },
   st: { cls: "neg", label: "Thoát ra" },
 };
 
 export const CF_SIG_ORDER = ["sn", "si", "so", "st"];
+
+export function cfSigStyle(sig, t) {
+  return {
+    sn: { bg: "rgba(61,214,140,.045)", border: "rgba(61,214,140,.18)", color: t.G },
+    si: { bg: "rgba(61,214,140,.16)", border: "rgba(61,214,140,.44)", color: t.G },
+    so: { bg: t.As, border: t.Ab, color: t.A },
+    st: { bg: t.Rs, border: t.Rb, color: t.R },
+  }[sig];
+}
 
 export function dominantSig(sigs) {
   const counts = {};

@@ -1,12 +1,11 @@
 import { useTheme } from "../../theme";
-import { hmStyle } from "../../styles/tokens";
-import { CF_SIG } from "./cashFlowUtils";
+import { CF_SIG, cfSigStyle } from "./cashFlowUtils";
 
 export function CfBadge({ sig, small, compact }) {
   const { t } = useTheme();
   const meta = CF_SIG[sig];
   if (!meta) return <span style={{ color: "var(--t4)" }}>—</span>;
-  const s = hmStyle(meta.cls, t);
+  const s = cfSigStyle(sig, t);
   return (
     <span
       style={{
