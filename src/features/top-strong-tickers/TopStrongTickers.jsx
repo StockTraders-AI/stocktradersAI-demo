@@ -15,7 +15,7 @@ import { IndustryPicker } from "../cash-flow-ticker/IndustryPicker";
 import { CfBadge } from "../cash-flow-ticker/CfBadge";
 import { cfSigStyle } from "../cash-flow-ticker/cashFlowUtils";
 
-const SIGS = ["si", "sn", "so", "st"];
+const SIGS = ["sn", "si", "so", "st"];
 const SIG_LABEL = {
   si: "Đổ vào",
   sn: "Nhen nhóm",

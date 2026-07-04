@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { readDataCache, writeDataCache } from "./cacheStorage";
 import { resolveRealtimeUrl } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
@@ -16,7 +17,8 @@ const FULL_LIMIT = "full";
 const CACHE_PERSIST_LIMIT = 150;
 const DEFAULT_REFRESH_MS = 15_000;
 const CACHE_KEY = "stock_wave_data_cache";
-const STOCK_WAVE_CHANNELS = ["smdt-stock"];
+const CACHE_SCHEMA_VERSION = 1;
+const STOCK_WAVE_CHANNELS = ["wave"];
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 
 let globalCache = null;
@@ -150,9 +152,7 @@ function extractRealtimeTicks(payload) {
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    const serialized = localStorage.getItem(CACHE_KEY);
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed && Array.isArray(parsed.rows)) {
       globalCache = {
         name: parsed.name || "ALL",
@@ -169,13 +169,14 @@ function getCachedData() {
 
 function setCachedData(data) {
   try {
-    localStorage.setItem(
+    writeDataCache(
       CACHE_KEY,
-      JSON.stringify({
+      {
         name: data.name,
         rows: Array.isArray(data.rows) ? data.rows.slice(-CACHE_PERSIST_LIMIT) : [],
         updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
-      })
+      },
+      { schemaVersion: CACHE_SCHEMA_VERSION }
     );
   } catch (e) {
     console.warn("Failed to save stock wave cache:", e);
@@ -314,7 +315,7 @@ function getRealtimeUrl() {
 /* ───────────────────────────────────────────────────────────────────────
  * useRealtimeStockWaveFeed — cầu nối realtime cho dữ liệu sóng cổ phiếu.
  *
- * Mặc định subscribe channel `smdt-stock`; nếu gateway dùng channel khác,
+ * Mặc định subscribe channel `wave`; nếu gateway dùng channel khác,
  * chỉ cần đổi STOCK_WAVE_CHANNELS hoặc cấu hình phía realtime core.
  * ─────────────────────────────────────────────────────────────────────── */
 export function useRealtimeStockWaveFeed(onTick) {

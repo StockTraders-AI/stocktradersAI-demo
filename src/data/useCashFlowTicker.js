@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { readDataCache, removeDataCache, writeDataCache } from "./cacheStorage";
 import { resolveRealtimeUrl } from "./realtimeUrl";
 
 const API_BASE_URL = "/api/cashflow-ticker";
@@ -11,6 +12,7 @@ const CACHE_PERSIST_LIMIT = 30;
 const DEFAULT_REFRESH_MS = 15_000;
 const WARMUP_REFRESH_DELAYS = [1_000, 3_000, 6_000];
 const CACHE_KEY = "cashflow_ticker_data_cache_v5";
+const CACHE_SCHEMA_VERSION = 1;
 const LEGACY_CACHE_KEYS = ["cashflow_ticker_data_cache_v4", "cashflow_ticker_data_cache_v3"];
 const CHANNELS = ["money-flow-stock"];
 const REPLY_KEYS = ["CashFlowTickerReply", "CashFlowTickerRequest"];
@@ -232,26 +234,13 @@ function extractRealtimeTicks(payload) {
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    let serialized = localStorage.getItem(CACHE_KEY);
-    let fromLegacy = false;
-    if (!serialized) {
-      for (const key of LEGACY_CACHE_KEYS) {
-        serialized = localStorage.getItem(key);
-        if (serialized) {
-          fromLegacy = true;
-          break;
-        }
-      }
-    }
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed && Array.isArray(parsed.buckets)) {
       globalCache = {
         buckets: parsed.buckets,
         allowedTickers: Array.isArray(parsed.allowedTickers) ? parsed.allowedTickers : [],
         updatedAt: parsed.updatedAt ? new Date(parsed.updatedAt) : null,
       };
-      if (fromLegacy) setCachedData(globalCache);
       return globalCache;
     }
   } catch (e) {
@@ -261,21 +250,21 @@ function getCachedData() {
 }
 
 function setCachedData(data) {
-  const serialize = (limit) => {
+  const buildPayload = (limit) => {
     const buckets = Array.isArray(data.buckets) ? data.buckets.slice(-limit) : [];
-    return JSON.stringify({
+    return {
       buckets,
       allowedTickers: data.allowedTickers || [],
       updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
-    });
+    };
   };
   try {
-    localStorage.setItem(CACHE_KEY, serialize(CACHE_PERSIST_LIMIT));
+    writeDataCache(CACHE_KEY, buildPayload(CACHE_PERSIST_LIMIT), { schemaVersion: CACHE_SCHEMA_VERSION });
   } catch (e) {
     try {
-      localStorage.removeItem(CACHE_KEY);
-      for (const key of LEGACY_CACHE_KEYS) localStorage.removeItem(key);
-      localStorage.setItem(CACHE_KEY, serialize(8));
+      removeDataCache(CACHE_KEY);
+      for (const key of LEGACY_CACHE_KEYS) removeDataCache(key);
+      writeDataCache(CACHE_KEY, buildPayload(8), { schemaVersion: CACHE_SCHEMA_VERSION });
     } catch (retryError) {
       console.warn("Failed to save CashFlowTicker cache:", retryError);
     }
