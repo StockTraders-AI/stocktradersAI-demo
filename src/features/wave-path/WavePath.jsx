@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNarrow } from "../../app/useNarrow";
 import { useBranchPath } from "../../data/useBranchPath";
 import { CORE_BRANCHES } from "../../data/useSMDT";
-import { useSMDTBranchCross, useSMDTTickerCross } from "../../data/useSMDTCross";
+import { useRealtimeSMDTBranchCrossFeed, useRealtimeSMDTTickerCrossFeed, useSMDTBranchCross, useSMDTTickerCross } from "../../data/useSMDTCross";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
 
@@ -17,8 +17,17 @@ const PINNED_KEYS = [
   "Thép",
   "BĐS Dân cư",
   "Xây dựng",
-  "Sản xuất và Khai thác dầu khí",
-  "Sóng Vin",
+  "Sóng ngành Vin",
+];
+
+const INDUSTRY_ALIAS_GROUPS = [
+  ["Ngân hàng", "Ngân hàng thương mại truyền thống"],
+  ["Chứng khoán", "Môi giới chứng khoán"],
+  ["Thép", "Sản xuất, chế biến thép"],
+  ["BĐS Dân cư", "Bất động sản", "Bất động sản dân cư", "Dịch vụ Bất động sản dân cư"],
+  ["BĐS KCN", "Bất động sản công nghiệp", "Bất động sản khu công nghiệp", "Khu công nghiệp"],
+  ["Sóng ngành Vin", "Sóng Vin", "Vin", "Vingroup"],
+  ["Sản xuất và Khai thác dầu khí", "SX & KT dầu khí", "Dầu khí"],
 ];
 
 const COLORS = [
@@ -71,6 +80,16 @@ function normalizeName(value) {
     .replace(/\s+/g, " ");
 }
 
+function aliasesOfIndustry(name) {
+  const normalized = normalizeName(name);
+  return INDUSTRY_ALIAS_GROUPS.find((group) => group.some((item) => normalizeName(item) === normalized)) || [name];
+}
+
+function pinnedOrderOfIndustry(name) {
+  const names = aliasesOfIndustry(name).map(normalizeName);
+  return PINNED_KEYS.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeName(alias))));
+}
+
 function pctPos(date, d0, totalMs) {
   if (!date || !d0 || totalMs <= 0) return 0;
   return Math.max(0, Math.min(100, ((new Date(date) - d0) / totalMs) * 100));
@@ -112,10 +131,8 @@ function signalMeta(value, prev, t) {
 
 function branchAliases(row) {
   const aliases = new Set([normalizeName(row.key), normalizeName(row.label)]);
-  if (row.key === "BĐS Dân cư") aliases.add(normalizeName("Bất động sản"));
-  if (row.key === "Sản xuất và Khai thác dầu khí") {
-    aliases.add(normalizeName("SX & KT dầu khí"));
-    aliases.add(normalizeName("Dầu khí"));
+  for (const name of [row.key, row.label]) {
+    for (const alias of aliasesOfIndustry(name)) aliases.add(normalizeName(alias));
   }
   return aliases;
 }
@@ -1224,7 +1241,6 @@ function ManageModal({ rows, visibleSet, onClose, onSave }) {
 }
 
 function buildRows({ branches, datesAsc, matrix }) {
-  const pinnedIndex = new Map(PINNED_KEYS.map((key, index) => [key, index]));
   const coreLabels = new Map(CORE_BRANCHES.map((item) => [item.key, item.label]));
 
   return branches
@@ -1234,13 +1250,14 @@ function buildRows({ branches, datesAsc, matrix }) {
         .filter((item) => item.smdt != null && item.smdt >= STRONG_THRESHOLD);
       if (!events.length) return null;
       const last = events[events.length - 1];
-      const pinned = pinnedIndex.has(branch.key);
+      const pinnedOrder = pinnedOrderOfIndustry(branch.key);
+      const pinned = pinnedOrder >= 0;
       return {
         key: branch.key,
         label: branch.key === "BĐS Dân cư" ? "BĐS Dân cư" : coreLabels.get(branch.key) || branch.label || branch.key,
         color: COLORS[index % COLORS.length],
         pinned,
-        pinnedOrder: pinned ? pinnedIndex.get(branch.key) : 999,
+        pinnedOrder: pinned ? pinnedOrder : 999,
         events,
         lastDate: last.date,
         lastSmdt: last.smdt,
@@ -1255,6 +1272,8 @@ export function ModLoTrinhDanSong() {
   const smdt = useSMDTBranchCross();
   const tickers = useSMDTTickerCross();
   const branchPath = useBranchPath();
+  useRealtimeSMDTBranchCrossFeed(smdt.applyTick);
+  useRealtimeSMDTTickerCrossFeed(tickers.applyTick);
 
   const [year, setYear] = useState(null);
   const [query, setQuery] = useState("");

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { readDataCache, writeDataCache } from "./cacheStorage";
 import { resolveRealtimeUrl } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
@@ -10,7 +11,7 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
  * - Chuẩn hoá thành lưới (cổ phiếu × ngày) → smdt (số), dễ render heatmap.
  *   (Mô hình số giống SMDT ngành; bố cục cột theo mã giống Dòng tiền cổ phiếu.)
  * - Realtime: bật `useRealtimeSMDTTickerFeed` (Socket.IO) trỏ tới Realtime Core,
- *   subscribe channel "smdt-ticker-cross", hoặc gọi `applyTick()` để merge tick mới.
+ *   subscribe channel "smdt-stock", hoặc gọi `applyTick()` để merge tick mới.
  * ─────────────────────────────────────────────────────────────────────── */
 
 const API_BASE_URL = "/api/smdt-ticker";
@@ -18,10 +19,11 @@ const INITIAL_LIMIT = 500;
 const FULL_LIMIT = "full";
 const DEFAULT_REFRESH_MS = 15_000;
 const CACHE_KEY = "smdt_ticker_data_cache";
+const CACHE_SCHEMA_VERSION = 1;
 // Giữ đủ dữ liệu trong RAM (để lịch lùi sâu hơn), nhưng chỉ lưu localStorage 150 phiên
 // gần nhất — tránh QuotaExceededError. Lần mở lại sẽ refetch full ngay nên không mất gì.
 const CACHE_PERSIST_LIMIT = 150;
-const CHANNELS = ["smdt-ticker-cross"];
+const CHANNELS = ["smdt-stock"];
 const REPLY_KEYS = ["SMDTTickerReply", "SMDTTickerRequest"];
 
 let globalCache = null; // RAM Cache to keep data alive across hook remounts
@@ -184,9 +186,7 @@ function extractRealtimeTicks(payload) {
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    const serialized = localStorage.getItem(CACHE_KEY);
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed && parsed.tickers && parsed.datesAsc && parsed.matrix) {
       globalCache = {
         tickers: parsed.tickers,
@@ -214,14 +214,15 @@ function setCachedData(data) {
       for (const date in byDate) if (keep.has(date)) row[date] = byDate[date];
       matrix[ticker] = row;
     }
-    localStorage.setItem(
+    writeDataCache(
       CACHE_KEY,
-      JSON.stringify({
+      {
         tickers: data.tickers,
         datesAsc,
         matrix,
         updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
-      })
+      },
+      { schemaVersion: CACHE_SCHEMA_VERSION }
     );
   } catch (e) {
     console.warn("Failed to save SMDTTicker cache:", e);
@@ -360,7 +361,7 @@ function getRealtimeUrl() {
  * useRealtimeSMDTTickerFeed — cầu nối tới gateway realtime phía sau Kafka qua Socket.IO.
  *
  * Cách dùng: đặt VITE_SMDT_TICKER_WS_URL (hoặc dùng chung VITE_SMDT_WS_URL) trỏ tới
- * Socket.IO namespace /realtime; subscribe channel "smdt-ticker-cross".
+ * Socket.IO namespace /realtime; subscribe channel "smdt-stock".
  * ─────────────────────────────────────────────────────────────────────── */
 export function useRealtimeSMDTTickerFeed(onTick) {
   const cbRef = useRef(onTick);
