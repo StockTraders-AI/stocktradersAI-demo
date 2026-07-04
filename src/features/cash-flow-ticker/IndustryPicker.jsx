@@ -1,39 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { CfBadge } from "./CfBadge";
-
-const CORE_INDUSTRY_GROUPS = [
-  ["Môi giới chứng khoán", "Chứng khoán"],
-  ["Ngân hàng thương mại truyền thống", "Ngân hàng"],
-  ["Bất động sản dân cư", "BĐS Dân cư", "Bất động sản"],
-  ["Sản xuất, chế biến thép", "Thép"],
-  ["Xây dựng"],
-  ["Sóng ngành Vin", "Vin", "Vingroup"],
-];
-
-const CORE_INDUSTRY_KEYS = new Set(CORE_INDUSTRY_GROUPS.flat().map(normalizeIndustryName));
-
-function normalizeIndustryName(name) {
-  return String(name || "")
-    .normalize("NFC")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLowerCase();
-}
-
-function getCoreRank(industry) {
-  const normalized = normalizeIndustryName(industry);
-  const index = CORE_INDUSTRY_GROUPS.findIndex((group) => group.some((item) => normalizeIndustryName(item) === normalized));
-  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-}
+import { getCashFlowCoreRank, isCashFlowCoreIndustry } from "./cashFlowUtils";
 
 function splitIndustries(industries) {
   const core = [];
   const sub = [];
   for (const industry of industries) {
-    if (CORE_INDUSTRY_KEYS.has(normalizeIndustryName(industry))) core.push(industry);
+    if (isCashFlowCoreIndustry(industry)) core.push(industry);
     else sub.push(industry);
   }
-  core.sort((a, b) => getCoreRank(a) - getCoreRank(b) || a.localeCompare(b, "vi"));
+  core.sort((a, b) => getCashFlowCoreRank(a) - getCashFlowCoreRank(b) || a.localeCompare(b, "vi"));
   sub.sort((a, b) => {
     if (a === "Khác") return 1;
     if (b === "Khác") return -1;

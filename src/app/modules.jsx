@@ -7,6 +7,7 @@ import { ModTopMaManh } from "../features/top-strong-tickers/TopStrongTickers";
 import { ModDongTienTT } from "../features/market-flow/MarketFlow";
 import { ModPhanTichDanhMuc } from "../features/portfolio-analysis/PortfolioAnalysis";
 import { ModLoTrinhDanSong } from "../features/wave-path/WavePath";
+import { ModDoSong } from "../features/stock-wave/StockWave";
 
 /* ─────────────────────────── MODULE REGISTRY ───────────────────────────
  * Mỗi module: tiêu đề + phụ đề cho topbar, render qua <ModuleView>.
@@ -15,6 +16,7 @@ import { ModLoTrinhDanSong } from "../features/wave-path/WavePath";
  * ─────────────────────────────────────────────────────────────────────── */
 export const MODULES = {
   "dashboard":       { title: "Dashboard",          sub: "Tổng quan thị trường hôm nay" },
+  "do-song":         { title: "Dò sóng",             sub: "Dữ liệu thật · getStockWave API" },
   "dong-tien-tt":    { title: "Thị trường",          sub: "Tổng hợp GTGD · Khối ngoại · Tự doanh" },
   "dong-tien-nganh": { title: "Dòng tiền ngành",     sub: "Chủ lực 6 ngành — theo dõi vào/ra theo ngày" },
   "smdt-nganh":      { title: "SMDT ngành",          sub: "Sức mạnh dòng tiền theo ngành · Heatmap" },
@@ -40,6 +42,7 @@ export const BOTTOM_TABS = [
 export function ModuleView({ id }) {
   switch (id) {
     case "dashboard":       return <ModDashboard />;
+    case "do-song":         return <ModDoSong />;
     case "smdt-nganh":      return <ModSMDTNganh />;
     case "lo-trinh-dan-song": return <ModLoTrinhDanSong />;
     case "dong-tien-nganh": return <ModDongTienNganh />;

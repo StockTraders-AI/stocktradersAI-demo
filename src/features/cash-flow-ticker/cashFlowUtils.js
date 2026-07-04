@@ -7,6 +7,34 @@ export const CF_SIG = {
 
 export const CF_SIG_ORDER = ["sn", "si", "so", "st"];
 
+export const CASH_FLOW_CORE_INDUSTRY_GROUPS = [
+  ["Môi giới chứng khoán", "Chứng khoán"],
+  ["Ngân hàng thương mại truyền thống", "Ngân hàng"],
+  ["Bất động sản dân cư", "BĐS Dân cư", "Bất động sản"],
+  ["Sản xuất, chế biến thép", "Thép"],
+  ["Xây dựng"],
+  ["Sóng ngành Vin", "Sóng Vin", "Vin", "Vingroup"],
+];
+
+export function normalizeCashFlowIndustryName(name) {
+  return String(name || "")
+    .normalize("NFC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+export function isCashFlowCoreIndustry(industry) {
+  const normalized = normalizeCashFlowIndustryName(industry);
+  return CASH_FLOW_CORE_INDUSTRY_GROUPS.some((group) => group.some((item) => normalizeCashFlowIndustryName(item) === normalized));
+}
+
+export function getCashFlowCoreRank(industry) {
+  const normalized = normalizeCashFlowIndustryName(industry);
+  const index = CASH_FLOW_CORE_INDUSTRY_GROUPS.findIndex((group) => group.some((item) => normalizeCashFlowIndustryName(item) === normalized));
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
 export function cfSigStyle(sig, t) {
   return {
     sn: { bg: "rgba(61,214,140,.045)", border: "rgba(61,214,140,.18)", color: t.G },

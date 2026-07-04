@@ -1,6 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const APP_CACHE_VERSION =
+  process.env.VITE_APP_CACHE_VERSION ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.GITHUB_SHA ||
+  `${process.env.npm_package_version || "local"}-${Date.now()}`;
+
 // Local cache variables for dev server
 let devCache = null;
 let devLastFetched = 0;
@@ -781,6 +787,9 @@ function smdtDevPlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    "import.meta.env.VITE_APP_CACHE_VERSION": JSON.stringify(APP_CACHE_VERSION),
+  },
   plugins: [react(), smdtDevPlugin()],
   server: {
     port: 3000,

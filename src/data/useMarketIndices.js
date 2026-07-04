@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { readDataCache, writeDataCache } from "./cacheStorage";
 
 const API_URL = "/api/total-trade-real";
 const DEFAULT_REFRESH_MS = 10_000;
 const CACHE_KEY = "market_indices_real_cache_v1";
+const CACHE_SCHEMA_VERSION = 1;
 
 const INDEX_CONFIG = [
   { name: "VNINDEX", aliases: ["VNINDEX", "VN-INDEX", "VN_INDEX"] },
@@ -80,9 +82,7 @@ function normalize(reply) {
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    const serialized = localStorage.getItem(CACHE_KEY);
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed && Array.isArray(parsed.indices)) {
       globalCache = {
         indices: parsed.indices,
@@ -98,10 +98,14 @@ function getCachedData() {
 
 function setCachedData(data) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      indices: data.indices,
-      updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
-    }));
+    writeDataCache(
+      CACHE_KEY,
+      {
+        indices: data.indices,
+        updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
+      },
+      { schemaVersion: CACHE_SCHEMA_VERSION }
+    );
   } catch (error) {
     console.warn("Failed to save MarketIndices cache:", error);
   }
