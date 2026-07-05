@@ -989,11 +989,10 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
-      "/stocktraders-api": {
-        target: "https://stocktraders.vn",
+      "/api/portfolio-chat": {
+        target: "http://112.213.91.235:8000",
         changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/stocktraders-api/, ""),
+        secure: false,
       },
     },
   },

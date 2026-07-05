@@ -10,7 +10,7 @@ import { useCashFlowBranch, contentToSig } from "../../data/useCashFlowBranch";
 import { useBranchPath } from "../../data/useBranchPath";
 import { useTotalTrade } from "../../data/useTotalTrade";
 import { useRealtimeStockSignalFeed, useStockSignal } from "../../data/useStockSignal";
-import { Banner, Card } from "../../components/ui";
+import { Banner, Card, Loading } from "../../components/ui";
 import { CfBadge } from "../cash-flow-ticker/CfBadge";
 import { PORTFOLIO_MAX_CODES, loadSavedPortfolio, parsePortfolioCodes, savePortfolioState, sortPortfolioCodes } from "./portfolioState";
 import { FOUR_KEY_META, evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "./stock4KeyEvaluator";
@@ -555,7 +555,7 @@ export function ModPhanTichDanhMuc() {
     }, 180);
   };
 
-  if (hasBlockingLoad) return <Banner>Đang tải dữ liệu phân tích danh mục...</Banner>;
+  if (hasBlockingLoad) return <Loading label="Đang tải dữ liệu phân tích danh mục…" />;
 
   if (!analyzedCodes.length) {
     return (

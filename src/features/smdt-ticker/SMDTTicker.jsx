@@ -4,7 +4,7 @@ import { useSMDTTicker, useRealtimeSMDTTickerFeed } from "../../data/useSMDTTick
 import { useBranchPath } from "../../data/useBranchPath";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtDay, fmtFull, fmtNum } from "../../app/formatters";
-import { Card, Pagination, HM, Banner, LiveFooter } from "../../components/ui";
+import { Card, Pagination, HM, Banner, LiveFooter, Loading } from "../../components/ui";
 import { DateSessionSelect, HeatLegend, SMDTToolbarPill, SMDTSearchPill, linkBtn } from "../../components/ui/ModuleControls";
 import { IndustryPicker } from "../cash-flow-ticker/IndustryPicker";
 import { cashFlowGroupTh, cashFlowMatrixDateTd, cashFlowMatrixTd, cashFlowMatrixTh } from "../cash-flow-ticker/cashFlowUtils";
@@ -296,11 +296,11 @@ export function ModSMDTMa() {
         <SMDTSearchPill placeholder="Tìm mã..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ gridColumn: narrow ? "1 / -1" : undefined, width: narrow ? "100%" : 118, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
       </div>
 
-      {status === "loading" && !datesDesc.length && <Banner>Đang tải dữ liệu SMDT cổ phiếu…</Banner>}
+      {status === "loading" && !datesDesc.length && <Loading label="Đang tải dữ liệu SMDT cổ phiếu…" />}
       {status === "error" && !datesDesc.length && (
         <Banner tone="error">Lỗi tải dữ liệu: {error} <button onClick={refresh} style={linkBtn}>Thử lại</button></Banner>
       )}
-      {branchPathStatus === "loading" && !Object.keys(tickerToBranch).length && <Banner>Đang tải danh sách ngành cổ phiếu…</Banner>}
+      {branchPathStatus === "loading" && !Object.keys(tickerToBranch).length && <Loading label="Đang tải danh sách ngành cổ phiếu…" compact />}
       {branchPathStatus === "error" && !Object.keys(tickerToBranch).length && (
         <Banner tone="error">Lỗi tải danh sách ngành: {branchPathError} <button onClick={refreshBranchPath} style={linkBtn}>Thử lại</button></Banner>
       )}
