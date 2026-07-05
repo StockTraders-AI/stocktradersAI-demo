@@ -3,7 +3,7 @@ import { valToHmCls } from "../../styles/tokens";
 import { useSMDT, useRealtimeFeed } from "../../data/useSMDT";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtDay, fmtFull, fmtNum } from "../../app/formatters";
-import { Card, Pagination, HM, Banner, LiveFooter } from "../../components/ui";
+import { Card, Pagination, HM, Banner, LiveFooter, Loading } from "../../components/ui";
 import { DateSessionSelect, HeatLegend, SMDTToolbarPill, SMDTSearchPill, linkBtn } from "../../components/ui/ModuleControls";
 import { IndustryPicker } from "../cash-flow-ticker/IndustryPicker";
 import { cashFlowMatrixDateTd, cashFlowMatrixTd, cashFlowMatrixTh } from "../cash-flow-ticker/cashFlowUtils";
@@ -233,7 +233,7 @@ export function ModSMDTNganh() {
         <SMDTSearchPill placeholder="Tìm ngành..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ gridColumn: narrow ? "1 / -1" : undefined, width: narrow ? "100%" : 150, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
       </div>
 
-      {status === "loading" && !datesDesc.length && <Banner>Đang tải dữ liệu…</Banner>}
+      {status === "loading" && !datesDesc.length && <Loading label="Đang tải dữ liệu SMDT ngành…" />}
       {status === "error" && !datesDesc.length && (
         <Banner tone="error">Lỗi tải dữ liệu: {error} <button onClick={refresh} style={linkBtn}>Thử lại</button></Banner>
       )}

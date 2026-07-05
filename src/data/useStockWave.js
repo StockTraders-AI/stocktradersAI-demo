@@ -196,7 +196,7 @@ export function useStockWave() {
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(() => getCachedData()?.updatedAt || null);
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false, bust = false } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
 
     const request = (async () => {
@@ -206,8 +206,10 @@ export function useStockWave() {
 
       const startedAt = Date.now();
       try {
-        const params = new URLSearchParams({ _: String(startedAt) });
+        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi refresh thủ công.
+        const params = new URLSearchParams();
         applyLimitParam(params, limit);
+        if (bust) params.set("_", String(startedAt));
         const res = await fetch(`${API_BASE_URL}?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -305,7 +307,7 @@ export function useStockWave() {
     setError(null);
   }, []);
 
-  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, limit: FULL_LIMIT }), applyTick };
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, bust: true, limit: FULL_LIMIT }), applyTick };
 }
 
 function getRealtimeUrl() {

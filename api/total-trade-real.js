@@ -64,12 +64,13 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=5, stale-while-revalidate=30");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const now = Date.now();
   const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
+  if (wantsFresh) res.setHeader("Cache-Control", "no-store, max-age=0");
 
   if (!serverCache || wantsFresh) {
     try {

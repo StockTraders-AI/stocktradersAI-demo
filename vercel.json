@@ -11,6 +11,10 @@
     {
       "source": "/service/:path*",
       "destination": "https://stocktraders.vn/service/:path*"
+    },
+    {
+      "source": "/api/portfolio-chat",
+      "destination": "http://112.213.91.235:8000/api/portfolio-chat"
     }
   ]
 }

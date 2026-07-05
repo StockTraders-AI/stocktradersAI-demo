@@ -5,6 +5,7 @@ import { CORE_BRANCHES } from "../../data/useSMDT";
 import { useRealtimeSMDTBranchCrossFeed, useRealtimeSMDTTickerCrossFeed, useSMDTBranchCross, useSMDTTickerCross } from "../../data/useSMDTCross";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
+import { Loading } from "../../components/ui";
 
 const STORAGE_KEY = "wave_path_visible_branches_v1";
 const STRONG_THRESHOLD = 70;
@@ -135,6 +136,10 @@ function branchAliases(row) {
     for (const alias of aliasesOfIndustry(name)) aliases.add(normalizeName(alias));
   }
   return aliases;
+}
+
+function sortTickerAsc(a, b) {
+  return a.ticker.localeCompare(b.ticker, "en", { sensitivity: "base", numeric: true });
 }
 
 function getValueAtOrBefore(matrix, datesAsc, ticker, date) {
@@ -1024,12 +1029,12 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
         };
       })
       .filter(Boolean)
-      .sort((a, b) => b.value - a.value)
+      .sort(sortTickerAsc)
       .slice(0, 60);
   }, [branchPath.tickerToBranch, eventDate, row, t, tickerData.datesAsc, tickerData.matrix, tickerData.tickers]);
 
   if (branchPath.status === "loading" || tickerData.status === "loading") {
-    return <div style={styles.tableNotice}>Đang tải danh sách mã trong ngành...</div>;
+    return <Loading label="Đang tải danh sách mã trong ngành…" compact style={{ marginBottom: 0, padding: "12px 4px" }} />;
   }
 
   if (!rows.length) {
@@ -1064,7 +1069,11 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
                   <div style={styles.tickerName}>{item.name}</div>
                 </td>
                 <td style={styles.tdMuted}>{row.label}</td>
-                <td style={{ ...styles.td, textAlign: "right", color: smdtColor(item.value, t), fontWeight: 850, ...mono }}>{item.value.toFixed(1)}%</td>
+                <td style={{ ...styles.td, textAlign: "right" }}>
+                  <span style={{ ...styles.smdtPill, color: smdtColor(item.value, t), background: `${smdtColor(item.value, t)}18`, borderColor: `${smdtColor(item.value, t)}33`, ...mono }}>
+                    {item.value.toFixed(1)}%
+                  </span>
+                </td>
                 <td style={{ ...styles.td, textAlign: "right", color: item.delta == null ? "var(--t4)" : item.delta >= 0 ? t.G : t.R, ...mono }}>
                   {item.delta == null ? "--" : `${item.delta >= 0 ? "+" : ""}${item.delta.toFixed(1)}`}
                 </td>
@@ -1363,7 +1372,7 @@ export function ModLoTrinhDanSong() {
     setHighlightDate(null);
   };
 
-  if (loading) return <div style={styles.banner}>Đang tải lộ trình dẫn sóng...</div>;
+  if (loading) return <Loading label="Đang tải lộ trình dẫn sóng…" />;
   if (error) return <div style={styles.banner}>Không tải được dữ liệu SMDT ngành: {smdt.error}</div>;
 
   return (
@@ -1503,6 +1512,7 @@ const styles = {
   td: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t2)", fontSize: 11, verticalAlign: "middle" },
   tdMuted: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t3)", fontSize: 11 },
   tickerName: { marginTop: 1, color: "var(--t3)", fontSize: 10, maxWidth: 210, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  smdtPill: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 62, border: "0.5px solid", borderRadius: 999, padding: "3px 8px", fontSize: 10.5, fontWeight: 850, whiteSpace: "nowrap" },
   signalPill: { display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "3px 8px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" },
   tableNotice: { marginTop: 12, padding: "12px 14px", background: "var(--bg)", border: "0.5px solid var(--bdr)", borderRadius: 10, color: "var(--t3)", fontSize: 12 },
   modalBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,.62)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
