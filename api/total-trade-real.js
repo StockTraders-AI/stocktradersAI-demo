@@ -6,21 +6,30 @@ const API_ACCOUNT = "thao.dtt";
 const INDEX_TICKERS = new Set(["VNINDEX", "HNXINDEX", "UPCOM"]);
 
 function normalizeTicker(value) {
-  return String(value || "").trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 }
 
 function filterIndexRows(data) {
   const reply = data?.TotalTradeRealReply || data?.TotalTradeRealRequest || {};
-  const stockTotalReals = Array.isArray(reply.stockTotalReals) ? reply.stockTotalReals : [];
-  return stockTotalReals.filter((row) => INDEX_TICKERS.has(normalizeTicker(row?.ticker)));
+  const stockTotalReals = Array.isArray(reply.stockTotalReals)
+    ? reply.stockTotalReals
+    : [];
+  return stockTotalReals.filter((row) =>
+    INDEX_TICKERS.has(normalizeTicker(row?.ticker)),
+  );
 }
 
 async function fetchTotalTradeRealFromSource() {
-  const response = await fetch("https://stocktraders.vn/service/data/getTotalTradeReal", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ TotalTradeRealRequest: { account: API_ACCOUNT } }),
-  });
+  const response = await fetch(
+    "https://stocktraders.vn/service/data/getTotalTradeReal",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ TotalTradeRealRequest: { account: API_ACCOUNT } }),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`External API returned status ${response.status}`);
@@ -50,7 +59,10 @@ async function refreshCache() {
       return data;
     })
     .catch((error) => {
-      console.error("Failed to refresh total trade real cache from source:", error);
+      console.error(
+        "Failed to refresh total trade real cache from source:",
+        error,
+      );
       if (!serverCache) throw error;
       return serverCache;
     })
@@ -76,13 +88,21 @@ export default async function handler(req, res) {
     try {
       await refreshCache();
     } catch (error) {
-      return res.status(502).json({ error: "Failed to load realtime data from source", details: error.message });
+      return res
+        .status(502)
+        .json({
+          error: "Failed to load realtime data from source",
+          details: error.message,
+        });
     }
   } else if (now - lastFetched > CACHE_DURATION) {
     refreshCache();
   }
 
-  const reply = serverCache?.TotalTradeRealReply || serverCache?.TotalTradeRealRequest || {};
+  const reply =
+    serverCache?.TotalTradeRealReply ||
+    serverCache?.TotalTradeRealRequest ||
+    {};
   return res.status(200).json({
     TotalTradeRealReply: {
       codeReply: reply.codeReply || { codeID: "S0000", codeName: "SUCSESS" },
