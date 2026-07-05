@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readDataCache, removeDataCache, writeDataCache } from "./cacheStorage";
 
 const API_URL = "/api/total-trade";
 const CACHE_KEY = "total_trade_data_cache_v1";
+const CACHE_SCHEMA_VERSION = 1;
 const DEFAULT_REFRESH_MS = 5 * 60_000;
 const CACHE_PERSIST_LIMIT = 45;
 
@@ -49,9 +51,7 @@ function normalize(reply) {
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    const serialized = localStorage.getItem(CACHE_KEY);
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed?.matrix && parsed?.tickers) {
       globalCache = {
         tickers: parsed.tickers,
@@ -75,18 +75,18 @@ function setCachedData(data) {
       matrix[ticker] = {};
       for (const date of dates) matrix[ticker][date] = row[date];
     }
-    return JSON.stringify({
+    return {
       tickers: data.tickers,
       matrix,
       updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
-    });
+    };
   };
   try {
-    localStorage.setItem(CACHE_KEY, buildPayload(CACHE_PERSIST_LIMIT));
+    writeDataCache(CACHE_KEY, buildPayload(CACHE_PERSIST_LIMIT), { schemaVersion: CACHE_SCHEMA_VERSION });
   } catch (e) {
     try {
-      localStorage.removeItem(CACHE_KEY);
-      localStorage.setItem(CACHE_KEY, buildPayload(12));
+      removeDataCache(CACHE_KEY);
+      writeDataCache(CACHE_KEY, buildPayload(12), { schemaVersion: CACHE_SCHEMA_VERSION });
     } catch (retryError) {
       console.warn("Failed to save TotalTrade cache:", retryError);
     }

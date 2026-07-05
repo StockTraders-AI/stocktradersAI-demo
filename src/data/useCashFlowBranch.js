@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { readDataCache, writeDataCache } from "./cacheStorage";
 import { resolveRealtimeUrl } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
@@ -235,14 +236,13 @@ function extractRealtimeTicks(payload) {
 }
 
 const CACHE_KEY = "cashflow_branch_data_cache_v2";
+const CACHE_SCHEMA_VERSION = 1;
 let globalCache = null; // RAM Cache to keep data alive across hook remounts
 
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    const serialized = localStorage.getItem(CACHE_KEY);
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed && parsed.branches && parsed.datesAsc && parsed.matrix) {
       globalCache = {
         branches: hydrateBranches(parsed.branches),
@@ -266,7 +266,7 @@ function setCachedData(data) {
       matrix: data.matrix,
       updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
     };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(toStore));
+    writeDataCache(CACHE_KEY, toStore, { schemaVersion: CACHE_SCHEMA_VERSION });
   } catch (e) {
     console.warn("Failed to save CashFlowBranch cache:", e);
   }

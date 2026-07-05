@@ -139,38 +139,38 @@ export function THead({ cols }) {
   );
 }
 
-export function Pagination({ page = 1, totalPages = 1, onChange }) {
+export function Pagination({ page = 1, totalPages = 1, onChange, compact = false }) {
   if (totalPages <= 1) return null;
   const items = buildPageItems(page, totalPages);
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-      <PageBtn disabled={page === 1} onClick={() => onChange?.(page - 1)}>‹</PageBtn>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: compact ? 4 : 5 }}>
+      <PageBtn compact={compact} disabled={page === 1} onClick={() => onChange?.(page - 1)}>‹</PageBtn>
       {items.map((p, i) =>
         p === "…" ? (
-          <span key={`e${i}`} style={{ color: "var(--t3)", padding: "0 4px" }}>…</span>
+          <span key={`e${i}`} style={{ color: "var(--t3)", padding: compact ? "0 2px" : "0 4px", fontSize: compact ? 11 : 12 }}>…</span>
         ) : (
-          <PageBtn key={p} active={p === page} onClick={() => onChange?.(p)}>{p}</PageBtn>
+          <PageBtn key={p} compact={compact} active={p === page} onClick={() => onChange?.(p)}>{p}</PageBtn>
         )
       )}
-      <PageBtn disabled={page === totalPages} onClick={() => onChange?.(page + 1)}>›</PageBtn>
+      <PageBtn compact={compact} disabled={page === totalPages} onClick={() => onChange?.(page + 1)}>›</PageBtn>
     </div>
   );
 }
 
-function PageBtn({ children, active, disabled, onClick }) {
+function PageBtn({ children, active, disabled, onClick, compact }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       style={{
-        minWidth: 30,
-        height: 30,
-        padding: "0 8px",
-        borderRadius: 7,
+        minWidth: compact ? 24 : 30,
+        height: compact ? 24 : 30,
+        padding: compact ? "0 6px" : "0 8px",
+        borderRadius: compact ? 6 : 7,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: 12,
+        fontSize: compact ? 11 : 12,
         fontFamily: "inherit",
         fontWeight: 600,
         cursor: disabled ? "default" : "pointer",
