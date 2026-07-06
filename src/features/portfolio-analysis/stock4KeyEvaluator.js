@@ -38,19 +38,19 @@ export const FOUR_KEY_META = {
     group: Nhom4Key.DUNG_SONG_DUNG_NGANH,
     label: Nhom4Key.DUNG_SONG_DUNG_NGANH,
     recommendation: KHUYEN_NGHI[Nhom4Key.DUNG_SONG_DUNG_NGANH],
-    score: 85,
+    score: 100,
   },
   DS_SN: {
     group: Nhom4Key.DUNG_SONG_SAI_NGANH,
     label: Nhom4Key.DUNG_SONG_SAI_NGANH,
     recommendation: KHUYEN_NGHI[Nhom4Key.DUNG_SONG_SAI_NGANH],
-    score: 55,
+    score: 70,
   },
   DN_SS: {
     group: Nhom4Key.DUNG_NGANH_SAI_SONG,
     label: Nhom4Key.DUNG_NGANH_SAI_SONG,
     recommendation: KHUYEN_NGHI[Nhom4Key.DUNG_NGANH_SAI_SONG],
-    score: 38,
+    score: 45,
   },
   SS: {
     group: Nhom4Key.SAI_SONG_SAI_NGANH,
