@@ -12,3 +12,13 @@ export function resolveRealtimeUrl(...candidates) {
   }
   return target;
 }
+
+/* Sự kiện toàn cục báo socket realtime vừa reconnect: các data hook lắng nghe để
+ * fetch lại snapshot bù dữ liệu hụt trong lúc mất kết nối (thay cho polling). */
+export const REALTIME_RECONNECT_EVENT = "realtime:reconnected";
+
+export function emitRealtimeReconnected() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(REALTIME_RECONNECT_EVENT));
+  }
+}

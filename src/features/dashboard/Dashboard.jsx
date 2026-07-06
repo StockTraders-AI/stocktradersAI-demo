@@ -395,29 +395,31 @@ function SmdtScoreBadge({ value }) {
 
 function SmdtTabs({ active, onChange }) {
   const { dark } = useTheme();
-  const tabStyle = (selected) => ({
+  const tabStyle = (selected, tone = "neutral") => {
+    const purple = tone === "purple";
+    return {
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
     padding: "4px 10px",
     borderRadius: 999,
-    border: selected ? `0.5px solid ${dark ? "rgba(80,95,125,.55)" : "var(--bdr)"}` : "0.5px solid transparent",
-    background: selected ? (dark ? "#101522" : "var(--surf)") : "transparent",
-    color: selected ? "var(--t1)" : "var(--t3)",
+    border: selected ? `0.5px solid ${purple ? "var(--B)" : dark ? "rgba(80,95,125,.55)" : "var(--bdr)"}` : "0.5px solid transparent",
+    background: selected ? (purple ? "rgba(124,58,237,.12)" : dark ? "#101522" : "var(--surf)") : "transparent",
+    color: selected ? (purple ? "var(--B)" : "var(--t1)") : "var(--t3)",
     fontSize: 10.5,
     fontWeight: 800,
     cursor: "pointer",
     whiteSpace: "nowrap",
     boxShadow: selected ? (dark ? "0 1px 0 rgba(255,255,255,.06) inset, 0 1px 6px rgba(0,0,0,.25)" : "0 1px 4px rgba(15,23,42,.08)") : "none",
-  });
+    };
+  };
 
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: 3, borderRadius: 8, background: dark ? "#151B2C" : "var(--elev)", border: `0.5px solid ${dark ? "rgba(27,32,48,.75)" : "var(--bdr)"}`, maxWidth: "100%" }}>
-      <button type="button" aria-pressed={active === "core"} onClick={(event) => { event.stopPropagation(); onChange("core"); }} style={tabStyle(active === "core")}>
-        <span style={{ color: "#F59E0B", fontSize: 10 }}>★</span>
-        <span style={{ color: "#F59E0B" }}>Chủ lực</span>
+      <button type="button" aria-pressed={active === "core"} onClick={(event) => { event.stopPropagation(); onChange("core"); }} style={tabStyle(active === "core", "purple")}>
+        ⭐ Chủ lực
       </button>
-      <button type="button" aria-pressed={active === "other"} onClick={(event) => { event.stopPropagation(); onChange("other"); }} style={tabStyle(active === "other")}>
+      <button type="button" aria-pressed={active === "other"} onClick={(event) => { event.stopPropagation(); onChange("other"); }} style={tabStyle(active === "other", "purple")}>
         Ngành phụ
       </button>
     </div>
@@ -623,7 +625,7 @@ function PortfolioMsgBubble({ role, text, panel = false }) {
         </span>
       )}
       <div style={{ maxWidth: panel && isAi ? "calc(100% - 35px)" : isAi ? "82%" : panel ? "86%" : "78%", minWidth: 0, borderRadius: isAi ? "8px 8px 8px 3px" : "8px 8px 3px 8px", padding: panel ? "9px 11px" : "7px 9px", background: isAi ? "var(--elev)" : "var(--Bs)", border: `0.5px solid ${isAi ? "var(--bdr)" : "var(--Bb)"}`, color: isAi ? "var(--t2)" : "var(--t1)", fontSize: panel ? 12 : 11, lineHeight: 1.5, overflowWrap: "anywhere", opacity: isTyping ? 0.78 : 1 }}>
-        <PortfolioMsgText text={text} />
+        {isTyping ? <Loading compact label={text} style={{ marginBottom: 0 }} /> : <PortfolioMsgText text={text} />}
       </div>
     </div>
   );
