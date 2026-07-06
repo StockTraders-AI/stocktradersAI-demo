@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readDataCache, writeDataCache } from "./cacheStorage";
+import { REALTIME_RECONNECT_EVENT } from "./realtimeUrl";
 
 const API_URL = "/api/total-trade-real";
-const DEFAULT_REFRESH_MS = 10_000;
 const CACHE_KEY = "market_indices_real_cache_v1";
 const CACHE_SCHEMA_VERSION = 1;
 
@@ -111,11 +111,6 @@ function setCachedData(data) {
   }
 }
 
-function getRefreshMs() {
-  const configured = Number(import.meta.env.VITE_TOTAL_TRADE_REAL_REFRESH_MS);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
-}
-
 export function useMarketIndices() {
   const inFlightRef = useRef(null);
   const cached = getCachedData();
@@ -176,13 +171,16 @@ export function useMarketIndices() {
     const refresh = () => {
       if (document.visibilityState === "visible") fetchSnapshot({ background: true });
     };
-    const timer = window.setInterval(refresh, getRefreshMs());
+
+    // Không poll định kỳ: chỉ fetch lại snapshot khi tab hiện lại / được focus
+    // hoặc khi socket realtime reconnect để bù dữ liệu hụt.
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
+    window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
     return () => {
-      window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
     };
   }, [fetchSnapshot]);
 
