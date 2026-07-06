@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readDataCache, writeDataCache } from "./cacheStorage";
 
 /* ───────────────────────────────────────────────────────────────────────
  * useBranchPath — bản đồ "mã cổ phiếu → ngành" lấy từ API getBranchPath.
@@ -14,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_URL = "/api/branch-path";
 const CACHE_KEY = "branch_path_data_cache";
+const CACHE_SCHEMA_VERSION = 1;
 
 let globalCache = null; // Giữ qua các lần remount hook.
 
@@ -53,9 +55,7 @@ function normalize(reply) {
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    const serialized = localStorage.getItem(CACHE_KEY);
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed && parsed.tickerToBranch) {
       globalCache = {
         branches: parsed.branches || [],
@@ -72,7 +72,7 @@ function getCachedData() {
 
 function setCachedData(data) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    writeDataCache(CACHE_KEY, data, { schemaVersion: CACHE_SCHEMA_VERSION });
   } catch (e) {
     console.warn("Failed to save BranchPath cache:", e);
   }
@@ -92,7 +92,8 @@ export function useBranchPath() {
 
     const request = (async () => {
       try {
-        const res = await fetch(`${API_URL}?_=${Date.now()}`, { cache: "no-store" });
+        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi force refresh.
+        const res = await fetch(force ? `${API_URL}?_=${Date.now()}` : API_URL, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const code = json?.BranchPathReply?.codeReply?.codeID;

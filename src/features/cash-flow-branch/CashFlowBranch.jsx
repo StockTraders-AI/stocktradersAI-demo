@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCashFlowBranch, useRealtimeCashFlowFeed, contentToSig } from "../../data/useCashFlowBranch";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtDay, fmtFull, fmtNum } from "../../app/formatters";
-import { Card, Pagination, Banner, LiveFooter } from "../../components/ui";
+import { Card, Pagination, Banner, LiveFooter, Loading } from "../../components/ui";
 import { DateSessionSelect, SMDTToolbarPill, SMDTSearchPill, linkBtn } from "../../components/ui/ModuleControls";
 import { CfBadge } from "../cash-flow-ticker/CfBadge";
 import { IndustryPicker } from "../cash-flow-ticker/IndustryPicker";
@@ -244,7 +244,7 @@ export function ModDongTienNganh() {
         <SMDTSearchPill placeholder="Tìm ngành..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ gridColumn: narrow ? "1 / -1" : undefined, width: narrow ? "100%" : 150, padding: "0 10px", flexShrink: narrow ? 1 : 0 }} />
       </div>
 
-      {status === "loading" && !datesDesc.length && <Banner>Đang tải dữ liệu…</Banner>}
+      {status === "loading" && !datesDesc.length && <Loading label="Đang tải dữ liệu dòng tiền ngành…" />}
       {status === "error" && !datesDesc.length && (
         <Banner tone="error">Lỗi tải dữ liệu: {error} <button onClick={refresh} style={linkBtn}>Thử lại</button></Banner>
       )}
