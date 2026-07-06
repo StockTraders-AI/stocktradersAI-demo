@@ -14,6 +14,7 @@ import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave"
 import { useTotalTrade } from "../../data/useTotalTrade";
 import { Card, Clink, LiveFooter, Loading, Pagination } from "../../components/ui";
 import { PORTFOLIO_MAX_CODES, loadSavedPortfolio, parsePortfolioCodes, savePortfolioState } from "../portfolio-analysis/portfolioState";
+import { evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "../portfolio-analysis/stock4KeyEvaluator";
 import { isCashFlowCoreIndustry } from "../cash-flow-ticker/cashFlowUtils";
 import CardDoSong from "./CardDoSong";
 
@@ -135,6 +136,15 @@ function lookupIndustryValue(map, name) {
     if (value != null) return value;
   }
   return map.get(normalizeIndustryName(name));
+}
+
+function findIndustryBranch(branches, industry) {
+  if (!industry) return null;
+  const targetAliases = aliasesOfIndustry(industry).map(normalizeIndustryName);
+  return branches.find((branch) => {
+    const branchAliases = [branch.key, branch.label, ...aliasesOfIndustry(branch.key), ...aliasesOfIndustry(branch.label)].map(normalizeIndustryName);
+    return targetAliases.some((target) => branchAliases.includes(target));
+  }) || null;
 }
 
 function sigWeight(sig) {
@@ -614,9 +624,28 @@ function PortfolioMsgBubble({ role, text, panel = false }) {
 function portfolioAutoMessage({ score, counts, total, analyzed }) {
   const good = analyzed.filter((row) => row.cat === "dd").map((row) => row.ticker).slice(0, 3).join(", ");
   const weak = analyzed.filter((row) => row.cat === "ss").map((row) => row.ticker).slice(0, 2).join(", ");
-  if (score >= 80) return `Danh mục mạnh: ${Math.round((counts.dd / total) * 100)}% đúng sóng đúng ngành${good ? ` (${good})` : ""}. Duy trì và theo dõi tín hiệu bán.`;
+  if (score >= 70) return `Danh mục mạnh: ${Math.round((counts.dd / total) * 100)}% đúng sóng đúng ngành${good ? ` (${good})` : ""}. Duy trì và theo dõi tín hiệu bán.`;
   if (counts.ss > 0) return `${weak ? `${weak} ` : ""}đang sai sóng sai ngành. Cân nhắc giảm tỷ trọng và ưu tiên nhóm đúng sóng đúng ngành${good ? ` như ${good}` : ""}.`;
   return `Danh mục trung bình. Có ${counts.ds} mã đúng sóng nhưng ngành chưa xác nhận, nên theo dõi thêm 1-2 phiên.`;
+}
+
+function portfolioScoreLabel(score) {
+  if (score >= 85) return "Xuất sắc";
+  if (score >= 70) return "Tốt";
+  if (score >= 55) return "Trung bình khá";
+  if (score >= 40) return "Trung bình";
+  return "Cần cải thiện";
+}
+
+function evalKeyToPortfolioCat(evalKey) {
+  return { DS_DN: "dd", DS_SN: "ds", DN_SS: "sd", SS: "ss" }[evalKey] || "ss";
+}
+
+function calcPortfolioEval(row) {
+  if (row?.evalKey) return row.evalKey;
+  const branchOk = isPositiveSig(row?.branchSig) && Number.isFinite(row?.branchSmdt) && row.branchSmdt > 70;
+  const tickerOk = isPositiveSig(row?.tickerSig || row?.sig) && Number.isFinite(row?.smdt) && row.smdt > 70;
+  return fallbackEvalKey({ tickerOk, industryOk: branchOk });
 }
 
 function portfolioAiReply(question, ctx) {
@@ -674,13 +703,14 @@ function PortfolioBox({ rows, asOfDate }) {
   const rowMap = useMemo(() => new Map(rows.map((row) => [row.ticker, row])), [rows]);
   const analyzed = analyzedCodes.map((ticker) => {
     const row = rowMap.get(ticker);
-    const strongStock = (row?.smdt || 0) >= 70;
-    const goodFlow = row?.sig === "si" || row?.sig === "sn";
-    const strongBranch = (row?.branchSmdt || 0) >= 70 || row?.branchSig === "si" || row?.branchSig === "sn";
-    const cat = strongStock && strongBranch ? "dd" : strongStock ? "ds" : strongBranch || goodFlow ? "sd" : "ss";
+    const found = Boolean(row && Number.isFinite(row.smdt));
+    const evalKey = found ? calcPortfolioEval(row) : null;
+    const cat = found ? evalKeyToPortfolioCat(evalKey) : "ss";
     return {
       ticker,
+      found,
       cat,
+      evalKey,
       industry: row?.industry || "",
       smdt: row?.smdt,
       smdtPrev: row?.prevSmdt,
@@ -690,13 +720,15 @@ function PortfolioBox({ rows, asOfDate }) {
       branchSig: row?.branchSig,
     };
   });
+  const foundAnalyzed = analyzed.filter((row) => row.found);
   const hasAnalysis = analyzedCodes.length > 0;
   const isDirty = picks.join("|") !== analyzedCodes.join("|");
-  const counts = analyzed.reduce((acc, row) => ({ ...acc, [row.cat]: (acc[row.cat] || 0) + 1 }), { dd: 0, ds: 0, sd: 0, ss: 0 });
-  const total = Math.max(1, analyzed.length);
-  const score = analyzed.length ? Math.round((counts.dd * 100 + counts.ds * 50 + counts.sd * 30) / total) : 0;
-  const level = score >= 70 ? "Tốt" : score >= 50 ? "Trung bình" : "Cần cơ cấu lại";
-  const portfolioCtx = useMemo(() => ({ hasAnalysis, analyzed, counts, total, score }), [analyzed, counts, hasAnalysis, score, total]);
+  const rawScore = useMemo(() => scorePortfolio4Key(foundAnalyzed), [foundAnalyzed]);
+  const counts = useMemo(() => ({ dd: rawScore.dn, ds: rawScore.sn, sd: rawScore.ns, ss: rawScore.ss }), [rawScore]);
+  const total = Math.max(1, foundAnalyzed.length);
+  const score = foundAnalyzed.length ? rawScore.score : 0;
+  const level = portfolioScoreLabel(score);
+  const portfolioCtx = useMemo(() => ({ hasAnalysis, analyzed: foundAnalyzed, counts, total, score }), [foundAnalyzed, counts, hasAnalysis, score, total]);
   const portfolioPayload = useMemo(() => ({
     asOfDate: toDateInputValue(asOfDate) || asOfDate || "",
     positions: analyzed
@@ -741,16 +773,17 @@ function PortfolioBox({ rows, asOfDate }) {
     savePortfolioState(input, picks);
     const nextAnalyzed = picks.map((ticker) => {
       const row = rowMap.get(ticker);
-      const strongStock = (row?.smdt || 0) >= 70;
-      const goodFlow = row?.sig === "si" || row?.sig === "sn";
-      const strongBranch = (row?.branchSmdt || 0) >= 70 || row?.branchSig === "si" || row?.branchSig === "sn";
-      const cat = strongStock && strongBranch ? "dd" : strongStock ? "ds" : strongBranch || goodFlow ? "sd" : "ss";
-      return { ticker, cat, industry: row?.industry || "", smdt: row?.smdt, smdtPrev: row?.prevSmdt, branchSmdt: row?.branchSmdt, branchSmdtPrev: row?.branchSmdtPrev, tickerSig: row?.tickerSig || row?.sig, branchSig: row?.branchSig };
+      const found = Boolean(row && Number.isFinite(row.smdt));
+      const evalKey = found ? calcPortfolioEval(row) : null;
+      const cat = found ? evalKeyToPortfolioCat(evalKey) : "ss";
+      return { ticker, found, cat, evalKey, industry: row?.industry || "", smdt: row?.smdt, smdtPrev: row?.prevSmdt, branchSmdt: row?.branchSmdt, branchSmdtPrev: row?.branchSmdtPrev, tickerSig: row?.tickerSig || row?.sig, branchSig: row?.branchSig };
     });
-    const nextCounts = nextAnalyzed.reduce((acc, row) => ({ ...acc, [row.cat]: (acc[row.cat] || 0) + 1 }), { dd: 0, ds: 0, sd: 0, ss: 0 });
-    const nextTotal = Math.max(1, nextAnalyzed.length);
-    const nextScore = nextAnalyzed.length ? Math.round((nextCounts.dd * 100 + nextCounts.ds * 50 + nextCounts.sd * 30) / nextTotal) : 0;
-    setMsgs((prev) => [...prev, { role: "ai", text: portfolioAutoMessage({ hasAnalysis: true, analyzed: nextAnalyzed, counts: nextCounts, total: nextTotal, score: nextScore }) }]);
+    const nextFoundAnalyzed = nextAnalyzed.filter((row) => row.found);
+    const nextRawScore = scorePortfolio4Key(nextFoundAnalyzed);
+    const nextCounts = { dd: nextRawScore.dn, ds: nextRawScore.sn, sd: nextRawScore.ns, ss: nextRawScore.ss };
+    const nextTotal = Math.max(1, nextFoundAnalyzed.length);
+    const nextScore = nextFoundAnalyzed.length ? nextRawScore.score : 0;
+    setMsgs((prev) => [...prev, { role: "ai", text: portfolioAutoMessage({ hasAnalysis: true, analyzed: nextFoundAnalyzed, counts: nextCounts, total: nextTotal, score: nextScore }) }]);
   };
   const openPortfolioDetail = () => {
     if (!hasAnalysis) return;
@@ -1453,6 +1486,7 @@ export function ModDashboard() {
   const smdtTickerDateIndex = useMemo(() => findDateIndex(smdtTickerDatesDesc, toDateInputValue(smdtTickerDate)), [smdtTickerDate, smdtTickerDatesDesc]);
   const prevSmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 1] || "" : "";
   const prev2SmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 2] || "" : "";
+  const portfolioBranchSmdtDate = smdtBranchDatesDesc[findDateIndex(smdtBranchDatesDesc, toDateInputValue(smdtTickerDate))] || "";
 
   const allTopTickers = useMemo(() => {
     const rows = smdtTickerPool.flatMap((tk) => {
@@ -1468,6 +1502,18 @@ export function ModDashboard() {
       const trade = getLatestTrade(totalTrade, tk.key);
       const prevSmdt = smdtTicker.matrix[tk.key]?.[prevSmdtTickerDate];
       const prev2Smdt = smdtTicker.matrix[tk.key]?.[prev2SmdtTickerDate];
+      const branch = findIndustryBranch(smdt.branches, industry);
+      const fourKey = evaluateFourKey({
+        ticker: tk.key,
+        industry,
+        date: smdtTickerDate,
+        tickerSeries: seriesFromMatrix(smdtTicker.matrix, smdtTicker.datesAsc, tk.key, smdtTickerDate),
+        industrySeries: branch ? seriesFromMatrix(smdt.matrix, smdt.datesAsc, branch.key, portfolioBranchSmdtDate || smdtTickerDate) : [],
+      });
+      const evalKey = fourKey?.evalKey || fallbackEvalKey({
+        tickerOk: isPositiveSig(tickerSig) && Number.isFinite(smdtValue) && smdtValue > 70,
+        industryOk: isPositiveSig(branchSig) && Number.isFinite(branchSmdt) && branchSmdt > 70,
+      });
       const momentum = Number.isFinite(prevSmdt) ? smdtValue - prevSmdt : 0;
       const status = classifyStrongTicker(smdtValue, prevSmdt, prev2Smdt, tickerSig, branchSmdt, branchSig);
       return [{
@@ -1483,13 +1529,15 @@ export function ModDashboard() {
         sig: tickerSig,
         tickerSig,
         branchSig,
+        fourKey,
+        evalKey,
         status,
         price: cash?.price || trade?.price || signal?.price,
         score: smdtValue + (Number.isFinite(branchSmdt) ? branchSmdt * 0.22 : 0) + sigWeight(tickerSig) * 8 + sigWeight(branchSig) * 4 + Math.max(-12, Math.min(18, momentum * 0.7)),
       }];
     });
     return rows.sort((a, b) => a.ticker.localeCompare(b.ticker));
-  }, [branchCashByLabel, branchSmdtByLabel, branchSmdtPrevByLabel, cashByTicker, prev2SmdtTickerDate, prevSmdtTickerDate, smdtTicker.matrix, smdtTickerDate, smdtTickerPool, stockSignalByTicker, totalTrade]);
+  }, [branchCashByLabel, branchSmdtByLabel, branchSmdtPrevByLabel, cashByTicker, portfolioBranchSmdtDate, prev2SmdtTickerDate, prevSmdtTickerDate, smdt.branches, smdt.datesAsc, smdt.matrix, smdtTicker.datesAsc, smdtTicker.matrix, smdtTickerDate, smdtTickerPool, stockSignalByTicker, totalTrade]);
 
   const rankedTopTickers = useMemo(() => {
     return [...allTopTickers].sort((a, b) => b.score - a.score || b.smdt - a.smdt);

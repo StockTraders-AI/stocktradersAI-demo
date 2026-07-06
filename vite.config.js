@@ -801,11 +801,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
-      "/api/portfolio-chat": {
-        target: "http://112.213.91.235:8000",
-        changeOrigin: true,
-        secure: false,
-      },
     },
   },
 });
