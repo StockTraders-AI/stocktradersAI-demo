@@ -50,6 +50,14 @@ const DONUT_COLORS = {
   waitSell: "#eda100",
   sell: "#e34948",
 };
+const DASH_TABLE_TONE = {
+  headerBg: "var(--Bs)",
+  headerBorder: "var(--Bb)",
+  headerText: "var(--B)",
+  rowBg: "rgba(124,58,237,.055)",
+  rowBorder: "rgba(124,58,237,.18)",
+  footerBg: "rgba(124,58,237,.045)",
+};
 
 function nav(id) {
   window.dispatchEvent(new CustomEvent("st-nav", { detail: id }));
@@ -418,18 +426,18 @@ function SmdtTabs({ active, onChange }) {
 
 function SmdtPreviewSectionLabel({ children }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 0" }}>
-      <span style={{ fontSize: 9, fontWeight: 850, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 0", padding: "2px 0" }}>
+      <span style={{ fontSize: 9, fontWeight: 850, color: DASH_TABLE_TONE.headerText, textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
         {children}
       </span>
-      <div style={{ flex: 1, height: 1, background: "var(--bdr)" }} />
+      <div style={{ flex: 1, height: 1, background: DASH_TABLE_TONE.rowBorder }} />
     </div>
   );
 }
 
 function SmdtPreviewLegend() {
   return (
-    <div style={{ display: "flex", gap: "6px 12px", flexWrap: "wrap", paddingTop: 7, marginTop: 2, borderTop: "0.5px solid var(--bdr)" }}>
+    <div style={{ display: "flex", gap: "6px 12px", flexWrap: "wrap", paddingTop: 7, marginTop: 2, borderTop: `0.5px solid ${DASH_TABLE_TONE.rowBorder}` }}>
       {[100, 70, 30, -Infinity].map((value) => {
         const tone = smdtBadgeTone(value);
         return (
@@ -462,9 +470,9 @@ function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, 
       <SmdtTabs active={tab} onChange={setTab} />
       <SmdtPreviewSectionLabel>{sectionTitle}</SmdtPreviewSectionLabel>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", columnGap: 18, alignContent: "start" }}>
-        {displayRows.length ? displayRows.map((row) => (
-          <div key={row.key} aria-hidden={row.placeholder || undefined} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, minHeight: 36, padding: "2px 0", borderBottom: `0.5px solid ${row.placeholder ? "transparent" : "var(--bdr)"}` }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", alignContent: "start", overflow: "hidden" }}>
+        {displayRows.length ? displayRows.map((row, index) => (
+          <div key={row.key} aria-hidden={row.placeholder || undefined} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, minHeight: 36, padding: row.placeholder ? 0 : "4px 8px", borderBottom: row.placeholder ? "none" : `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, borderRight: !row.placeholder && index % 2 === 0 ? `0.5px solid ${DASH_TABLE_TONE.rowBorder}` : "none", background: row.placeholder ? "transparent" : index % 4 > 1 ? DASH_TABLE_TONE.rowBg : undefined }}>
             {!row.placeholder && (
               <>
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--t1)", fontSize: 11, fontWeight: 700 }}>
@@ -546,7 +554,7 @@ function TopStrongTable({ rows, date, narrow }) {
 
   return (
     <Card noPad style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "12px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+      <div style={{ padding: "12px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Top mã mạnh</span>
           <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -563,15 +571,15 @@ function TopStrongTable({ rows, date, narrow }) {
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: narrow ? 520 : 0 }}>
           <thead>
-            <tr style={{ background: "var(--elev)" }}>
+            <tr style={{ background: DASH_TABLE_TONE.headerBg }}>
               {["Mã", "Giá", "TH cổ phiếu", "TH ngành", "T.thái"].map((h, i) => (
-                <th key={h} style={{ padding: i === 0 ? "5px 10px" : "5px 8px", textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: i === 0 ? "5px 10px" : "5px 8px", textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: DASH_TABLE_TONE.headerText, textTransform: "uppercase", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {visible.map((row) => (
-              <tr key={row.ticker} onClick={() => nav("top-ma-manh")} style={{ borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer" }}>
+            {visible.map((row, index) => (
+              <tr key={row.ticker} onClick={() => nav("top-ma-manh")} style={{ borderBottom: `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, background: index % 2 ? DASH_TABLE_TONE.rowBg : undefined, cursor: "pointer" }}>
                 <td style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
                 <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{row.price ? fmtNum(row.price) : "—"}</td>
                 <td style={{ padding: "6px 8px" }}><SignalPill sig={row.tickerSig} /></td>
@@ -583,7 +591,7 @@ function TopStrongTable({ rows, date, narrow }) {
         </table>
         {!visible.length && <EmptyHint />}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, marginTop: "auto", gap: 8 }}>
         <span style={{ fontSize: 10, color: "var(--t3)" }}>{filtered.length ? `${(safePage - 1) * PAGE_SIZE + 1}-${Math.min(safePage * PAGE_SIZE, filtered.length)} / ${filtered.length}` : "0 / 0"}</span>
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
@@ -831,177 +839,177 @@ function PortfolioBox({ rows, asOfDate }) {
 
   return (
     <>
-    <Card style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)", whiteSpace: "nowrap" }}>Phân tích danh mục</span>
-          <span style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap" }}>tối đa {PORTFOLIO_MAX_CODES} mã</span>
+      <Card style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)", whiteSpace: "nowrap" }}>Phân tích danh mục</span>
+            <span style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap" }}>tối đa {PORTFOLIO_MAX_CODES} mã</span>
+          </div>
+          {hasAnalysis && <Clink onClick={openPortfolioDetail}>Chi tiết ›</Clink>}
         </div>
-        {hasAnalysis && <Clink onClick={openPortfolioDetail}>Chi tiết ›</Clink>}
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={input}
-          onChange={(e) => updateInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && analyzePortfolio()}
-          style={{ flex: 1, minWidth: 0, padding: "7px 11px", borderRadius: 7, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: 11, outline: "none" }}
-          placeholder="VCG, HHV, BVS, TCB..."
-        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            value={input}
+            onChange={(e) => updateInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && analyzePortfolio()}
+            style={{ flex: 1, minWidth: 0, padding: "7px 11px", borderRadius: 7, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: 11, outline: "none" }}
+            placeholder="VCG, HHV, BVS, TCB..."
+          />
+          <button
+            type="button"
+            onClick={analyzePortfolio}
+            disabled={!picks.length}
+            style={{ padding: "7px 12px", borderRadius: 7, background: "var(--B)", color: "white", border: "none", fontSize: 11, fontWeight: 700, cursor: picks.length ? "pointer" : "not-allowed", whiteSpace: "nowrap", opacity: picks.length ? 1 : 0.5 }}
+          >
+            <i className="ti ti-sparkles" style={{ marginRight: 5 }} />
+            Phân tích
+          </button>
+        </div>
+        {hasAnalysis ? (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Donut items={cats.map((cat) => ({ value: counts[cat.key] || 0, color: cat.color }))} size={72} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                {cats.map((cat) => (
+                  <div key={cat.key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 999, background: cat.color }} />
+                    <span style={{ flex: 1, minWidth: 0, color: "var(--t2)", fontSize: 10, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cat.label}</span>
+                    <span style={{ color: cat.color, fontSize: 11, fontWeight: 750, whiteSpace: "nowrap", ...mono }}>{counts[cat.key] || 0} ({Math.round(((counts[cat.key] || 0) / total) * 100)}%)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", background: "var(--elev)", borderRadius: 8, padding: "8px 12px" }}>
+              <div>
+                <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 2 }}>Điểm phù hợp</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: score >= 70 ? "#0ca30c" : score >= 50 ? "#eda100" : "#e34948", ...mono }}>{score}/100</div>
+                <div style={{ fontSize: 9, color: "var(--t3)" }}>{level}</div>
+              </div>
+              <div style={{ width: 1, height: 38, background: "var(--bdr)" }} />
+              <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.55, flex: 1 }}>
+                <span style={{ fontSize: 9, fontWeight: 750, color: "#9b7cf7" }}>✦ AI </span>
+                {aiMessage}
+                {isDirty && <div style={{ marginTop: 3, color: "var(--A)", fontSize: 10, fontWeight: 750 }}>Danh sách mới chưa phân tích.</div>}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ minHeight: 132, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 8, color: "var(--t3)", fontSize: 11, textAlign: "center", padding: "12px 14px" }}>
+            <i className="ti ti-chart-donut" style={{ color: "var(--B)", fontSize: 17 }} />
+            Nhập mã rồi bấm Phân tích để xem kết quả.
+          </div>
+        )}
+
+        <div style={{ margin: "0 -14px", borderTop: "0.5px solid var(--bdr)", background: "var(--elev)", padding: "8px 14px 7px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span style={{ width: 24, height: 24, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 850, flexShrink: 0 }}>✦</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 750, color: "var(--t1)" }}>Tư vấn AI</div>
+              <div style={{ fontSize: 9, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: chatLoading ? "var(--A)" : "var(--G)" }}>
+              <span style={{ width: 5, height: 5, borderRadius: 999, background: chatLoading ? "var(--A)" : "var(--G)" }} />
+              {chatLoading ? "Đang hỏi" : "Sẵn sàng"}
+            </span>
+            <button type="button" onClick={() => setChatOpen(true)} style={{ border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--B)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 750, cursor: "pointer", whiteSpace: "nowrap" }}>
+              ↗ Mở rộng
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {["Mã nào đúng sóng?", "Ngành nào dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng?"].map((text) => (
+            <button key={text} type="button" onClick={() => askPortfolioMsg(text)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "4px 8px", fontSize: 10, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
+              {text}
+            </button>
+          ))}
+        </div>
+
         <button
           type="button"
-          onClick={analyzePortfolio}
-          disabled={!picks.length}
-          style={{ padding: "7px 12px", borderRadius: 7, background: "var(--B)", color: "white", border: "none", fontSize: 11, fontWeight: 700, cursor: picks.length ? "pointer" : "not-allowed", whiteSpace: "nowrap", opacity: picks.length ? 1 : 0.5 }}
+          onClick={() => setChatOpen(true)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 32, padding: "6px 9px 6px 11px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t3)", fontSize: 11, cursor: "text", textAlign: "left" }}
         >
-          <i className="ti ti-sparkles" style={{ marginRight: 5 }} />
-          Phân tích
+          <span>Hỏi AI về danh mục, chiến lược...</span>
+          <span style={{ width: 22, height: 22, borderRadius: 6, background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>➤</span>
         </button>
-      </div>
-      {hasAnalysis ? (
+      </Card>
+
+      {chatOpen && (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <Donut items={cats.map((cat) => ({ value: counts[cat.key] || 0, color: cat.color }))} size={72} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-              {cats.map((cat) => (
-                <div key={cat.key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: cat.color }} />
-                  <span style={{ flex: 1, minWidth: 0, color: "var(--t2)", fontSize: 10, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cat.label}</span>
-                  <span style={{ color: cat.color, fontSize: 11, fontWeight: 750, whiteSpace: "nowrap", ...mono }}>{counts[cat.key] || 0} ({Math.round(((counts[cat.key] || 0) / total) * 100)}%)</span>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", backdropFilter: "blur(2px)", zIndex: 900 }} onClick={() => setChatOpen(false)} />
+          <aside style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: narrow ? "100vw" : "min(460px,96vw)", maxWidth: "100vw", boxSizing: "border-box", overflowX: "hidden", background: "var(--surf)", borderLeft: narrow ? "none" : "0.5px solid var(--bdr)", zIndex: 901, display: "flex", flexDirection: "column", boxShadow: narrow ? "none" : "-24px 0 70px rgba(0,0,0,.35)" }}>
+            <div style={{ padding: narrow ? "12px 14px" : "14px 16px", borderBottom: "0.5px solid var(--bdr)", background: "var(--elev)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <span style={{ width: 32, height: 32, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 850, flexShrink: 0 }}>✦</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Tư vấn AI danh mục</div>
+                  <div style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
                 </div>
+              </div>
+              <button type="button" onClick={() => setChatOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--t2)", cursor: "pointer", fontSize: 15, flexShrink: 0 }}>
+                ×
+              </button>
+            </div>
+
+            {hasAnalysis && (
+              <div style={{ margin: narrow ? "10px 14px 0" : "12px 16px 0", background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "10px 12px", flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
+                <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 7, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".05em" }}>Danh mục đang phân tích</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {analyzed.map((row) => {
+                    const cat = cats.find((item) => item.key === row.cat);
+                    return (
+                      <span key={row.ticker} style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 5, background: `${cat?.color || "var(--t3)"}20`, color: cat?.color || "var(--t3)", border: `0.5px solid ${cat?.color || "var(--bdr)"}44` }}>
+                        {row.ticker}
+                      </span>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                  <span style={{ fontSize: 18, fontWeight: 850, color: score >= 70 ? "#0ca30c" : score >= 50 ? "#eda100" : "#e34948", ...mono }}>{score}/100</span>
+                  <span style={{ flex: "1 1 180px", minWidth: 0, fontSize: 10, color: "var(--t3)", overflowWrap: "anywhere" }}>{counts.dd} đúng sóng đúng ngành · {counts.ss} sai sóng sai ngành</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={panelRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", gap: 10, padding: narrow ? "12px 14px" : "14px 16px" }}>
+              {msgs.map((msg, index) => (
+                <PortfolioMsgBubble key={`panel-${msg.role}-${index}-${msg.text}`} role={msg.role} text={msg.text} panel />
               ))}
             </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", background: "var(--elev)", borderRadius: 8, padding: "8px 12px" }}>
-            <div>
-              <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 2 }}>Điểm phù hợp</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: score >= 70 ? "#0ca30c" : score >= 50 ? "#eda100" : "#e34948", ...mono }}>{score}/100</div>
-              <div style={{ fontSize: 9, color: "var(--t3)" }}>{level}</div>
+
+            <div style={{ padding: narrow ? "9px 14px" : "10px 16px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "0.5px solid var(--bdr)", minWidth: 0 }}>
+              {["Mã nào đúng sóng đúng ngành?", "Ngành nào đang dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng 3-5-2?", "So sánh các mã?"].map((text) => (
+                <button key={text} type="button" onClick={() => sendPortfolioMsg(text, true)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "5px 9px", fontSize: 11, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
+                  {text}
+                </button>
+              ))}
             </div>
-            <div style={{ width: 1, height: 38, background: "var(--bdr)" }} />
-            <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.55, flex: 1 }}>
-              <span style={{ fontSize: 9, fontWeight: 750, color: "#9b7cf7" }}>✦ AI </span>
-              {aiMessage}
-              {isDirty && <div style={{ marginTop: 3, color: "var(--A)", fontSize: 10, fontWeight: 750 }}>Danh sách mới chưa phân tích.</div>}
-            </div>
-          </div>
-        </>
-      ) : (
-        <div style={{ minHeight: 132, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 8, color: "var(--t3)", fontSize: 11, textAlign: "center", padding: "12px 14px" }}>
-          <i className="ti ti-chart-donut" style={{ color: "var(--B)", fontSize: 17 }} />
-          Nhập mã rồi bấm Phân tích để xem kết quả.
-        </div>
-      )}
 
-      <div style={{ margin: "0 -14px", borderTop: "0.5px solid var(--bdr)", background: "var(--elev)", padding: "8px 14px 7px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span style={{ width: 24, height: 24, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 850, flexShrink: 0 }}>✦</span>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 750, color: "var(--t1)" }}>Tư vấn AI</div>
-            <div style={{ fontSize: 9, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: chatLoading ? "var(--A)" : "var(--G)" }}>
-            <span style={{ width: 5, height: 5, borderRadius: 999, background: chatLoading ? "var(--A)" : "var(--G)" }} />
-            {chatLoading ? "Đang hỏi" : "Sẵn sàng"}
-          </span>
-          <button type="button" onClick={() => setChatOpen(true)} style={{ border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--B)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 750, cursor: "pointer", whiteSpace: "nowrap" }}>
-            ↗ Mở rộng
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-        {["Mã nào đúng sóng?", "Ngành nào dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng?"].map((text) => (
-          <button key={text} type="button" onClick={() => askPortfolioMsg(text)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "4px 8px", fontSize: 10, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
-            {text}
-          </button>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setChatOpen(true)}
-        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 32, padding: "6px 9px 6px 11px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t3)", fontSize: 11, cursor: "text", textAlign: "left" }}
-      >
-        <span>Hỏi AI về danh mục, chiến lược...</span>
-        <span style={{ width: 22, height: 22, borderRadius: 6, background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>➤</span>
-      </button>
-    </Card>
-
-    {chatOpen && (
-      <>
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", backdropFilter: "blur(2px)", zIndex: 900 }} onClick={() => setChatOpen(false)} />
-        <aside style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: narrow ? "100vw" : "min(460px,96vw)", maxWidth: "100vw", boxSizing: "border-box", overflowX: "hidden", background: "var(--surf)", borderLeft: narrow ? "none" : "0.5px solid var(--bdr)", zIndex: 901, display: "flex", flexDirection: "column", boxShadow: narrow ? "none" : "-24px 0 70px rgba(0,0,0,.35)" }}>
-          <div style={{ padding: narrow ? "12px 14px" : "14px 16px", borderBottom: "0.5px solid var(--bdr)", background: "var(--elev)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <span style={{ width: 32, height: 32, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 850, flexShrink: 0 }}>✦</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Tư vấn AI danh mục</div>
-                <div style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
-              </div>
-            </div>
-            <button type="button" onClick={() => setChatOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--t2)", cursor: "pointer", fontSize: 15, flexShrink: 0 }}>
-              ×
-            </button>
-          </div>
-
-          {hasAnalysis && (
-            <div style={{ margin: narrow ? "10px 14px 0" : "12px 16px 0", background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "10px 12px", flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
-              <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 7, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".05em" }}>Danh mục đang phân tích</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {analyzed.map((row) => {
-                  const cat = cats.find((item) => item.key === row.cat);
-                  return (
-                    <span key={row.ticker} style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 5, background: `${cat?.color || "var(--t3)"}20`, color: cat?.color || "var(--t3)", border: `0.5px solid ${cat?.color || "var(--bdr)"}44` }}>
-                      {row.ticker}
-                    </span>
-                  );
-                })}
-              </div>
-              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-                <span style={{ fontSize: 18, fontWeight: 850, color: score >= 70 ? "#0ca30c" : score >= 50 ? "#eda100" : "#e34948", ...mono }}>{score}/100</span>
-                <span style={{ flex: "1 1 180px", minWidth: 0, fontSize: 10, color: "var(--t3)", overflowWrap: "anywhere" }}>{counts.dd} đúng sóng đúng ngành · {counts.ss} sai sóng sai ngành</span>
-              </div>
-            </div>
-          )}
-
-          <div ref={panelRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", gap: 10, padding: narrow ? "12px 14px" : "14px 16px" }}>
-            {msgs.map((msg, index) => (
-              <PortfolioMsgBubble key={`panel-${msg.role}-${index}-${msg.text}`} role={msg.role} text={msg.text} panel />
-            ))}
-          </div>
-
-          <div style={{ padding: narrow ? "9px 14px" : "10px 16px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "0.5px solid var(--bdr)", minWidth: 0 }}>
-            {["Mã nào đúng sóng đúng ngành?", "Ngành nào đang dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng 3-5-2?", "So sánh các mã?"].map((text) => (
-              <button key={text} type="button" onClick={() => sendPortfolioMsg(text, true)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "5px 9px", fontSize: 11, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
-                {text}
+            <div style={{ display: "flex", gap: 8, padding: narrow ? "10px 14px calc(10px + env(safe-area-inset-bottom))" : "12px 16px", borderTop: "0.5px solid var(--bdr)", alignItems: "flex-end", minWidth: 0 }}>
+              <textarea
+                autoFocus
+                rows={1}
+                value={panelVal}
+                onChange={(event) => setPanelVal(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    sendPortfolioMsg(panelVal, true);
+                  }
+                }}
+                placeholder="Hỏi bất cứ điều gì về danh mục..."
+                style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 90, resize: "none", padding: "8px 12px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: 12, lineHeight: 1.5, outline: "none", fontFamily: "inherit" }}
+              />
+              <button type="button" onClick={() => sendPortfolioMsg(panelVal, true)} disabled={chatLoading || !panelVal.trim()} style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: chatLoading || !panelVal.trim() ? "not-allowed" : "pointer", opacity: chatLoading || !panelVal.trim() ? 0.55 : 1, flexShrink: 0 }}>
+                ➤
               </button>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", gap: 8, padding: narrow ? "10px 14px calc(10px + env(safe-area-inset-bottom))" : "12px 16px", borderTop: "0.5px solid var(--bdr)", alignItems: "flex-end", minWidth: 0 }}>
-            <textarea
-              autoFocus
-              rows={1}
-              value={panelVal}
-              onChange={(event) => setPanelVal(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  sendPortfolioMsg(panelVal, true);
-                }
-              }}
-              placeholder="Hỏi bất cứ điều gì về danh mục..."
-              style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 90, resize: "none", padding: "8px 12px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: 12, lineHeight: 1.5, outline: "none", fontFamily: "inherit" }}
-            />
-            <button type="button" onClick={() => sendPortfolioMsg(panelVal, true)} disabled={chatLoading || !panelVal.trim()} style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: chatLoading || !panelVal.trim() ? "not-allowed" : "pointer", opacity: chatLoading || !panelVal.trim() ? 0.55 : 1, flexShrink: 0 }}>
-              ➤
-            </button>
-          </div>
-        </aside>
-      </>
-    )}
+            </div>
+          </aside>
+        </>
+      )}
     </>
   );
 }
@@ -1179,7 +1187,7 @@ function SignalPortfolio({ rows, date, live }) {
 
   return (
     <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Danh mục đầu tư giả lập</span>
           <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>{date ? fmtFull(date) : "—"} </span>
@@ -1196,15 +1204,15 @@ function SignalPortfolio({ rows, date, live }) {
             {cols.map((col) => <col key={col.label} style={{ width: col.width }} />)}
           </colgroup>
           <thead>
-            <tr style={{ background: "var(--elev)" }}>
+            <tr style={{ background: DASH_TABLE_TONE.headerBg }}>
               {cols.map((col, i) => (
-                <th key={col.label} style={{ padding: i === 0 ? "6px 12px" : "6px 8px", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
+                <th key={col.label} style={{ padding: i === 0 ? "6px 12px" : "6px 8px", fontSize: 9, fontWeight: 800, color: DASH_TABLE_TONE.headerText, textTransform: "uppercase", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {visible.map((row) => (
-              <tr key={`${row.ticker}-${row.date}`} style={{ borderBottom: "0.5px solid var(--bdrs)" }}>
+            {visible.map((row, index) => (
+              <tr key={`${row.ticker}-${row.date}`} style={{ borderBottom: `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, background: index % 2 ? DASH_TABLE_TONE.rowBg : undefined }}>
                 <td style={{ padding: "7px 12px", fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
                 <td style={{ padding: "7px 8px", textAlign: "center" }}><SignalPill compact sig={row.cashSig || signalToSig(row.signal)} /></td>
                 <td style={{ padding: "7px 8px", textAlign: "center" }}><SmdtBarCell value={row.smdt} /></td>
@@ -1217,7 +1225,7 @@ function SignalPortfolio({ rows, date, live }) {
         </table>
         {!visible.length && <EmptyHint>Chưa có tín hiệu {tab === "MUA" ? "mua" : "bán"}.</EmptyHint>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 14px", borderTop: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, marginTop: "auto", gap: 8 }}>
         <span style={{ fontSize: 10, color: "var(--t3)" }}>{tabRows.length ? `${(safePage - 1) * SIGNAL_PORTFOLIO_PAGE_SIZE + 1}–${Math.min(safePage * SIGNAL_PORTFOLIO_PAGE_SIZE, tabRows.length)} / ${tabRows.length} mã` : "0 mã"}</span>
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
@@ -1278,7 +1286,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
 
   return (
     <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
         <div>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Nhật ký tín hiệu</span>
           <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>Sóng thị trường · Ngành · Mã</span>
@@ -1294,7 +1302,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
         {visible.map((item, index) => {
           const tone = LOG_TONES[item.type] || LOG_TONES.tr;
           return (
-            <div key={`${item.title}-${item.tag}-${index}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 14px", borderBottom: "0.5px solid var(--bdrs)" }}>
+            <div key={`${item.title}-${item.tag}-${index}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, background: index % 2 ? DASH_TABLE_TONE.rowBg : undefined }}>
               <div style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, background: tone.bg, color: tone.color }}>
                 <i className={`ti ${item.kind === "ng" ? "ti-building-community" : tone.icon}`} />
               </div>
@@ -1311,7 +1319,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
         })}
         {!visible.length && <EmptyHint />}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, marginTop: "auto", gap: 8 }}>
         <span style={{ fontSize: 10, color: "var(--t3)" }}>{logs.length ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, logs.length)} / ${logs.length} tín hiệu` : "0 tín hiệu"}</span>
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
