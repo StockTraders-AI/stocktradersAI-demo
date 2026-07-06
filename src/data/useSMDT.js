@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { readDataCache, writeDataCache } from "./cacheStorage";
 import { resolveRealtimeUrl } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ export const CORE_BRANCHES = [
   { key: "BĐS Dân cư", label: "Bất động sản" },
   { key: "Thép", label: "Thép" },
   { key: "Xây dựng", label: "Xây dựng" },
-  { key: "Sản xuất và Khai thác dầu khí", label: "Dầu khí" },
+  { key: "Sóng ngành Vin", label: "Sóng Vin" },
 ];
 
 const CORE_KEYS = new Set(CORE_BRANCHES.map((b) => b.key));
@@ -184,14 +185,13 @@ function extractRealtimeTicks(payload) {
 }
 
 const CACHE_KEY = "smdt_data_cache";
+const CACHE_SCHEMA_VERSION = 1;
 let globalCache = null; // RAM Cache to keep data alive across hook remounts
 
 function getCachedData() {
   if (globalCache) return globalCache;
   try {
-    const serialized = localStorage.getItem(CACHE_KEY);
-    if (!serialized) return null;
-    const parsed = JSON.parse(serialized);
+    const parsed = readDataCache(CACHE_KEY, { schemaVersion: CACHE_SCHEMA_VERSION });
     if (parsed && parsed.branches && parsed.datesAsc && parsed.matrix) {
       globalCache = {
         branches: parsed.branches,
@@ -215,7 +215,7 @@ function setCachedData(data) {
       matrix: data.matrix,
       updatedAt: data.updatedAt ? data.updatedAt.toISOString() : null,
     };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(toStore));
+    writeDataCache(CACHE_KEY, toStore, { schemaVersion: CACHE_SCHEMA_VERSION });
   } catch (e) {
     console.warn("Failed to save SMDT cache:", e);
   }
@@ -246,7 +246,7 @@ export function useSMDT() {
     return cached ? cached.updatedAt : null;
   });
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false, bust = false } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
 
     let request;
@@ -256,8 +256,10 @@ export function useSMDT() {
       }
       const startedAt = Date.now();
       try {
-        const params = new URLSearchParams({ _: String(startedAt) });
+        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi refresh thủ công.
+        const params = new URLSearchParams();
         applyLimitParam(params, limit);
+        if (bust) params.set("_", String(startedAt));
         const res = await fetch(`${API_BASE_URL}?${params.toString()}`, {
           cache: "no-store",
         });
@@ -376,7 +378,7 @@ export function useSMDT() {
     setError(null);
   }, []);
 
-  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, limit: FULL_LIMIT }), applyTick };
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, bust: true, limit: FULL_LIMIT }), applyTick };
 }
 
 function getRealtimeUrl() {

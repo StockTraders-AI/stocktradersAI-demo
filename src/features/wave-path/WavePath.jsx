@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNarrow } from "../../app/useNarrow";
 import { useBranchPath } from "../../data/useBranchPath";
 import { CORE_BRANCHES } from "../../data/useSMDT";
-import { useSMDTBranchCross, useSMDTTickerCross } from "../../data/useSMDTCross";
+import { useRealtimeSMDTBranchCrossFeed, useRealtimeSMDTTickerCrossFeed, useSMDTBranchCross, useSMDTTickerCross } from "../../data/useSMDTCross";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
+import { Loading } from "../../components/ui";
 
 const STORAGE_KEY = "wave_path_visible_branches_v1";
 const STRONG_THRESHOLD = 70;
@@ -17,8 +18,17 @@ const PINNED_KEYS = [
   "Thép",
   "BĐS Dân cư",
   "Xây dựng",
-  "Sản xuất và Khai thác dầu khí",
-  "Sóng Vin",
+  "Sóng ngành Vin",
+];
+
+const INDUSTRY_ALIAS_GROUPS = [
+  ["Ngân hàng", "Ngân hàng thương mại truyền thống"],
+  ["Chứng khoán", "Môi giới chứng khoán"],
+  ["Thép", "Sản xuất, chế biến thép"],
+  ["BĐS Dân cư", "Bất động sản", "Bất động sản dân cư", "Dịch vụ Bất động sản dân cư"],
+  ["BĐS KCN", "Bất động sản công nghiệp", "Bất động sản khu công nghiệp", "Khu công nghiệp"],
+  ["Sóng ngành Vin", "Sóng Vin", "Vin", "Vingroup"],
+  ["Sản xuất và Khai thác dầu khí", "SX & KT dầu khí", "Dầu khí"],
 ];
 
 const COLORS = [
@@ -71,6 +81,16 @@ function normalizeName(value) {
     .replace(/\s+/g, " ");
 }
 
+function aliasesOfIndustry(name) {
+  const normalized = normalizeName(name);
+  return INDUSTRY_ALIAS_GROUPS.find((group) => group.some((item) => normalizeName(item) === normalized)) || [name];
+}
+
+function pinnedOrderOfIndustry(name) {
+  const names = aliasesOfIndustry(name).map(normalizeName);
+  return PINNED_KEYS.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeName(alias))));
+}
+
 function pctPos(date, d0, totalMs) {
   if (!date || !d0 || totalMs <= 0) return 0;
   return Math.max(0, Math.min(100, ((new Date(date) - d0) / totalMs) * 100));
@@ -112,12 +132,14 @@ function signalMeta(value, prev, t) {
 
 function branchAliases(row) {
   const aliases = new Set([normalizeName(row.key), normalizeName(row.label)]);
-  if (row.key === "BĐS Dân cư") aliases.add(normalizeName("Bất động sản"));
-  if (row.key === "Sản xuất và Khai thác dầu khí") {
-    aliases.add(normalizeName("SX & KT dầu khí"));
-    aliases.add(normalizeName("Dầu khí"));
+  for (const name of [row.key, row.label]) {
+    for (const alias of aliasesOfIndustry(name)) aliases.add(normalizeName(alias));
   }
   return aliases;
+}
+
+function sortTickerAsc(a, b) {
+  return a.ticker.localeCompare(b.ticker, "en", { sensitivity: "base", numeric: true });
 }
 
 function getValueAtOrBefore(matrix, datesAsc, ticker, date) {
@@ -1007,12 +1029,12 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
         };
       })
       .filter(Boolean)
-      .sort((a, b) => b.value - a.value)
+      .sort(sortTickerAsc)
       .slice(0, 60);
   }, [branchPath.tickerToBranch, eventDate, row, t, tickerData.datesAsc, tickerData.matrix, tickerData.tickers]);
 
   if (branchPath.status === "loading" || tickerData.status === "loading") {
-    return <div style={styles.tableNotice}>Đang tải danh sách mã trong ngành...</div>;
+    return <Loading label="Đang tải danh sách mã trong ngành…" compact style={{ marginBottom: 0, padding: "12px 4px" }} />;
   }
 
   if (!rows.length) {
@@ -1047,7 +1069,11 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
                   <div style={styles.tickerName}>{item.name}</div>
                 </td>
                 <td style={styles.tdMuted}>{row.label}</td>
-                <td style={{ ...styles.td, textAlign: "right", color: smdtColor(item.value, t), fontWeight: 850, ...mono }}>{item.value.toFixed(1)}%</td>
+                <td style={{ ...styles.td, textAlign: "right" }}>
+                  <span style={{ ...styles.smdtPill, color: smdtColor(item.value, t), background: `${smdtColor(item.value, t)}18`, borderColor: `${smdtColor(item.value, t)}33`, ...mono }}>
+                    {item.value.toFixed(1)}%
+                  </span>
+                </td>
                 <td style={{ ...styles.td, textAlign: "right", color: item.delta == null ? "var(--t4)" : item.delta >= 0 ? t.G : t.R, ...mono }}>
                   {item.delta == null ? "--" : `${item.delta >= 0 ? "+" : ""}${item.delta.toFixed(1)}`}
                 </td>
@@ -1224,7 +1250,6 @@ function ManageModal({ rows, visibleSet, onClose, onSave }) {
 }
 
 function buildRows({ branches, datesAsc, matrix }) {
-  const pinnedIndex = new Map(PINNED_KEYS.map((key, index) => [key, index]));
   const coreLabels = new Map(CORE_BRANCHES.map((item) => [item.key, item.label]));
 
   return branches
@@ -1234,13 +1259,14 @@ function buildRows({ branches, datesAsc, matrix }) {
         .filter((item) => item.smdt != null && item.smdt >= STRONG_THRESHOLD);
       if (!events.length) return null;
       const last = events[events.length - 1];
-      const pinned = pinnedIndex.has(branch.key);
+      const pinnedOrder = pinnedOrderOfIndustry(branch.key);
+      const pinned = pinnedOrder >= 0;
       return {
         key: branch.key,
         label: branch.key === "BĐS Dân cư" ? "BĐS Dân cư" : coreLabels.get(branch.key) || branch.label || branch.key,
         color: COLORS[index % COLORS.length],
         pinned,
-        pinnedOrder: pinned ? pinnedIndex.get(branch.key) : 999,
+        pinnedOrder: pinned ? pinnedOrder : 999,
         events,
         lastDate: last.date,
         lastSmdt: last.smdt,
@@ -1255,6 +1281,8 @@ export function ModLoTrinhDanSong() {
   const smdt = useSMDTBranchCross();
   const tickers = useSMDTTickerCross();
   const branchPath = useBranchPath();
+  useRealtimeSMDTBranchCrossFeed(smdt.applyTick);
+  useRealtimeSMDTTickerCrossFeed(tickers.applyTick);
 
   const [year, setYear] = useState(null);
   const [query, setQuery] = useState("");
@@ -1344,7 +1372,7 @@ export function ModLoTrinhDanSong() {
     setHighlightDate(null);
   };
 
-  if (loading) return <div style={styles.banner}>Đang tải lộ trình dẫn sóng...</div>;
+  if (loading) return <Loading label="Đang tải lộ trình dẫn sóng…" />;
   if (error) return <div style={styles.banner}>Không tải được dữ liệu SMDT ngành: {smdt.error}</div>;
 
   return (
@@ -1484,6 +1512,7 @@ const styles = {
   td: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t2)", fontSize: 11, verticalAlign: "middle" },
   tdMuted: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t3)", fontSize: 11 },
   tickerName: { marginTop: 1, color: "var(--t3)", fontSize: 10, maxWidth: 210, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  smdtPill: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 62, border: "0.5px solid", borderRadius: 999, padding: "3px 8px", fontSize: 10.5, fontWeight: 850, whiteSpace: "nowrap" },
   signalPill: { display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "3px 8px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" },
   tableNotice: { marginTop: 12, padding: "12px 14px", background: "var(--bg)", border: "0.5px solid var(--bdr)", borderRadius: 10, color: "var(--t3)", fontSize: 12 },
   modalBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,.62)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },

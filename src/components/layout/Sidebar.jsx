@@ -179,6 +179,8 @@ export function Sidebar({ curMod, onNav, compact }) {
           {sub("portfolio-analysis", "ti-sparkles", "Phân tích danh mục")}
         </div>
 
+        {item("do-song", "ti-wave-sine", "Dò sóng thị trường")}
+
         {item(null, "ti-chart-bar", "Báo cáo")}
         {item(null, "ti-book", "Kiến thức")}
         {item(null, "ti-settings", "Cài đặt")}

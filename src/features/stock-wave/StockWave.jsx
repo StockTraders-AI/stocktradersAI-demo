@@ -3,7 +3,7 @@ import { useTheme } from "../../theme";
 import { mono } from "../../styles/tokens";
 import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave";
 import { fmtDay, fmtFull, fmtNum, pct, signed } from "../../app/formatters";
-import { Card, CardHeader, TableWrap, THead, Pagination, Banner, LiveFooter } from "../../components/ui";
+import { Card, CardHeader, TableWrap, THead, Pagination, Banner, LiveFooter, Loading } from "../../components/ui";
 import { linkBtn } from "../../components/ui/ModuleControls";
 import { WaveDonut } from "./WaveDonut";
 
@@ -235,7 +235,7 @@ export function ModDoSong() {
   const safePage = Math.min(page, totalPages);
   const pageRows = rowsDesc.slice((safePage - 1) * PER, safePage * PER);
 
-  if (status === "loading" && !latest) return <Banner>Đang tải dữ liệu dò sóng…</Banner>;
+  if (status === "loading" && !latest) return <Loading label="Đang tải dữ liệu dò sóng…" />;
   if (status === "error" && !latest)
     return <Banner tone="error">Lỗi tải dữ liệu: {error} <button onClick={refresh} style={linkBtn}>Thử lại</button></Banner>;
   if (!latest) return <Banner>Chưa có dữ liệu dò sóng.</Banner>;

@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
+import { readDataCache, writeDataCache } from "./cacheStorage";
+import { resolveRealtimeUrl } from "./realtimeUrl";
 import { CORE_BRANCHES } from "./useSMDT";
 
 const ACCOUNT = "thao.dtt";
@@ -6,6 +9,9 @@ const BRANCH_CROSS_API = "/service/data/getSMDTBranchCross";
 const TICKER_CROSS_API = "/service/data/getSMDTTickerCross";
 const BRANCH_CACHE_KEY = "smdt_branch_cross_data_cache";
 const TICKER_CACHE_KEY = "smdt_ticker_cross_data_cache";
+const CACHE_SCHEMA_VERSION = 1;
+const BRANCH_CHANNEL = "smdt-branch-cross";
+const TICKER_CHANNEL = "smdt-ticker-cross";
 
 const CORE_KEYS = new Set(CORE_BRANCHES.map((item) => item.key));
 
@@ -20,7 +26,7 @@ function toNumber(value) {
 
 function readCache(key) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "null");
+    const parsed = readDataCache(key, { schemaVersion: CACHE_SCHEMA_VERSION });
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
@@ -29,7 +35,7 @@ function readCache(key) {
 
 function writeCache(key, value) {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    writeDataCache(key, value, { schemaVersion: CACHE_SCHEMA_VERSION });
   } catch {
     // Bỏ qua nếu trình duyệt chặn hoặc quota localStorage đầy.
   }
@@ -51,7 +57,8 @@ function sortTickers(tickers) {
 }
 
 function normalizeBranchCross(data) {
-  const datas = data?.SMDTBranchCrossReply?.SMDTDatas ?? [];
+  const payload = data?.channel === BRANCH_CHANNEL && data?.data ? data.data : data;
+  const datas = payload?.SMDTBranchCrossReply?.SMDTDatas ?? payload?.SMDTBranchCrossRequest?.SMDTDatas ?? payload?.SMDTDatas ?? [];
   const dateSet = new Set();
   const matrix = {};
 
@@ -79,7 +86,8 @@ function normalizeBranchCross(data) {
 }
 
 function normalizeTickerCross(data) {
-  const datas = data?.SMDTTickerCrossReply?.SMDTDatas ?? [];
+  const payload = data?.channel === TICKER_CHANNEL && data?.data ? data.data : data;
+  const datas = payload?.SMDTTickerCrossReply?.SMDTDatas ?? payload?.SMDTTickerCrossRequest?.SMDTDatas ?? payload?.SMDTDatas ?? [];
   const dateSet = new Set();
   const matrix = {};
   const tickers = [];
@@ -102,6 +110,36 @@ function normalizeTickerCross(data) {
   }
 
   return { tickers: sortTickers(tickers), datesAsc: [...dateSet].sort(), matrix };
+}
+
+function mergeBranchCross(base, patch) {
+  const dateSet = new Set([...(base?.datesAsc || []), ...(patch?.datesAsc || [])]);
+  const branchMap = new Map((base?.branches || []).map((branch) => [branch.key, branch]));
+  for (const branch of patch?.branches || []) branchMap.set(branch.key, branch);
+
+  const matrix = { ...(base?.matrix || {}) };
+  for (const key in patch?.matrix || {}) {
+    matrix[key] = { ...(matrix[key] || {}), ...patch.matrix[key] };
+  }
+
+  return { branches: sortBranches([...branchMap.values()]), datesAsc: [...dateSet].sort(), matrix };
+}
+
+function mergeTickerCross(base, patch) {
+  const dateSet = new Set([...(base?.datesAsc || []), ...(patch?.datesAsc || [])]);
+  const tickerMap = new Map((base?.tickers || []).map((ticker) => [ticker.key, ticker]));
+  for (const ticker of patch?.tickers || []) tickerMap.set(ticker.key, ticker);
+
+  const matrix = { ...(base?.matrix || {}) };
+  for (const key in patch?.matrix || {}) {
+    matrix[key] = { ...(matrix[key] || {}), ...patch.matrix[key] };
+  }
+
+  return { tickers: sortTickers([...tickerMap.values()]), datesAsc: [...dateSet].sort(), matrix };
+}
+
+function hasCrossData(data) {
+  return Boolean(data?.datesAsc?.length && data?.matrix && Object.keys(data.matrix).length);
 }
 
 async function postJson(url, body) {
@@ -137,7 +175,7 @@ function validateTickerCross(json) {
   if (!Array.isArray(reply?.SMDTDatas)) throw new Error("API response missing SMDTDatas");
 }
 
-function useCrossData({ cacheKey, initialState, fetcher, normalize, validate }) {
+function useCrossData({ cacheKey, initialState, fetcher, normalize, validate, merge }) {
   const inFlightRef = useRef(null);
   const cached = readCache(cacheKey);
   const [state, setState] = useState(() => cached?.state || initialState);
@@ -182,7 +220,22 @@ function useCrossData({ cacheKey, initialState, fetcher, normalize, validate }) 
     fetchSnapshot();
   }, [fetchSnapshot]);
 
-  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }) };
+  const applyTick = useCallback((payload) => {
+    const normalized = normalize(payload);
+    if (!hasCrossData(normalized)) return;
+
+    const now = new Date();
+    setState((prev) => {
+      const nextState = merge(prev, normalized);
+      writeCache(cacheKey, { state: nextState, updatedAt: now.toISOString() });
+      return nextState;
+    });
+    setUpdatedAt(now);
+    setStatus("ready");
+    setError(null);
+  }, [cacheKey, merge, normalize]);
+
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }), applyTick };
 }
 
 export function useSMDTBranchCross() {
@@ -192,6 +245,7 @@ export function useSMDTBranchCross() {
     fetcher: fetchBranchCross,
     normalize: normalizeBranchCross,
     validate: validateBranchCross,
+    merge: mergeBranchCross,
   });
 }
 
@@ -202,5 +256,57 @@ export function useSMDTTickerCross() {
     fetcher: fetchTickerCross,
     normalize: normalizeTickerCross,
     validate: validateTickerCross,
+    merge: mergeTickerCross,
+  });
+}
+
+function getRealtimeUrl() {
+  return resolveRealtimeUrl(import.meta.env.VITE_SMDT_CROSS_WS_URL, import.meta.env.VITE_SMDT_WS_URL);
+}
+
+function useRealtimeCrossFeed({ channel, normalize, onTick, label }) {
+  const cbRef = useRef(onTick);
+  cbRef.current = onTick;
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    const socket = io(getRealtimeUrl(), { autoConnect: true });
+
+    const handlePayload = (payload) => {
+      if (payload?.channel && payload.channel !== channel) return;
+      if (hasCrossData(normalize(payload))) cbRef.current?.(payload);
+    };
+
+    socket.on("connect", () => {
+      console.log(`Socket.IO (${label}) connected to namespace:`, socket.nsp);
+      setConnected(true);
+      socket.emit("message", { action: "subscribe", channels: [channel] });
+    });
+
+    socket.on("message", handlePayload);
+    socket.on("connect_error", (error) => console.error(`Socket.IO (${label}) connection error:`, error.message));
+    socket.on("disconnect", () => setConnected(false));
+
+    return () => socket.disconnect();
+  }, [channel, label, normalize]);
+
+  return { connected };
+}
+
+export function useRealtimeSMDTBranchCrossFeed(onTick) {
+  return useRealtimeCrossFeed({
+    channel: BRANCH_CHANNEL,
+    normalize: normalizeBranchCross,
+    onTick,
+    label: "smdt branch cross",
+  });
+}
+
+export function useRealtimeSMDTTickerCrossFeed(onTick) {
+  return useRealtimeCrossFeed({
+    channel: TICKER_CHANNEL,
+    normalize: normalizeTickerCross,
+    onTick,
+    label: "smdt ticker cross",
   });
 }

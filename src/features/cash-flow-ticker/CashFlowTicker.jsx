@@ -4,7 +4,7 @@ import { useCashFlowBranch, useRealtimeCashFlowFeed, contentToSig } from "../../
 import { useBranchPath } from "../../data/useBranchPath";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtFull, fmtNum } from "../../app/formatters";
-import { Card, Pagination, Banner, LiveFooter } from "../../components/ui";
+import { Card, Pagination, Banner, LiveFooter, Loading } from "../../components/ui";
 import { DateSessionSelect, SMDTToolbarPill, SMDTSearchPill, InlineFilterChips, linkBtn } from "../../components/ui/ModuleControls";
 import { CashFlowMatrixTable } from "./CashFlowMatrixTable";
 import { CfBadge } from "./CfBadge";
@@ -332,11 +332,11 @@ export function ModDongTienCP() {
     URL.revokeObjectURL(url);
   }, [visibleTickers, datesDesc, matrix, latestDate]);
 
-  if (status === "loading" && !rows.length) return <Banner>Đang tải dữ liệu dòng tiền cổ phiếu…</Banner>;
+  if (status === "loading" && !rows.length) return <Loading label="Đang tải dữ liệu dòng tiền cổ phiếu…" />;
   if (status === "error" && !rows.length)
     return <Banner tone="error">Lỗi tải dữ liệu: {error} <button onClick={refresh} style={linkBtn}>Thử lại</button></Banner>;
   if (branchPathStatus === "loading" && !Object.keys(tickerToBranch).length)
-    return <Banner>Đang tải danh sách ngành cổ phiếu…</Banner>;
+    return <Loading label="Đang tải danh sách ngành cổ phiếu…" />;
   if (branchPathStatus === "error" && !Object.keys(tickerToBranch).length)
     return <Banner tone="error">Lỗi tải danh sách ngành: {branchPathError} <button onClick={refreshBranchPath} style={linkBtn}>Thử lại</button></Banner>;
 
