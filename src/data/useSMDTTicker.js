@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
  * useSMDTTicker — nguồn dữ liệu "Sức mạnh dòng tiền cổ phiếu"
@@ -17,7 +17,6 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
 const API_BASE_URL = "/api/smdt-ticker";
 const INITIAL_LIMIT = 500;
 const FULL_LIMIT = "full";
-const DEFAULT_REFRESH_MS = 15_000;
 const CACHE_KEY = "smdt_ticker_data_cache";
 const CACHE_SCHEMA_VERSION = 1;
 // Giữ đủ dữ liệu trong RAM (để lịch lùi sâu hơn), nhưng chỉ lưu localStorage 150 phiên
@@ -27,11 +26,6 @@ const CHANNELS = ["smdt-stock"];
 const REPLY_KEYS = ["SMDTTickerReply", "SMDTTickerRequest"];
 
 let globalCache = null; // RAM Cache to keep data alive across hook remounts
-
-function getRefreshMs() {
-  const configured = Number(import.meta.env.VITE_SMDT_TICKER_REFRESH_MS);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
-}
 
 function getReply(data) {
   for (const key of REPLY_KEYS) {
@@ -301,14 +295,16 @@ export function useSMDTTicker() {
     const refresh = () => {
       if (document.visibilityState === "visible") fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
     };
-    const timer = window.setInterval(refresh, getRefreshMs());
+    // Không poll định kỳ: dữ liệu mới đến qua Socket.IO; chỉ fetch lại snapshot
+    // khi tab hiện lại / được focus hoặc khi socket realtime reconnect (bù dữ liệu hụt).
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
+    window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
     };
   }, [fetchSnapshot]);
 
@@ -371,26 +367,23 @@ export function useRealtimeSMDTTickerFeed(onTick) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket = io(getRealtimeUrl(), { autoConnect: true });
+    const socket = io(getRealtimeUrl(), { autoConnect: true, transports: ["websocket"] });
 
     const handlePayload = (payload) => {
       if (extractRealtimeTicks(payload).length > 0) cbRef.current?.(payload);
     };
 
+    let hadConnected = false;
     socket.on("connect", () => {
       console.log("Socket.IO (smdt ticker) connected to namespace:", socket.nsp);
       setConnected(true);
       socket.emit("message", { action: "subscribe", channels: CHANNELS });
+      // Reconnect: báo các data hook fetch lại snapshot bù dữ liệu hụt lúc mất kết nối.
+      if (hadConnected) emitRealtimeReconnected();
+      hadConnected = true;
     });
 
-    socket.onAny((event, ...args) => {
-      if (event === "connect" || event === "disconnect" || event === "connect_error") return;
-      if (CHANNELS.includes(event) && args.length === 1) {
-        handlePayload({ channel: event, data: args[0] });
-        return;
-      }
-      for (const payload of args) handlePayload(payload);
-    });
+    socket.on("message", handlePayload);
 
     socket.on("connect_error", (error) => console.error("Socket.IO (smdt ticker) connection error:", error.message));
     socket.on("disconnect", () => setConnected(false));
