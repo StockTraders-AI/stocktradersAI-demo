@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
 import { CORE_BRANCHES } from "./useSMDT";
 
 const ACCOUNT = "thao.dtt";
@@ -218,6 +218,10 @@ function useCrossData({ cacheKey, initialState, fetcher, normalize, validate, me
 
   useEffect(() => {
     fetchSnapshot();
+    // Fetch lại snapshot khi socket realtime reconnect để bù dữ liệu hụt lúc mất kết nối.
+    const refresh = () => fetchSnapshot();
+    window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
+    return () => window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
   }, [fetchSnapshot]);
 
   const applyTick = useCallback((payload) => {
@@ -270,17 +274,21 @@ function useRealtimeCrossFeed({ channel, normalize, onTick, label }) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket = io(getRealtimeUrl(), { autoConnect: true });
+    const socket = io(getRealtimeUrl(), { autoConnect: true, transports: ["websocket"] });
 
     const handlePayload = (payload) => {
       if (payload?.channel && payload.channel !== channel) return;
       if (hasCrossData(normalize(payload))) cbRef.current?.(payload);
     };
 
+    let hadConnected = false;
     socket.on("connect", () => {
       console.log(`Socket.IO (${label}) connected to namespace:`, socket.nsp);
       setConnected(true);
       socket.emit("message", { action: "subscribe", channels: [channel] });
+      // Reconnect: báo các data hook fetch lại snapshot bù dữ liệu hụt lúc mất kết nối.
+      if (hadConnected) emitRealtimeReconnected();
+      hadConnected = true;
     });
 
     socket.on("message", handlePayload);

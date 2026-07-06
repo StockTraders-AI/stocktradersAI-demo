@@ -50,14 +50,6 @@ const DONUT_COLORS = {
   waitSell: "#eda100",
   sell: "#e34948",
 };
-const DASH_TABLE_TONE = {
-  headerBg: "var(--Bs)",
-  headerBorder: "var(--Bb)",
-  headerText: "var(--B)",
-  rowBg: "rgba(124,58,237,.055)",
-  rowBorder: "rgba(124,58,237,.18)",
-  footerBg: "rgba(124,58,237,.045)",
-};
 
 function nav(id) {
   window.dispatchEvent(new CustomEvent("st-nav", { detail: id }));
@@ -395,29 +387,31 @@ function SmdtScoreBadge({ value }) {
 
 function SmdtTabs({ active, onChange }) {
   const { dark } = useTheme();
-  const tabStyle = (selected) => ({
+  const tabStyle = (selected, tone = "neutral") => {
+    const purple = tone === "purple";
+    return {
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
     padding: "4px 10px",
     borderRadius: 999,
-    border: selected ? `0.5px solid ${dark ? "rgba(80,95,125,.55)" : "var(--bdr)"}` : "0.5px solid transparent",
-    background: selected ? (dark ? "#101522" : "var(--surf)") : "transparent",
-    color: selected ? "var(--t1)" : "var(--t3)",
+    border: selected ? `0.5px solid ${purple ? "var(--B)" : dark ? "rgba(80,95,125,.55)" : "var(--bdr)"}` : "0.5px solid transparent",
+    background: selected ? (purple ? "rgba(124,58,237,.12)" : dark ? "#101522" : "var(--surf)") : "transparent",
+    color: selected ? (purple ? "var(--B)" : "var(--t1)") : "var(--t3)",
     fontSize: 10.5,
     fontWeight: 800,
     cursor: "pointer",
     whiteSpace: "nowrap",
     boxShadow: selected ? (dark ? "0 1px 0 rgba(255,255,255,.06) inset, 0 1px 6px rgba(0,0,0,.25)" : "0 1px 4px rgba(15,23,42,.08)") : "none",
-  });
+    };
+  };
 
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: 3, borderRadius: 8, background: dark ? "#151B2C" : "var(--elev)", border: `0.5px solid ${dark ? "rgba(27,32,48,.75)" : "var(--bdr)"}`, maxWidth: "100%" }}>
-      <button type="button" aria-pressed={active === "core"} onClick={(event) => { event.stopPropagation(); onChange("core"); }} style={tabStyle(active === "core")}>
-        <span style={{ color: "#F59E0B", fontSize: 10 }}>★</span>
-        <span style={{ color: "#F59E0B" }}>Chủ lực</span>
+      <button type="button" aria-pressed={active === "core"} onClick={(event) => { event.stopPropagation(); onChange("core"); }} style={tabStyle(active === "core", "purple")}>
+        ⭐ Chủ lực
       </button>
-      <button type="button" aria-pressed={active === "other"} onClick={(event) => { event.stopPropagation(); onChange("other"); }} style={tabStyle(active === "other")}>
+      <button type="button" aria-pressed={active === "other"} onClick={(event) => { event.stopPropagation(); onChange("other"); }} style={tabStyle(active === "other", "purple")}>
         Ngành phụ
       </button>
     </div>
@@ -426,18 +420,18 @@ function SmdtTabs({ active, onChange }) {
 
 function SmdtPreviewSectionLabel({ children }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 0", padding: "2px 0" }}>
-      <span style={{ fontSize: 9, fontWeight: 850, color: DASH_TABLE_TONE.headerText, textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 0" }}>
+      <span style={{ fontSize: 9, fontWeight: 850, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
         {children}
       </span>
-      <div style={{ flex: 1, height: 1, background: DASH_TABLE_TONE.rowBorder }} />
+      <div style={{ flex: 1, height: 1, background: "var(--bdr)" }} />
     </div>
   );
 }
 
 function SmdtPreviewLegend() {
   return (
-    <div style={{ display: "flex", gap: "6px 12px", flexWrap: "wrap", paddingTop: 7, marginTop: 2, borderTop: `0.5px solid ${DASH_TABLE_TONE.rowBorder}` }}>
+    <div style={{ display: "flex", gap: "6px 12px", flexWrap: "wrap", paddingTop: 7, marginTop: 2, borderTop: "0.5px solid var(--bdr)" }}>
       {[100, 70, 30, -Infinity].map((value) => {
         const tone = smdtBadgeTone(value);
         return (
@@ -470,9 +464,9 @@ function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, 
       <SmdtTabs active={tab} onChange={setTab} />
       <SmdtPreviewSectionLabel>{sectionTitle}</SmdtPreviewSectionLabel>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", alignContent: "start", overflow: "hidden" }}>
-        {displayRows.length ? displayRows.map((row, index) => (
-          <div key={row.key} aria-hidden={row.placeholder || undefined} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, minHeight: 36, padding: row.placeholder ? 0 : "4px 8px", borderBottom: row.placeholder ? "none" : `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, borderRight: !row.placeholder && index % 2 === 0 ? `0.5px solid ${DASH_TABLE_TONE.rowBorder}` : "none", background: row.placeholder ? "transparent" : index % 4 > 1 ? DASH_TABLE_TONE.rowBg : undefined }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", columnGap: 18, alignContent: "start" }}>
+        {displayRows.length ? displayRows.map((row) => (
+          <div key={row.key} aria-hidden={row.placeholder || undefined} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, minHeight: 36, padding: "2px 0", borderBottom: `0.5px solid ${row.placeholder ? "transparent" : "var(--bdr)"}` }}>
             {!row.placeholder && (
               <>
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--t1)", fontSize: 11, fontWeight: 700 }}>
@@ -554,7 +548,7 @@ function TopStrongTable({ rows, date, narrow }) {
 
   return (
     <Card noPad style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "12px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+      <div style={{ padding: "12px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Top mã mạnh</span>
           <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -571,15 +565,15 @@ function TopStrongTable({ rows, date, narrow }) {
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: narrow ? 520 : 0 }}>
           <thead>
-            <tr style={{ background: DASH_TABLE_TONE.headerBg }}>
+            <tr style={{ background: "var(--elev)" }}>
               {["Mã", "Giá", "TH cổ phiếu", "TH ngành", "T.thái"].map((h, i) => (
-                <th key={h} style={{ padding: i === 0 ? "5px 10px" : "5px 8px", textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: DASH_TABLE_TONE.headerText, textTransform: "uppercase", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: i === 0 ? "5px 10px" : "5px 8px", textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {visible.map((row, index) => (
-              <tr key={row.ticker} onClick={() => nav("top-ma-manh")} style={{ borderBottom: `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, background: index % 2 ? DASH_TABLE_TONE.rowBg : undefined, cursor: "pointer" }}>
+            {visible.map((row) => (
+              <tr key={row.ticker} onClick={() => nav("top-ma-manh")} style={{ borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer" }}>
                 <td style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
                 <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{row.price ? fmtNum(row.price) : "—"}</td>
                 <td style={{ padding: "6px 8px" }}><SignalPill sig={row.tickerSig} /></td>
@@ -591,7 +585,7 @@ function TopStrongTable({ rows, date, narrow }) {
         </table>
         {!visible.length && <EmptyHint />}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, marginTop: "auto", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
         <span style={{ fontSize: 10, color: "var(--t3)" }}>{filtered.length ? `${(safePage - 1) * PAGE_SIZE + 1}-${Math.min(safePage * PAGE_SIZE, filtered.length)} / ${filtered.length}` : "0 / 0"}</span>
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
@@ -623,7 +617,7 @@ function PortfolioMsgBubble({ role, text, panel = false }) {
         </span>
       )}
       <div style={{ maxWidth: panel && isAi ? "calc(100% - 35px)" : isAi ? "82%" : panel ? "86%" : "78%", minWidth: 0, borderRadius: isAi ? "8px 8px 8px 3px" : "8px 8px 3px 8px", padding: panel ? "9px 11px" : "7px 9px", background: isAi ? "var(--elev)" : "var(--Bs)", border: `0.5px solid ${isAi ? "var(--bdr)" : "var(--Bb)"}`, color: isAi ? "var(--t2)" : "var(--t1)", fontSize: panel ? 12 : 11, lineHeight: 1.5, overflowWrap: "anywhere", opacity: isTyping ? 0.78 : 1 }}>
-        <PortfolioMsgText text={text} />
+        {isTyping ? <Loading compact label={text} style={{ marginBottom: 0 }} /> : <PortfolioMsgText text={text} />}
       </div>
     </div>
   );
@@ -1187,7 +1181,7 @@ function SignalPortfolio({ rows, date, live }) {
 
   return (
     <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Danh mục đầu tư giả lập</span>
           <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>{date ? fmtFull(date) : "—"} </span>
@@ -1204,15 +1198,15 @@ function SignalPortfolio({ rows, date, live }) {
             {cols.map((col) => <col key={col.label} style={{ width: col.width }} />)}
           </colgroup>
           <thead>
-            <tr style={{ background: DASH_TABLE_TONE.headerBg }}>
+            <tr style={{ background: "var(--elev)" }}>
               {cols.map((col, i) => (
-                <th key={col.label} style={{ padding: i === 0 ? "6px 12px" : "6px 8px", fontSize: 9, fontWeight: 800, color: DASH_TABLE_TONE.headerText, textTransform: "uppercase", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
+                <th key={col.label} style={{ padding: i === 0 ? "6px 12px" : "6px 8px", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {visible.map((row, index) => (
-              <tr key={`${row.ticker}-${row.date}`} style={{ borderBottom: `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, background: index % 2 ? DASH_TABLE_TONE.rowBg : undefined }}>
+            {visible.map((row) => (
+              <tr key={`${row.ticker}-${row.date}`} style={{ borderBottom: "0.5px solid var(--bdrs)" }}>
                 <td style={{ padding: "7px 12px", fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
                 <td style={{ padding: "7px 8px", textAlign: "center" }}><SignalPill compact sig={row.cashSig || signalToSig(row.signal)} /></td>
                 <td style={{ padding: "7px 8px", textAlign: "center" }}><SmdtBarCell value={row.smdt} /></td>
@@ -1225,7 +1219,7 @@ function SignalPortfolio({ rows, date, live }) {
         </table>
         {!visible.length && <EmptyHint>Chưa có tín hiệu {tab === "MUA" ? "mua" : "bán"}.</EmptyHint>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 14px", borderTop: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, marginTop: "auto", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
         <span style={{ fontSize: 10, color: "var(--t3)" }}>{tabRows.length ? `${(safePage - 1) * SIGNAL_PORTFOLIO_PAGE_SIZE + 1}–${Math.min(safePage * SIGNAL_PORTFOLIO_PAGE_SIZE, tabRows.length)} / ${tabRows.length} mã` : "0 mã"}</span>
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
@@ -1286,7 +1280,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
 
   return (
     <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
         <div>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Nhật ký tín hiệu</span>
           <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>Sóng thị trường · Ngành · Mã</span>
@@ -1302,7 +1296,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
         {visible.map((item, index) => {
           const tone = LOG_TONES[item.type] || LOG_TONES.tr;
           return (
-            <div key={`${item.title}-${item.tag}-${index}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 14px", borderBottom: `0.5px solid ${DASH_TABLE_TONE.rowBorder}`, background: index % 2 ? DASH_TABLE_TONE.rowBg : undefined }}>
+            <div key={`${item.title}-${item.tag}-${index}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 14px", borderBottom: "0.5px solid var(--bdrs)" }}>
               <div style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, background: tone.bg, color: tone.color }}>
                 <i className={`ti ${item.kind === "ng" ? "ti-building-community" : tone.icon}`} />
               </div>
@@ -1319,7 +1313,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
         })}
         {!visible.length && <EmptyHint />}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: `0.5px solid ${DASH_TABLE_TONE.headerBorder}`, background: DASH_TABLE_TONE.footerBg, marginTop: "auto", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
         <span style={{ fontSize: 10, color: "var(--t3)" }}>{logs.length ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, logs.length)} / ${logs.length} tín hiệu` : "0 tín hiệu"}</span>
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>

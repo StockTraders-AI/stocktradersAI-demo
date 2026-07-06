@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
  * useCashFlowBranch — nguồn dữ liệu "Dòng tiền ngành"
@@ -17,12 +17,6 @@ import { resolveRealtimeUrl } from "./realtimeUrl";
 const API_BASE_URL = "/api/cashflow-branch";
 const INITIAL_LIMIT = 500;
 const FULL_LIMIT = "full";
-const DEFAULT_REFRESH_MS = 15_000;
-
-function getRefreshMs() {
-  const configured = Number(import.meta.env.VITE_CASHFLOW_REFRESH_MS);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
-}
 
 /** Tên ngành (keyName từ API) -> nhãn hiển thị ngắn gọn cho 6 ngành "Chủ lực". */
 export const CORE_BRANCHES = [
@@ -367,15 +361,17 @@ export function useCashFlowBranch() {
       }
     };
 
-    const timer = window.setInterval(refresh, getRefreshMs());
+    // Không poll định kỳ: dữ liệu mới đến qua Socket.IO; chỉ fetch lại snapshot
+    // khi tab hiện lại / được focus hoặc khi socket realtime reconnect (bù dữ liệu hụt).
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
+    window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
     };
   }, [fetchSnapshot]);
 
@@ -452,6 +448,7 @@ export function useRealtimeCashFlowFeed(onTick) {
 
     const socket = io(url, {
       autoConnect: true,
+      transports: ["websocket"],
     });
 
     const handlePayload = (payload) => {
@@ -460,6 +457,7 @@ export function useRealtimeCashFlowFeed(onTick) {
       }
     };
 
+    let hadConnected = false;
     socket.on("connect", () => {
       console.log("Socket.IO (cashflow) connected to namespace:", socket.nsp);
       setConnected(true);
@@ -468,14 +466,12 @@ export function useRealtimeCashFlowFeed(onTick) {
         action: "subscribe",
         channels: ["money-flow-branch"],
       });
+      // Reconnect: báo các data hook fetch lại snapshot bù dữ liệu hụt lúc mất kết nối.
+      if (hadConnected) emitRealtimeReconnected();
+      hadConnected = true;
     });
 
-    socket.onAny((event, ...args) => {
-      if (event === "connect" || event === "disconnect" || event === "connect_error") return;
-      for (const payload of args) {
-        handlePayload(payload);
-      }
-    });
+    socket.on("message", handlePayload);
 
     socket.on("connect_error", (error) => {
       console.error("Socket.IO (cashflow) connection error:", error.message);

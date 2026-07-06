@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
  * useStockWave — nguồn dữ liệu "Sóng cổ phiếu"
@@ -15,18 +15,12 @@ const API_BASE_URL = "/api/stock-wave";
 const INITIAL_LIMIT = 150;
 const FULL_LIMIT = "full";
 const CACHE_PERSIST_LIMIT = 150;
-const DEFAULT_REFRESH_MS = 15_000;
 const CACHE_KEY = "stock_wave_data_cache";
 const CACHE_SCHEMA_VERSION = 1;
 const STOCK_WAVE_CHANNELS = ["wave"];
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 
 let globalCache = null;
-
-function getRefreshMs() {
-  const configured = Number(import.meta.env.VITE_STOCK_WAVE_REFRESH_MS);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
-}
 
 function applyLimitParam(params, limit) {
   if (limit === FULL_LIMIT) {
@@ -264,15 +258,17 @@ export function useStockWave() {
       }
     };
 
-    const timer = window.setInterval(refresh, getRefreshMs());
+    // Không poll định kỳ: dữ liệu mới đến qua Socket.IO; chỉ fetch lại snapshot
+    // khi tab hiện lại / được focus hoặc khi socket realtime reconnect (bù dữ liệu hụt).
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
+    window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
     };
   }, [fetchSnapshot]);
 
@@ -328,6 +324,7 @@ export function useRealtimeStockWaveFeed(onTick) {
   useEffect(() => {
     const socket = io(getRealtimeUrl(), {
       autoConnect: true,
+      transports: ["websocket"],
     });
 
     const handlePayload = (payload) => {
@@ -336,6 +333,7 @@ export function useRealtimeStockWaveFeed(onTick) {
       }
     };
 
+    let hadConnected = false;
     socket.on("connect", () => {
       console.log("Socket.IO connected for stock wave:", socket.nsp);
       setConnected(true);
@@ -343,20 +341,12 @@ export function useRealtimeStockWaveFeed(onTick) {
         action: "subscribe",
         channels: STOCK_WAVE_CHANNELS,
       });
+      // Reconnect: báo các data hook fetch lại snapshot bù dữ liệu hụt lúc mất kết nối.
+      if (hadConnected) emitRealtimeReconnected();
+      hadConnected = true;
     });
 
-    socket.onAny((event, ...args) => {
-      if (event === "connect" || event === "disconnect" || event === "connect_error") return;
-
-      if (STOCK_WAVE_CHANNELS.includes(event) && args.length === 1) {
-        handlePayload({ channel: event, data: args[0] });
-        return;
-      }
-
-      for (const payload of args) {
-        handlePayload(payload);
-      }
-    });
+    socket.on("message", handlePayload);
 
     socket.on("connect_error", (error) => {
       console.error("Socket.IO stock wave connection error:", error.message);

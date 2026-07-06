@@ -1,23 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
 
 const API_URL = "/api/stock-signal";
 const CACHE_KEY = "stock_signal_data_cache_v4";
 const CACHE_SCHEMA_VERSION = 1;
 const LEGACY_CACHE_KEYS = ["stock_signal_data_cache_v3"];
 const CACHE_POINT_LIMIT = 16;
-const DEFAULT_REFRESH_MS = 15_000;
 const REPLY_KEYS = ["StockSignalReply", "StockSignalRequest"];
 const CHANNELS = ["stock-signal"];
 
 let globalCache = null;
-
-function getRefreshMs() {
-  const configured = Number(import.meta.env.VITE_STOCK_SIGNAL_REFRESH_MS);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REFRESH_MS;
-}
 
 function getReply(data) {
   for (const key of REPLY_KEYS) {
@@ -334,13 +328,15 @@ export function useStockSignal() {
     const refresh = () => {
       if (document.visibilityState === "visible") fetchSnapshot({ background: true });
     };
-    const timer = window.setInterval(refresh, getRefreshMs());
+    // Không poll định kỳ: dữ liệu mới đến qua Socket.IO; chỉ fetch lại snapshot
+    // khi tab hiện lại / được focus hoặc khi socket realtime reconnect (bù dữ liệu hụt).
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
+    window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
     return () => {
-      window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
     };
   }, [fetchSnapshot]);
 
@@ -374,16 +370,20 @@ export function useRealtimeStockSignalFeed(onTick) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket = io(getRealtimeUrl(), { autoConnect: true });
+    const socket = io(getRealtimeUrl(), { autoConnect: true, transports: ["websocket"] });
 
     const handlePayload = (payload) => {
       if (extractRealtimeSignals(payload).rows.length > 0) cbRef.current?.(payload);
     };
 
+    let hadConnected = false;
     socket.on("connect", () => {
       console.log("Socket.IO (stock signal) connected to namespace:", socket.nsp);
       setConnected(true);
       socket.emit("message", { action: "subscribe", channels: CHANNELS });
+      // Reconnect: báo các data hook fetch lại snapshot bù dữ liệu hụt lúc mất kết nối.
+      if (hadConnected) emitRealtimeReconnected();
+      hadConnected = true;
     });
 
     socket.on("message", handlePayload);
