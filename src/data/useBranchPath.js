@@ -92,7 +92,8 @@ export function useBranchPath() {
 
     const request = (async () => {
       try {
-        const res = await fetch(`${API_URL}?_=${Date.now()}`, { cache: "no-store" });
+        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi force refresh.
+        const res = await fetch(force ? `${API_URL}?_=${Date.now()}` : API_URL, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const code = json?.BranchPathReply?.codeReply?.codeID;

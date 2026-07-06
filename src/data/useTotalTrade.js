@@ -112,7 +112,8 @@ export function useTotalTrade() {
     const request = (async () => {
       if (!background) setStatus((s) => s === "ready" ? "ready" : "loading");
       try {
-        const url = force ? `${API_URL}?fresh=1&_=${Date.now()}` : `${API_URL}?_=${Date.now()}`;
+        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi force refresh.
+        const url = force ? `${API_URL}?fresh=1&_=${Date.now()}` : API_URL;
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();

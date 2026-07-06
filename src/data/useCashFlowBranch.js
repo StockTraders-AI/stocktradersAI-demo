@@ -297,7 +297,7 @@ export function useCashFlowBranch() {
     return cached ? cached.updatedAt : null;
   });
 
-  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false } = {}) => {
+  const fetchSnapshot = useCallback(async ({ background = false, force = false, limit = null, merge = false, bust = false } = {}) => {
     if (inFlightRef.current && !force) return inFlightRef.current;
 
     let request;
@@ -307,8 +307,10 @@ export function useCashFlowBranch() {
       }
       const startedAt = Date.now();
       try {
-        const params = new URLSearchParams({ _: String(startedAt) });
+        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi refresh thủ công.
+        const params = new URLSearchParams();
         applyLimitParam(params, limit);
+        if (bust) params.set("_", String(startedAt));
         const res = await fetch(`${API_BASE_URL}?${params.toString()}`, {
           cache: "no-store",
         });
@@ -427,7 +429,7 @@ export function useCashFlowBranch() {
     setError(null);
   }, []);
 
-  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, limit: FULL_LIMIT }), applyTick };
+  return { ...state, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true, bust: true, limit: FULL_LIMIT }), applyTick };
 }
 
 function getRealtimeUrl() {

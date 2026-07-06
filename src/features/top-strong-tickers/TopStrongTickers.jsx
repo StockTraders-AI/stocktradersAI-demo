@@ -9,7 +9,7 @@ import { useSMDT, useRealtimeFeed as useRealtimeSMDTBranchFeed } from "../../dat
 import { useCashFlowBranch, useRealtimeCashFlowFeed, contentToSig } from "../../data/useCashFlowBranch";
 import { useBranchPath } from "../../data/useBranchPath";
 import { useTotalTrade } from "../../data/useTotalTrade";
-import { Card, CardHeader, Pagination, Banner, LiveFooter } from "../../components/ui";
+import { Card, CardHeader, Pagination, Banner, LiveFooter, Loading } from "../../components/ui";
 import { DateSessionSelect, SMDTSearchPill, SMDTToolbarPill, linkBtn } from "../../components/ui/ModuleControls";
 import { IndustryPicker } from "../cash-flow-ticker/IndustryPicker";
 import { CfBadge } from "../cash-flow-ticker/CfBadge";
@@ -648,12 +648,12 @@ export function ModTopMaManh() {
   const loading = smdtTicker.status === "loading" && !rows.length;
   const error = smdtTicker.status === "error" && !rows.length;
 
-  if (loading) return <Banner>Đang tải dữ liệu Top mã mạnh…</Banner>;
+  if (loading) return <Loading label="Đang tải dữ liệu Top mã mạnh…" />;
   if (error) return <Banner tone="error">Lỗi tải SMDT cổ phiếu: {smdtTicker.error} <button onClick={smdtTicker.refresh} style={linkBtn}>Thử lại</button></Banner>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {branchPath.status === "loading" && !Object.keys(branchPath.tickerToBranch).length && <Banner>Đang tải danh sách ngành cổ phiếu…</Banner>}
+      {branchPath.status === "loading" && !Object.keys(branchPath.tickerToBranch).length && <Loading label="Đang tải danh sách ngành cổ phiếu…" compact />}
       {branchPath.status === "error" && !Object.keys(branchPath.tickerToBranch).length && (
         <Banner tone="error">Lỗi tải danh sách ngành: {branchPath.error} <button onClick={branchPath.refresh} style={linkBtn}>Thử lại</button></Banner>
       )}

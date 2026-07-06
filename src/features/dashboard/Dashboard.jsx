@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../../theme";
 import { mono, sigStyle } from "../../styles/tokens";
 import { useNarrow } from "../../app/useNarrow";
@@ -12,8 +12,9 @@ import { useRealtimeSMDTBranchCrossFeed, useSMDTBranchCross } from "../../data/u
 import { useRealtimeStockSignalFeed, useStockSignal } from "../../data/useStockSignal";
 import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave";
 import { useTotalTrade } from "../../data/useTotalTrade";
-import { Card, Clink, LiveFooter, Pagination } from "../../components/ui";
+import { Card, Clink, LiveFooter, Loading, Pagination } from "../../components/ui";
 import { PORTFOLIO_MAX_CODES, loadSavedPortfolio, parsePortfolioCodes, savePortfolioState } from "../portfolio-analysis/portfolioState";
+import { evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "../portfolio-analysis/stock4KeyEvaluator";
 import { isCashFlowCoreIndustry } from "../cash-flow-ticker/cashFlowUtils";
 import CardDoSong from "./CardDoSong";
 
@@ -22,6 +23,8 @@ const CORE_KEYS = new Set(CORE_BRANCHES.map((b) => b.key));
 const CORE_LABELS = new Set(CORE_BRANCHES.flatMap((b) => [b.key, b.label]));
 const TOP_LIMIT = 40;
 const PAGE_SIZE = 8;
+const SIGNAL_PORTFOLIO_PAGE_SIZE = 5;
+const PORTFOLIO_CHAT_API_URL = import.meta.env.VITE_PORTFOLIO_CHAT_API_URL || "";
 const TOP_STATUS_META = {
   vm: { label: "Vừa mạnh", color: "var(--G)", icon: "ti-star-filled" },
   dt: { label: "Duy trì", color: "var(--B)", icon: "ti-circle-filled" },
@@ -94,6 +97,12 @@ function findLatestValueAtOrBefore(row, datesDesc, dateValue) {
   return null;
 }
 
+function apiNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function latestUpdatedAt(...items) {
   return items.filter(Boolean).sort((a, b) => b.getTime() - a.getTime())[0] || null;
 }
@@ -129,6 +138,15 @@ function lookupIndustryValue(map, name) {
   return map.get(normalizeIndustryName(name));
 }
 
+function findIndustryBranch(branches, industry) {
+  if (!industry) return null;
+  const targetAliases = aliasesOfIndustry(industry).map(normalizeIndustryName);
+  return branches.find((branch) => {
+    const branchAliases = [branch.key, branch.label, ...aliasesOfIndustry(branch.key), ...aliasesOfIndustry(branch.label)].map(normalizeIndustryName);
+    return targetAliases.some((target) => branchAliases.includes(target));
+  }) || null;
+}
+
 function sigWeight(sig) {
   return { si: 3, sn: 1.6, so: -1.1, st: -2.4 }[sig] || 0;
 }
@@ -153,13 +171,6 @@ function classifyStrongTicker(smdt, prevSmdt, prev2Smdt, tickerSig, branchSmdt, 
   if ((smdt >= 50 && rising) || risingTwoSessions || tickerFlowSupported || branchFlowSupported) return "tn";
 
   return null;
-}
-
-function smdtColor(value) {
-  if (value >= 100) return "#0ca30c";
-  if (value >= 70) return "#1baf7a";
-  if (value >= 30) return "#eda100";
-  return "var(--t4)";
 }
 
 function sigLabel(sig) {
@@ -235,7 +246,8 @@ function getLatestTrade(totalTrade, ticker) {
   return date ? row[date] : null;
 }
 
-function EmptyHint({ children = "Đang tải dữ liệu..." }) {
+function EmptyHint({ children }) {
+  if (!children) return <Loading label="Đang tải dữ liệu…" rows={2} pillHeight={38} style={{ margin: "4px 0 6px" }} />;
   return <div style={{ padding: 18, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>{children}</div>;
 }
 
@@ -356,47 +368,118 @@ function DashboardCard({ children, onClick, style }) {
   );
 }
 
-function SmdtBarRow({ name, value, max, ticker }) {
-  const color = smdtColor(value);
-  const pct = max ? Math.max(2, Math.min(100, (value / max) * 100)) : 0;
+function smdtBadgeTone(value) {
+  if (value >= 100) return { color: "#22C55E", bg: "rgba(34,197,94,.12)", border: "rgba(34,197,94,.45)", label: ">=100%" };
+  if (value >= 70) return { color: "#10B981", bg: "rgba(16,185,129,.10)", border: "rgba(16,185,129,.38)", label: ">=70%" };
+  if (value >= 30) return { color: "#F59E0B", bg: "rgba(245,158,11,.10)", border: "rgba(245,158,11,.38)", label: ">=30%" };
+  return { color: "#64748B", bg: "rgba(100,116,139,.10)", border: "rgba(100,116,139,.35)", label: "<30%" };
+}
+
+function SmdtScoreBadge({ value }) {
+  if (!Number.isFinite(value)) return <span style={{ color: "var(--t4)" }}>—</span>;
+  const tone = smdtBadgeTone(value);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-      <span style={{ fontSize: 9, fontWeight: ticker ? 750 : 500, color: ticker ? "var(--t2)" : "var(--t3)", width: ticker ? 34 : 72, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {name}
-      </span>
-      <div style={{ flex: 1, height: 5, background: "var(--elev)", borderRadius: 2, overflow: "hidden", minWidth: 16 }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2 }} />
-      </div>
-      <span style={{ fontSize: 9, fontWeight: 750, color, minWidth: 32, textAlign: "right", ...mono }}>{Math.round(value)}%</span>
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 58, height: 25, padding: "0 8px", borderRadius: 8, border: `0.5px solid ${tone.border}`, background: tone.bg, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap", ...mono }}>
+      {value.toFixed(1)}
+    </span>
+  );
+}
+
+function SmdtTabs({ active, onChange }) {
+  const { dark } = useTheme();
+  const tabStyle = (selected) => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "4px 10px",
+    borderRadius: 999,
+    border: selected ? `0.5px solid ${dark ? "rgba(80,95,125,.55)" : "var(--bdr)"}` : "0.5px solid transparent",
+    background: selected ? (dark ? "#101522" : "var(--surf)") : "transparent",
+    color: selected ? "var(--t1)" : "var(--t3)",
+    fontSize: 10.5,
+    fontWeight: 800,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    boxShadow: selected ? (dark ? "0 1px 0 rgba(255,255,255,.06) inset, 0 1px 6px rgba(0,0,0,.25)" : "0 1px 4px rgba(15,23,42,.08)") : "none",
+  });
+
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: 3, borderRadius: 8, background: dark ? "#151B2C" : "var(--elev)", border: `0.5px solid ${dark ? "rgba(27,32,48,.75)" : "var(--bdr)"}`, maxWidth: "100%" }}>
+      <button type="button" aria-pressed={active === "core"} onClick={(event) => { event.stopPropagation(); onChange("core"); }} style={tabStyle(active === "core")}>
+        <span style={{ color: "#F59E0B", fontSize: 10 }}>★</span>
+        <span style={{ color: "#F59E0B" }}>Chủ lực</span>
+      </button>
+      <button type="button" aria-pressed={active === "other"} onClick={(event) => { event.stopPropagation(); onChange("other"); }} style={tabStyle(active === "other")}>
+        Ngành phụ
+      </button>
     </div>
   );
 }
 
-function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, ticker, navId }) {
-  const max = Math.max(1, ...leftRows.map((r) => r.value), ...rightRows.map((r) => r.value));
+function SmdtPreviewSectionLabel({ children }) {
   return (
-    <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10, cursor: "pointer" }} onClick={() => nav(navId)}>
-      <DashHeader title={title} meta={meta} action="Chi tiết ›" onClick={() => nav(navId)} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 0" }}>
+      <span style={{ fontSize: 9, fontWeight: 850, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
+        {children}
+      </span>
+      <div style={{ flex: 1, height: 1, background: "var(--bdr)" }} />
+    </div>
+  );
+}
+
+function SmdtPreviewLegend() {
+  return (
+    <div style={{ display: "flex", gap: "6px 12px", flexWrap: "wrap", paddingTop: 7, marginTop: 2, borderTop: "0.5px solid var(--bdr)" }}>
+      {[100, 70, 30, -Infinity].map((value) => {
+        const tone = smdtBadgeTone(value);
+        return (
+          <span key={tone.label} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--t3)", fontSize: 10, whiteSpace: "nowrap" }}>
+            <span style={{ width: 7, height: 7, borderRadius: 2, background: tone.color }} />
+            {tone.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, defaultTab = "core", navId }) {
+  const [tab, setTab] = useState(defaultTab);
+  const rows = tab === "core" ? leftRows : rightRows;
+  const displayRows = rows.length ? [...rows, ...Array.from({ length: Math.max(0, 10 - rows.length) }, (_, index) => ({ key: `placeholder-${index}`, placeholder: true }))] : [];
+  const sectionTitle = tab === "core" ? leftTitle : rightTitle;
+
+  return (
+    <Card style={{ padding: "15px 16px", display: "flex", flexDirection: "column", gap: 7, cursor: "pointer", minWidth: 0, alignSelf: "start" }} onClick={() => nav(navId)}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <SectionLabel>{leftTitle}</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {leftRows.length ? leftRows.map((row) => <SmdtBarRow key={row.key} name={row.name} value={row.value} max={max} ticker={ticker} />) : <EmptyHint />}
-          </div>
+          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>{title}</h3>
+          {meta && <div style={{ marginTop: 2, fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta}</div>}
         </div>
-        <div style={{ minWidth: 0 }}>
-          <SectionLabel>{rightTitle}</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {rightRows.length ? rightRows.map((row) => <SmdtBarRow key={row.key} name={row.name} value={row.value} max={max} ticker={ticker} />) : <EmptyHint />}
+        <Clink onClick={() => nav(navId)}>Chi tiết ›</Clink>
+      </div>
+
+      <SmdtTabs active={tab} onChange={setTab} />
+      <SmdtPreviewSectionLabel>{sectionTitle}</SmdtPreviewSectionLabel>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", columnGap: 18, alignContent: "start" }}>
+        {displayRows.length ? displayRows.map((row) => (
+          <div key={row.key} aria-hidden={row.placeholder || undefined} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, minHeight: 36, padding: "2px 0", borderBottom: `0.5px solid ${row.placeholder ? "transparent" : "var(--bdr)"}` }}>
+            {!row.placeholder && (
+              <>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--t1)", fontSize: 11, fontWeight: 700 }}>
+                  {row.name}
+                </span>
+                <SmdtScoreBadge value={row.value} />
+              </>
+            )}
           </div>
-        </div>
+        )) : (
+          <div style={{ gridColumn: "1 / -1" }}><EmptyHint /></div>
+        )}
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 6, borderTop: "0.5px solid var(--bdr)" }}>
-        <LegendText color="#0ca30c" label=">=100%" />
-        <LegendText color="#1baf7a" label=">=70%" />
-        <LegendText color="#eda100" label=">=30%" />
-        <LegendText color="var(--t4)" label="<30%" />
-      </div>
+
+      <SmdtPreviewLegend />
     </Card>
   );
 }
@@ -408,10 +491,6 @@ function LegendText({ color, label }) {
       {label}
     </span>
   );
-}
-
-function SectionLabel({ children }) {
-  return <div style={{ fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 5 }}>{children}</div>;
 }
 
 function ChipButton({ children, active, tone = "B", onClick }) {
@@ -474,7 +553,7 @@ function TopStrongTable({ rows, date, narrow }) {
             {fmtNum(displayCount)} mã · {filterLabel}{date ? ` · ${fmtFull(date)}` : ""}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "nowrap", justifyContent: "flex-end", flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0, minWidth: 0 }}>
           <ChipButton active={filter === "all"} onClick={() => setNextFilter("all")}>Tất cả</ChipButton>
           <ChipButton active={filter === "sn"} tone="G" onClick={() => setNextFilter("sn")}>Nhen nhóm</ChipButton>
           <ChipButton active={filter === "si"} tone="G" onClick={() => setNextFilter("si")}>Đổ vào</ChipButton>
@@ -512,40 +591,178 @@ function TopStrongTable({ rows, date, narrow }) {
   );
 }
 
-function PortfolioBox({ rows }) {
+function PortfolioMsgText({ text }) {
+  return (
+    <>
+      {String(text || "").split("\n").map((line, index) => (
+        <span key={`${line}-${index}`}>
+          {line}
+          {index < String(text || "").split("\n").length - 1 && <br />}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function PortfolioMsgBubble({ role, text, panel = false }) {
+  const isAi = role === "ai" || role === "typing";
+  const isTyping = role === "typing";
+  return (
+    <div style={{ width: "100%", minWidth: 0, display: "flex", gap: 7, alignItems: "flex-start", justifyContent: isAi ? "flex-start" : "flex-end" }}>
+      {isAi && (
+        <span style={{ width: panel ? 28 : 22, height: panel ? 28 : 22, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: panel ? 12 : 10, fontWeight: 850, flexShrink: 0 }}>
+          AI
+        </span>
+      )}
+      <div style={{ maxWidth: panel && isAi ? "calc(100% - 35px)" : isAi ? "82%" : panel ? "86%" : "78%", minWidth: 0, borderRadius: isAi ? "8px 8px 8px 3px" : "8px 8px 3px 8px", padding: panel ? "9px 11px" : "7px 9px", background: isAi ? "var(--elev)" : "var(--Bs)", border: `0.5px solid ${isAi ? "var(--bdr)" : "var(--Bb)"}`, color: isAi ? "var(--t2)" : "var(--t1)", fontSize: panel ? 12 : 11, lineHeight: 1.5, overflowWrap: "anywhere", opacity: isTyping ? 0.78 : 1 }}>
+        <PortfolioMsgText text={text} />
+      </div>
+    </div>
+  );
+}
+
+function portfolioAutoMessage({ score, counts, total, analyzed }) {
+  const good = analyzed.filter((row) => row.cat === "dd").map((row) => row.ticker).slice(0, 3).join(", ");
+  const weak = analyzed.filter((row) => row.cat === "ss").map((row) => row.ticker).slice(0, 2).join(", ");
+  if (score >= 70) return `Danh mục mạnh: ${Math.round((counts.dd / total) * 100)}% đúng sóng đúng ngành${good ? ` (${good})` : ""}. Duy trì và theo dõi tín hiệu bán.`;
+  if (counts.ss > 0) return `${weak ? `${weak} ` : ""}đang sai sóng sai ngành. Cân nhắc giảm tỷ trọng và ưu tiên nhóm đúng sóng đúng ngành${good ? ` như ${good}` : ""}.`;
+  return `Danh mục trung bình. Có ${counts.ds} mã đúng sóng nhưng ngành chưa xác nhận, nên theo dõi thêm 1-2 phiên.`;
+}
+
+function portfolioScoreLabel(score) {
+  if (score >= 85) return "Xuất sắc";
+  if (score >= 70) return "Tốt";
+  if (score >= 55) return "Trung bình khá";
+  if (score >= 40) return "Trung bình";
+  return "Cần cải thiện";
+}
+
+function evalKeyToPortfolioCat(evalKey) {
+  return { DS_DN: "dd", DS_SN: "ds", DN_SS: "sd", SS: "ss" }[evalKey] || "ss";
+}
+
+function calcPortfolioEval(row) {
+  if (row?.evalKey) return row.evalKey;
+  const branchOk = isPositiveSig(row?.branchSig) && Number.isFinite(row?.branchSmdt) && row.branchSmdt > 70;
+  const tickerOk = isPositiveSig(row?.tickerSig || row?.sig) && Number.isFinite(row?.smdt) && row.smdt > 70;
+  return fallbackEvalKey({ tickerOk, industryOk: branchOk });
+}
+
+function portfolioAiReply(question, ctx) {
+  if (!ctx.hasAnalysis) return "Bạn nhập danh sách mã rồi bấm Phân tích trước nhé. Sau đó mình sẽ đọc danh mục và gợi ý cụ thể hơn.";
+
+  const q = normalizeIndustryName(question);
+  const byCat = (cat) => ctx.analyzed.filter((row) => row.cat === cat);
+  const fmtRow = (row) => `${row.ticker}: SMDT mã ${Number.isFinite(row.smdt) ? row.smdt.toFixed(1) : "--"} · ngành ${row.industry || "--"}${Number.isFinite(row.branchSmdt) ? ` ${row.branchSmdt.toFixed(1)}` : ""}`;
+
+  if (q.includes("đúng sóng") || q.includes("dung song")) {
+    const rows = byCat("dd");
+    if (!rows.length) return "Chưa có mã nào đúng cả sóng lẫn ngành. Ưu tiên cơ cấu sang mã có SMDT mã >=70 và ngành cũng đang dẫn.";
+    return `Mã đúng sóng đúng ngành:\n${rows.map((row) => `• ${fmtRow(row)}`).join("\n")}`;
+  }
+
+  if (q.includes("cắt") || q.includes("cat") || q.includes("giảm") || q.includes("giam")) {
+    const rows = byCat("ss");
+    if (!rows.length) return "Chưa có mã cần cắt ngay theo bộ lọc sai sóng sai ngành. Vẫn nên theo dõi nếu SMDT mã tụt dưới 30 hoặc dòng tiền chuyển thoát ra.";
+    return `Nhóm cần xem xét giảm/cắt:\n${rows.map((row) => `• ${fmtRow(row)}`).join("\n")}\n\nGợi ý: giảm trước nhóm SMDT thấp và không thuộc ngành dẫn.`;
+  }
+
+  if (q.includes("ngành") || q.includes("nganh")) {
+    const industries = [...new Map(ctx.analyzed.filter((row) => Number.isFinite(row.branchSmdt)).sort((a, b) => b.branchSmdt - a.branchSmdt).map((row) => [row.industry, row])).values()].slice(0, 5);
+    if (!industries.length) return "Chưa đủ dữ liệu SMDT ngành cho danh mục này.";
+    return `Ngành nổi bật trong danh mục:\n${industries.map((row) => `• ${row.industry}: SMDT ngành ${row.branchSmdt.toFixed(1)} · mã ${row.ticker}`).join("\n")}`;
+  }
+
+  if (q.includes("tỷ trọng") || q.includes("ty trong") || q.includes("phân bổ") || q.includes("phan bo")) {
+    return `Gợi ý phân bổ:\n• Nhóm đúng sóng đúng ngành: ${ctx.counts.dd} mã, có thể giữ/tăng tỷ trọng.\n• Nhóm đúng sóng sai ngành: ${ctx.counts.ds} mã, chỉ giữ tỷ trọng vừa phải.\n• Nhóm sai sóng sai ngành: ${ctx.counts.ss} mã, ưu tiên giảm.\n\nĐiểm danh mục hiện tại: ${ctx.score}/100.`;
+  }
+
+  if (q.includes("so sánh") || q.includes("so sanh")) {
+    const labels = { dd: "Đúng sóng đúng ngành", ds: "Đúng sóng sai ngành", sd: "Đúng ngành sai sóng", ss: "Sai sóng sai ngành" };
+    return `So sánh nhanh:\n${ctx.analyzed.map((row) => `• ${row.ticker}: ${labels[row.cat]} · SMDT ${Number.isFinite(row.smdt) ? row.smdt.toFixed(1) : "--"}`).join("\n")}`;
+  }
+
+  return portfolioAutoMessage(ctx);
+}
+
+function PortfolioBox({ rows, asOfDate }) {
+  const narrow = useNarrow();
   const saved = useMemo(() => loadSavedPortfolio("STB, BVS, SSI"), []);
   const initialInput = saved.input || saved.analyzedCodes.join(", ") || "STB, BVS, SSI";
   const [input, setInput] = useState(initialInput);
   const [analyzedCodes, setAnalyzedCodes] = useState(saved.analyzedCodes);
+  const [panelVal, setPanelVal] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [conversationId, setConversationId] = useState(() => `portfolio-dashboard-${Date.now()}`);
+  const [msgs, setMsgs] = useState([
+    { role: "ai", text: "Nhập mã và bấm Phân tích, sau đó hỏi tôi về mã đúng sóng, ngành dẫn dắt, mã nên cắt hoặc phân bổ tỷ trọng." },
+  ]);
+  const panelRef = useRef(null);
   const picks = useMemo(() => parsePortfolioCodes(input), [input]);
   const rowMap = useMemo(() => new Map(rows.map((row) => [row.ticker, row])), [rows]);
   const analyzed = analyzedCodes.map((ticker) => {
     const row = rowMap.get(ticker);
-    const strongStock = (row?.smdt || 0) >= 70;
-    const goodFlow = row?.sig === "si" || row?.sig === "sn";
-    const strongBranch = (row?.branchSmdt || 0) >= 70 || row?.branchSig === "si" || row?.branchSig === "sn";
-    const cat = strongStock && strongBranch ? "dd" : strongStock ? "ds" : strongBranch || goodFlow ? "sd" : "ss";
-    return { ticker, cat };
+    const found = Boolean(row && Number.isFinite(row.smdt));
+    const evalKey = found ? calcPortfolioEval(row) : null;
+    const cat = found ? evalKeyToPortfolioCat(evalKey) : "ss";
+    return {
+      ticker,
+      found,
+      cat,
+      evalKey,
+      industry: row?.industry || "",
+      smdt: row?.smdt,
+      smdtPrev: row?.prevSmdt,
+      branchSmdt: row?.branchSmdt,
+      branchSmdtPrev: row?.branchSmdtPrev,
+      tickerSig: row?.tickerSig || row?.sig,
+      branchSig: row?.branchSig,
+    };
   });
+  const foundAnalyzed = analyzed.filter((row) => row.found);
   const hasAnalysis = analyzedCodes.length > 0;
   const isDirty = picks.join("|") !== analyzedCodes.join("|");
-  const counts = analyzed.reduce((acc, row) => ({ ...acc, [row.cat]: (acc[row.cat] || 0) + 1 }), { dd: 0, ds: 0, sd: 0, ss: 0 });
-  const total = Math.max(1, analyzed.length);
-  const score = analyzed.length ? Math.round((counts.dd * 100 + counts.ds * 50 + counts.sd * 30) / total) : 0;
-  const level = score >= 70 ? "Tốt" : score >= 50 ? "Trung bình" : "Cần cơ cấu lại";
-  const aiMessage = counts.ss / total >= 0.5
-    ? "Nhiều mã sai sóng sai ngành. Cân nhắc cơ cấu lại, tập trung mã đúng ngành dẫn dắt."
-    : counts.dd / total >= 0.6
-      ? "Danh mục mạnh — đa số đúng sóng đúng ngành. Duy trì và theo dõi tín hiệu bán."
-      : counts.ds / total >= 0.3
-        ? "Đúng sóng nhưng sai ngành — xem xét chuyển sang mã trong ngành đang dẫn."
-        : "Danh mục trung bình. Tăng tỷ trọng mã đúng ngành dẫn, cắt giảm mã sai sóng.";
+  const rawScore = useMemo(() => scorePortfolio4Key(foundAnalyzed), [foundAnalyzed]);
+  const counts = useMemo(() => ({ dd: rawScore.dn, ds: rawScore.sn, sd: rawScore.ns, ss: rawScore.ss }), [rawScore]);
+  const total = Math.max(1, foundAnalyzed.length);
+  const score = foundAnalyzed.length ? rawScore.score : 0;
+  const level = portfolioScoreLabel(score);
+  const portfolioCtx = useMemo(() => ({ hasAnalysis, analyzed: foundAnalyzed, counts, total, score }), [foundAnalyzed, counts, hasAnalysis, score, total]);
+  const portfolioPayload = useMemo(() => ({
+    asOfDate: toDateInputValue(asOfDate) || asOfDate || "",
+    positions: analyzed
+      .filter((row) => Number.isFinite(row.smdt) || Number.isFinite(row.branchSmdt))
+      .map((row) => ({
+        ticker: row.ticker,
+        industry: row.industry || "",
+        smdt: apiNumber(row.smdt),
+        smdtPrev: apiNumber(row.smdtPrev),
+        branchSmdt: apiNumber(row.branchSmdt),
+        branchSmdtPrev: apiNumber(row.branchSmdtPrev),
+      })),
+  }), [analyzed, asOfDate]);
+  const aiMessage = hasAnalysis ? portfolioAutoMessage(portfolioCtx) : "";
   const cats = [
     { key: "dd", color: "#0ca30c", label: "Đúng sóng - đúng ngành" },
     { key: "ds", color: "#eda100", label: "Đúng sóng - sai ngành" },
     { key: "sd", color: "#9b7cf7", label: "Đúng ngành - sai sóng" },
     { key: "ss", color: "#e34948", label: "Sai sóng - sai ngành" },
   ];
+
+  useEffect(() => {
+    if (panelRef.current) panelRef.current.scrollTop = panelRef.current.scrollHeight;
+  }, [msgs, chatOpen]);
+
+  useEffect(() => {
+    if (!chatOpen) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") setChatOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [chatOpen]);
+
   const updateInput = (value) => {
     setInput(value);
     savePortfolioState(value, analyzedCodes);
@@ -554,14 +771,66 @@ function PortfolioBox({ rows }) {
     if (!picks.length) return;
     setAnalyzedCodes(picks);
     savePortfolioState(input, picks);
+    const nextAnalyzed = picks.map((ticker) => {
+      const row = rowMap.get(ticker);
+      const found = Boolean(row && Number.isFinite(row.smdt));
+      const evalKey = found ? calcPortfolioEval(row) : null;
+      const cat = found ? evalKeyToPortfolioCat(evalKey) : "ss";
+      return { ticker, found, cat, evalKey, industry: row?.industry || "", smdt: row?.smdt, smdtPrev: row?.prevSmdt, branchSmdt: row?.branchSmdt, branchSmdtPrev: row?.branchSmdtPrev, tickerSig: row?.tickerSig || row?.sig, branchSig: row?.branchSig };
+    });
+    const nextFoundAnalyzed = nextAnalyzed.filter((row) => row.found);
+    const nextRawScore = scorePortfolio4Key(nextFoundAnalyzed);
+    const nextCounts = { dd: nextRawScore.dn, ds: nextRawScore.sn, sd: nextRawScore.ns, ss: nextRawScore.ss };
+    const nextTotal = Math.max(1, nextFoundAnalyzed.length);
+    const nextScore = nextFoundAnalyzed.length ? nextRawScore.score : 0;
+    setMsgs((prev) => [...prev, { role: "ai", text: portfolioAutoMessage({ hasAnalysis: true, analyzed: nextFoundAnalyzed, counts: nextCounts, total: nextTotal, score: nextScore }) }]);
   };
   const openPortfolioDetail = () => {
     if (!hasAnalysis) return;
     savePortfolioState(input, analyzedCodes);
     nav("portfolio-analysis");
   };
+  const sendPortfolioMsg = useCallback(async (text, panel = false) => {
+    const question = text.trim();
+    if (!question || chatLoading) return;
+    if (panel) setPanelVal("");
+    setChatOpen(true);
+    setChatLoading(true);
+    setMsgs((prev) => [...prev, { role: "user", text: question }, { role: "typing", text: "Đang phân tích dữ liệu danh mục..." }]);
+
+    try {
+      if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu VITE_PORTFOLIO_CHAT_API_URL");
+      const response = await fetch(PORTFOLIO_CHAT_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          user_id: "u1",
+          conversation_id: conversationId,
+          portfolio: portfolioPayload,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (data?.conversation_id) setConversationId(data.conversation_id);
+      const answer = data?.answer || portfolioAiReply(question, portfolioCtx);
+      setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: answer }]);
+    } catch (error) {
+      const fallback = portfolioAiReply(question, portfolioCtx);
+      setMsgs((prev) => [
+        ...prev.filter((msg) => msg.role !== "typing"),
+        { role: "ai", text: `Chưa gọi được API Chat AI${error?.message ? ` (${error.message})` : ""}. Tạm dùng phân tích nội bộ:\n${fallback}` },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatLoading, conversationId, portfolioCtx, portfolioPayload]);
+  const askPortfolioMsg = useCallback((text) => {
+    sendPortfolioMsg(text, true);
+  }, [sendPortfolioMsg]);
 
   return (
+    <>
     <Card style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -622,7 +891,118 @@ function PortfolioBox({ rows }) {
           Nhập mã rồi bấm Phân tích để xem kết quả.
         </div>
       )}
+
+      <div style={{ margin: "0 -14px", borderTop: "0.5px solid var(--bdr)", background: "var(--elev)", padding: "8px 14px 7px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ width: 24, height: 24, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 850, flexShrink: 0 }}>✦</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 750, color: "var(--t1)" }}>Tư vấn AI</div>
+            <div style={{ fontSize: 9, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: chatLoading ? "var(--A)" : "var(--G)" }}>
+            <span style={{ width: 5, height: 5, borderRadius: 999, background: chatLoading ? "var(--A)" : "var(--G)" }} />
+            {chatLoading ? "Đang hỏi" : "Sẵn sàng"}
+          </span>
+          <button type="button" onClick={() => setChatOpen(true)} style={{ border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--B)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 750, cursor: "pointer", whiteSpace: "nowrap" }}>
+            ↗ Mở rộng
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+        {["Mã nào đúng sóng?", "Ngành nào dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng?"].map((text) => (
+          <button key={text} type="button" onClick={() => askPortfolioMsg(text)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "4px 8px", fontSize: 10, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
+            {text}
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setChatOpen(true)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 32, padding: "6px 9px 6px 11px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t3)", fontSize: 11, cursor: "text", textAlign: "left" }}
+      >
+        <span>Hỏi AI về danh mục, chiến lược...</span>
+        <span style={{ width: 22, height: 22, borderRadius: 6, background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>➤</span>
+      </button>
     </Card>
+
+    {chatOpen && (
+      <>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", backdropFilter: "blur(2px)", zIndex: 900 }} onClick={() => setChatOpen(false)} />
+        <aside style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: narrow ? "100vw" : "min(460px,96vw)", maxWidth: "100vw", boxSizing: "border-box", overflowX: "hidden", background: "var(--surf)", borderLeft: narrow ? "none" : "0.5px solid var(--bdr)", zIndex: 901, display: "flex", flexDirection: "column", boxShadow: narrow ? "none" : "-24px 0 70px rgba(0,0,0,.35)" }}>
+          <div style={{ padding: narrow ? "12px 14px" : "14px 16px", borderBottom: "0.5px solid var(--bdr)", background: "var(--elev)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <span style={{ width: 32, height: 32, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 850, flexShrink: 0 }}>✦</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Tư vấn AI danh mục</div>
+                <div style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
+              </div>
+            </div>
+            <button type="button" onClick={() => setChatOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--t2)", cursor: "pointer", fontSize: 15, flexShrink: 0 }}>
+              ×
+            </button>
+          </div>
+
+          {hasAnalysis && (
+            <div style={{ margin: narrow ? "10px 14px 0" : "12px 16px 0", background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "10px 12px", flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
+              <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 7, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".05em" }}>Danh mục đang phân tích</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {analyzed.map((row) => {
+                  const cat = cats.find((item) => item.key === row.cat);
+                  return (
+                    <span key={row.ticker} style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 5, background: `${cat?.color || "var(--t3)"}20`, color: cat?.color || "var(--t3)", border: `0.5px solid ${cat?.color || "var(--bdr)"}44` }}>
+                      {row.ticker}
+                    </span>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                <span style={{ fontSize: 18, fontWeight: 850, color: score >= 70 ? "#0ca30c" : score >= 50 ? "#eda100" : "#e34948", ...mono }}>{score}/100</span>
+                <span style={{ flex: "1 1 180px", minWidth: 0, fontSize: 10, color: "var(--t3)", overflowWrap: "anywhere" }}>{counts.dd} đúng sóng đúng ngành · {counts.ss} sai sóng sai ngành</span>
+              </div>
+            </div>
+          )}
+
+          <div ref={panelRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", gap: 10, padding: narrow ? "12px 14px" : "14px 16px" }}>
+            {msgs.map((msg, index) => (
+              <PortfolioMsgBubble key={`panel-${msg.role}-${index}-${msg.text}`} role={msg.role} text={msg.text} panel />
+            ))}
+          </div>
+
+          <div style={{ padding: narrow ? "9px 14px" : "10px 16px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "0.5px solid var(--bdr)", minWidth: 0 }}>
+            {["Mã nào đúng sóng đúng ngành?", "Ngành nào đang dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng 3-5-2?", "So sánh các mã?"].map((text) => (
+              <button key={text} type="button" onClick={() => sendPortfolioMsg(text, true)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "5px 9px", fontSize: 11, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
+                {text}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, padding: narrow ? "10px 14px calc(10px + env(safe-area-inset-bottom))" : "12px 16px", borderTop: "0.5px solid var(--bdr)", alignItems: "flex-end", minWidth: 0 }}>
+            <textarea
+              autoFocus
+              rows={1}
+              value={panelVal}
+              onChange={(event) => setPanelVal(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  sendPortfolioMsg(panelVal, true);
+                }
+              }}
+              placeholder="Hỏi bất cứ điều gì về danh mục..."
+              style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 90, resize: "none", padding: "8px 12px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: 12, lineHeight: 1.5, outline: "none", fontFamily: "inherit" }}
+            />
+            <button type="button" onClick={() => sendPortfolioMsg(panelVal, true)} disabled={chatLoading || !panelVal.trim()} style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: chatLoading || !panelVal.trim() ? "not-allowed" : "pointer", opacity: chatLoading || !panelVal.trim() ? 0.55 : 1, flexShrink: 0 }}>
+              ➤
+            </button>
+          </div>
+        </aside>
+      </>
+    )}
+    </>
   );
 }
 
@@ -684,7 +1064,7 @@ function WaveTimeline({ events, recentDates, narrow }) {
   };
 
   return (
-    <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }}>
+    <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
         <div>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Lộ trình dẫn sóng</span>
@@ -780,9 +1160,9 @@ function SignalPortfolio({ rows, date, live }) {
   const buyRows = useMemo(() => sortByTicker(rows.filter((row) => row.signal === "MUA")), [rows]);
   const sellRows = useMemo(() => sortByTicker(rows.filter((row) => row.signal === "BAN")), [rows]);
   const tabRows = tab === "MUA" ? buyRows : sellRows;
-  const totalPages = Math.max(1, Math.ceil(tabRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(tabRows.length / SIGNAL_PORTFOLIO_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const visible = tabRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const visible = tabRows.slice((safePage - 1) * SIGNAL_PORTFOLIO_PAGE_SIZE, safePage * SIGNAL_PORTFOLIO_PAGE_SIZE);
   const cols = [
     { label: "Mã", width: "14%", align: "left" },
     { label: "DT cổ phiếu", width: "19%", align: "center" },
@@ -838,7 +1218,7 @@ function SignalPortfolio({ rows, date, live }) {
         {!visible.length && <EmptyHint>Chưa có tín hiệu {tab === "MUA" ? "mua" : "bán"}.</EmptyHint>}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>{tabRows.length ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, tabRows.length)} / ${tabRows.length} mã` : "0 mã"}</span>
+        <span style={{ fontSize: 10, color: "var(--t3)" }}>{tabRows.length ? `${(safePage - 1) * SIGNAL_PORTFOLIO_PAGE_SIZE + 1}–${Math.min(safePage * SIGNAL_PORTFOLIO_PAGE_SIZE, tabRows.length)} / ${tabRows.length} mã` : "0 mã"}</span>
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
     </Card>
@@ -961,6 +1341,9 @@ export function ModDashboard() {
 
   const smdtBranchDate = topDate(smdt.datesAsc);
   const cashBranchDate = topDate(cashBranch.datesAsc);
+  const smdtBranchDatesDesc = useMemo(() => sortDatesDesc(smdt.datesAsc), [smdt.datesAsc]);
+  const smdtBranchDateIndex = useMemo(() => findDateIndex(smdtBranchDatesDesc, toDateInputValue(smdtBranchDate)), [smdtBranchDate, smdtBranchDatesDesc]);
+  const prevSmdtBranchDate = smdtBranchDateIndex >= 0 ? smdtBranchDatesDesc[smdtBranchDateIndex + 1] || "" : "";
   const cashBranchDatesDesc = useMemo(() => sortDatesDesc(cashBranch.datesAsc), [cashBranch.datesAsc]);
   const smdtTickerDate = topDate(smdtTicker.datesAsc);
   const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt, stockSignal.updatedAt, stockWave.updatedAt, branchCross.updatedAt, totalTrade.updatedAt);
@@ -1014,6 +1397,18 @@ export function ModDashboard() {
     }
     return map;
   }, [branchSmdtRows]);
+
+  const branchSmdtPrevByLabel = useMemo(() => {
+    const map = new Map();
+    if (!prevSmdtBranchDate) return map;
+    for (const branch of smdt.branches) {
+      const value = smdt.matrix[branch.key]?.[prevSmdtBranchDate];
+      if (!Number.isFinite(value)) continue;
+      setIndustryLookup(map, branch.key, value);
+      setIndustryLookup(map, branch.label, value);
+    }
+    return map;
+  }, [prevSmdtBranchDate, smdt.branches, smdt.matrix]);
 
   const cashTickerDatesDesc = useMemo(() => sortDatesDesc(cashTicker.buckets.map((bucket) => bucket.date)), [cashTicker.buckets]);
   const activeCashTickerDate = useMemo(() => {
@@ -1091,6 +1486,7 @@ export function ModDashboard() {
   const smdtTickerDateIndex = useMemo(() => findDateIndex(smdtTickerDatesDesc, toDateInputValue(smdtTickerDate)), [smdtTickerDate, smdtTickerDatesDesc]);
   const prevSmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 1] || "" : "";
   const prev2SmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 2] || "" : "";
+  const portfolioBranchSmdtDate = smdtBranchDatesDesc[findDateIndex(smdtBranchDatesDesc, toDateInputValue(smdtTickerDate))] || "";
 
   const allTopTickers = useMemo(() => {
     const rows = smdtTickerPool.flatMap((tk) => {
@@ -1099,12 +1495,25 @@ export function ModDashboard() {
       const cash = cashByTicker.get(tk.key);
       const industry = tk.industry;
       const branchSmdt = lookupIndustryValue(branchSmdtByLabel, industry);
+      const branchSmdtPrev = lookupIndustryValue(branchSmdtPrevByLabel, industry);
       const tickerSig = tickerContentToSig(cash?.content || "");
       const branchSig = lookupIndustryValue(branchCashByLabel, industry);
       const signal = stockSignalByTicker.get(tk.key);
       const trade = getLatestTrade(totalTrade, tk.key);
       const prevSmdt = smdtTicker.matrix[tk.key]?.[prevSmdtTickerDate];
       const prev2Smdt = smdtTicker.matrix[tk.key]?.[prev2SmdtTickerDate];
+      const branch = findIndustryBranch(smdt.branches, industry);
+      const fourKey = evaluateFourKey({
+        ticker: tk.key,
+        industry,
+        date: smdtTickerDate,
+        tickerSeries: seriesFromMatrix(smdtTicker.matrix, smdtTicker.datesAsc, tk.key, smdtTickerDate),
+        industrySeries: branch ? seriesFromMatrix(smdt.matrix, smdt.datesAsc, branch.key, portfolioBranchSmdtDate || smdtTickerDate) : [],
+      });
+      const evalKey = fourKey?.evalKey || fallbackEvalKey({
+        tickerOk: isPositiveSig(tickerSig) && Number.isFinite(smdtValue) && smdtValue > 70,
+        industryOk: isPositiveSig(branchSig) && Number.isFinite(branchSmdt) && branchSmdt > 70,
+      });
       const momentum = Number.isFinite(prevSmdt) ? smdtValue - prevSmdt : 0;
       const status = classifyStrongTicker(smdtValue, prevSmdt, prev2Smdt, tickerSig, branchSmdt, branchSig);
       return [{
@@ -1116,16 +1525,19 @@ export function ModDashboard() {
         prev2Smdt,
         momentum,
         branchSmdt,
+        branchSmdtPrev,
         sig: tickerSig,
         tickerSig,
         branchSig,
+        fourKey,
+        evalKey,
         status,
         price: cash?.price || trade?.price || signal?.price,
         score: smdtValue + (Number.isFinite(branchSmdt) ? branchSmdt * 0.22 : 0) + sigWeight(tickerSig) * 8 + sigWeight(branchSig) * 4 + Math.max(-12, Math.min(18, momentum * 0.7)),
       }];
     });
     return rows.sort((a, b) => a.ticker.localeCompare(b.ticker));
-  }, [branchCashByLabel, branchSmdtByLabel, cashByTicker, prev2SmdtTickerDate, prevSmdtTickerDate, smdtTicker.matrix, smdtTickerDate, smdtTickerPool, stockSignalByTicker, totalTrade]);
+  }, [branchCashByLabel, branchSmdtByLabel, branchSmdtPrevByLabel, cashByTicker, portfolioBranchSmdtDate, prev2SmdtTickerDate, prevSmdtTickerDate, smdt.branches, smdt.datesAsc, smdt.matrix, smdtTicker.datesAsc, smdtTicker.matrix, smdtTickerDate, smdtTickerPool, stockSignalByTicker, totalTrade]);
 
   const rankedTopTickers = useMemo(() => {
     return [...allTopTickers].sort((a, b) => b.score - a.score || b.smdt - a.smdt);
@@ -1187,8 +1599,8 @@ export function ModDashboard() {
   }, [waveLatest]);
   const waveTotal = waveLatest?.total ?? marketWaveItems.reduce((sum, item) => sum + item.n, 0);
 
-  const smdtBranchCore = branchSmdtRows.filter((row) => row.isCore).slice(0, 7);
-  const smdtBranchOther = branchSmdtRows.filter((row) => !row.isCore).slice(0, 7);
+  const smdtBranchCore = branchSmdtRows.filter((row) => row.isCore).slice(0, 10);
+  const smdtBranchOther = branchSmdtRows.filter((row) => !row.isCore).slice(0, 10);
   const tickerRows = rankedTopTickers.map((row) => ({ key: row.ticker, name: row.ticker, value: row.smdt, isCore: isCoreBranchName(row.industry) }));
   const sortTickerPreview = (rows) => [...rows].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore)).slice(0, 10);
@@ -1197,7 +1609,7 @@ export function ModDashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "repeat(3,minmax(0,1fr))", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 14 }}>
         <CardDoSong
           data={marketWaveItems}
           maCount={waveTotal}
@@ -1238,7 +1650,7 @@ export function ModDashboard() {
         </DashboardCard>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(440px, 100%), 1fr))", gap: 14 }}>
         <SmdtPreview
           title="SMDT ngành"
           meta={`${fmtNum(branchSmdtRows.length)} ngành${smdtBranchDate ? ` · ${fmtFull(smdtBranchDate)}` : ""}`}
@@ -1246,6 +1658,7 @@ export function ModDashboard() {
           rightTitle="Ngành phụ · top"
           leftRows={smdtBranchCore}
           rightRows={smdtBranchOther}
+          defaultTab="other"
           navId="smdt-nganh"
         />
         <SmdtPreview
@@ -1255,17 +1668,17 @@ export function ModDashboard() {
           rightTitle="Ngành phụ · top"
           leftRows={tickerCoreRows}
           rightRows={tickerOtherRows}
-          ticker
+          defaultTab="core"
           navId="smdt-ma"
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(440px, 100%), 1fr))", gap: 14 }}>
         <TopStrongTable rows={rankedStrongTickers} date={smdtTickerDate} narrow={narrow} />
-        <PortfolioBox rows={rankedTopTickers} />
+        <PortfolioBox rows={rankedTopTickers} asOfDate={smdtTickerDate} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "55fr 45fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(440px, 100%), 1fr))", gap: 14 }}>
         <WaveTimeline events={waveEvents} recentDates={waveWindowDates} narrow={narrow} />
         <SignalPortfolio rows={stockSignalRows} date={signalLatestDate} live={live} />
       </div>

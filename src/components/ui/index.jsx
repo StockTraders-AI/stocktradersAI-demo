@@ -1,6 +1,8 @@
 import { useTheme } from "../../theme";
 import { hmStyle, sigStyle, tagStyle, mono } from "../../styles/tokens";
 
+export { Loading } from "./Loading";
+
 /* ─────────────────────────── PRIMITIVES ────────────────────────────────
  * Component nền dùng chung cho mọi module. Phần "khung" dùng CSS var
  * (var(--surf)…) nên tự đổi theo theme; phần tô màu theo dữ liệu lấy `t`
