@@ -13,6 +13,7 @@ import { CF_SIG, CF_SIG_ORDER, cfSigStyle } from "./cashFlowUtils";
 
 const HIDDEN_INDUSTRIES_KEY = "cashflow_ticker_hidden_industries_v1";
 const COLLAPSED_INDUSTRIES_KEY = "cashflow_ticker_collapsed_industries_v1";
+const UNGROUPED_INDUSTRY = "Chưa phân ngành";
 const INDUSTRY_ALIAS_GROUPS = [
   ["Môi giới chứng khoán", "Chứng khoán"],
   ["Ngân hàng thương mại truyền thống", "Ngân hàng"],
@@ -100,22 +101,24 @@ export function ModDongTienCP() {
 
   const rows = latest?.rows || [];
 
-  /* Vũ trụ mã = danh sách mã đang giao dịch (allowedTickers) ∩ mã có ngành thật từ getBranchPath.
-   * Lấy thẳng từ allowedTickers nên ổn định ngay từ lần paint đầu (không phụ thuộc số phiên đã tải),
-   * tránh nhá 162→168 và phản ánh đúng tổng (vd 173) kể cả mã chưa có tín hiệu dòng tiền nào. */
   const { tickerPool, industries } = useMemo(() => {
     const seen = new Map();
     const indSeen = new Set();
-    for (const ticker of allowedTickers || []) {
-      const ind = tickerToBranch[ticker];
-      if (!ind) continue;
+    const source = allowedTickers?.length ? allowedTickers : buckets.flatMap((bucket) => bucket.rows.map((row) => row.ticker));
+    for (const ticker of source) {
+      if (!ticker) continue;
+      const ind = tickerToBranch[ticker] || UNGROUPED_INDUSTRY;
       if (!seen.has(ticker)) seen.set(ticker, { ticker, type: ind });
       indSeen.add(ind);
     }
     const pool = [...seen.values()].sort((a, b) => a.ticker.localeCompare(b.ticker));
-    const indList = [...indSeen].sort((a, b) => a.localeCompare(b, "vi"));
+    const indList = [...indSeen].sort((a, b) => {
+      if (a === UNGROUPED_INDUSTRY) return 1;
+      if (b === UNGROUPED_INDUSTRY) return -1;
+      return a.localeCompare(b, "vi");
+    });
     return { tickerPool: pool, industries: indList };
-  }, [allowedTickers, tickerToBranch]);
+  }, [allowedTickers, buckets, tickerToBranch]);
 
   const datesDesc = useMemo(() => [...buckets].reverse(), [buckets]);
   const latestDate = latest?.date || datesDesc[0]?.date || null;

@@ -12,6 +12,7 @@ import { cashFlowGroupTh, cashFlowMatrixDateTd, cashFlowMatrixTd, cashFlowMatrix
 const HIDDEN_INDUSTRIES_KEY = "smdt_ticker_hidden_industries_v1";
 const COLLAPSED_INDUSTRIES_KEY = "smdt_ticker_collapsed_industries_v1";
 const SMDT_SESSION_OPTIONS = [12, 25, 50];
+const UNGROUPED_INDUSTRY = "Chưa phân ngành";
 
 function loadSet(key) {
   try {
@@ -70,16 +71,22 @@ export function ModSMDTMa() {
   const [collapsedInd, setCollapsedInd] = useState(() => loadSet(COLLAPSED_INDUSTRIES_KEY));
 
   const { tickerPool, industries } = useMemo(() => {
+    const tickerByKey = new Map(tickers.map((tk) => [tk.key, tk]));
+    const source = tickers.length ? tickers.map((tk) => tk.key) : Object.keys(matrix);
     const indSeen = new Set();
-    const pool = tickers.flatMap((tk) => {
-      const ind = tickerToBranch[tk.key];
-      if (!ind) return [];
+    const pool = [...new Set(source)].filter(Boolean).map((ticker) => {
+      const tk = tickerByKey.get(ticker) || { key: ticker, name: ticker };
+      const ind = tickerToBranch[ticker] || UNGROUPED_INDUSTRY;
       indSeen.add(ind);
-      return [{ ...tk, type: ind }];
+      return { ...tk, type: ind };
     }).sort((a, b) => a.key.localeCompare(b.key));
-    const indList = [...indSeen].sort((a, b) => a.localeCompare(b, "vi"));
+    const indList = [...indSeen].sort((a, b) => {
+      if (a === UNGROUPED_INDUSTRY) return 1;
+      if (b === UNGROUPED_INDUSTRY) return -1;
+      return a.localeCompare(b, "vi");
+    });
     return { tickerPool: pool, industries: indList };
-  }, [tickers, tickerToBranch]);
+  }, [matrix, tickers, tickerToBranch]);
 
   const datesDesc = useMemo(() => [...datesAsc].reverse(), [datesAsc]);
   const latestDate = datesDesc[0] || null;

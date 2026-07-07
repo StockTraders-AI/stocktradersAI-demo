@@ -385,6 +385,15 @@ function SmdtScoreBadge({ value }) {
   );
 }
 
+function PriceChip({ value }) {
+  const price = toNumber(value);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 54, height: 24, padding: "0 8px", borderRadius: 8, border: "0.5px solid rgba(59,130,246,.30)", background: "rgba(59,130,246,.09)", color: "var(--t1)", fontSize: 10.5, fontWeight: 750, whiteSpace: "nowrap", ...mono }}>
+      {Number.isFinite(price) ? fmtNum(price) : "—"}
+    </span>
+  );
+}
+
 function SmdtTabs({ active, onChange }) {
   const { dark } = useTheme();
   const tabStyle = (selected, tone = "neutral") => {
@@ -445,7 +454,7 @@ function SmdtPreviewLegend() {
   );
 }
 
-function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, defaultTab = "core", navId }) {
+function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, defaultTab = "core", navId, showPrice = false }) {
   const [tab, setTab] = useState(defaultTab);
   const rows = tab === "core" ? leftRows : rightRows;
   const displayRows = rows.length ? [...rows, ...Array.from({ length: Math.max(0, 10 - rows.length) }, (_, index) => ({ key: `placeholder-${index}`, placeholder: true }))] : [];
@@ -472,6 +481,7 @@ function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, 
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--t1)", fontSize: 11, fontWeight: 700 }}>
                   {row.name}
                 </span>
+                {showPrice && <PriceChip value={row.price} />}
                 <SmdtScoreBadge value={row.value} />
               </>
             )}
@@ -1527,14 +1537,17 @@ export function ModDashboard() {
     }
     return map;
   }, [activeCashTickerDate, cashTicker.buckets, cashTickerDatesDesc, cashTickerUniverse]);
+  const smdtTickerUniverse = useMemo(() => {
+    const source = smdtTicker.tickers.length ? smdtTicker.tickers.map((tk) => tk.key) : Object.keys(smdtTicker.matrix);
+    return [...new Set(source)].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [smdtTicker.matrix, smdtTicker.tickers]);
+  const smdtTickerByKey = useMemo(() => new Map(smdtTicker.tickers.map((tk) => [tk.key, tk])), [smdtTicker.tickers]);
   const smdtTickerPool = useMemo(() => {
-    return smdtTicker.tickers
-      .flatMap((tk) => {
-        const industry = branchPath.tickerToBranch[tk.key];
-        return industry ? [{ ...tk, industry }] : [];
-      })
-      .sort((a, b) => a.key.localeCompare(b.key));
-  }, [branchPath.tickerToBranch, smdtTicker.tickers]);
+    return smdtTickerUniverse.map((ticker) => {
+      const tk = smdtTickerByKey.get(ticker) || { key: ticker, name: ticker };
+      return { ...tk, industry: branchPath.tickerToBranch[ticker] || "" };
+    });
+  }, [branchPath.tickerToBranch, smdtTickerByKey, smdtTickerUniverse]);
 
   const cashTickerCounts = useMemo(() => {
     const byGroup = {
@@ -1689,7 +1702,7 @@ export function ModDashboard() {
 
   const smdtBranchCore = branchSmdtRows.filter((row) => row.isCore).slice(0, 10);
   const smdtBranchOther = branchSmdtRows.filter((row) => !row.isCore).slice(0, 10);
-  const tickerRows = rankedTopTickers.map((row) => ({ key: row.ticker, name: row.ticker, value: row.smdt, isCore: isCoreBranchName(row.industry) }));
+  const tickerRows = rankedTopTickers.map((row) => ({ key: row.ticker, name: row.ticker, value: row.smdt, price: row.price, isCore: isCoreBranchName(row.industry) }));
   const sortTickerPreview = (rows) => [...rows].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore)).slice(0, 10);
   const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore)).slice(0, 10);
@@ -1751,13 +1764,14 @@ export function ModDashboard() {
         />
         <SmdtPreview
           title="SMDT cổ phiếu"
-          meta={`${fmtNum(smdtTickerPool.length)} mã${smdtTickerDate ? ` · ${fmtFull(smdtTickerDate)}` : ""}`}
+          meta={`${fmtNum(smdtTickerUniverse.length)} mã${smdtTickerDate ? ` · ${fmtFull(smdtTickerDate)}` : ""}`}
           leftTitle="Chủ lực · top"
           rightTitle="Ngành phụ · top"
           leftRows={tickerCoreRows}
           rightRows={tickerOtherRows}
           defaultTab="core"
           navId="smdt-ma"
+          showPrice
         />
       </div>
 
