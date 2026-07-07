@@ -606,6 +606,44 @@ function PortfolioMsgText({ text }) {
   );
 }
 
+function PortfolioAiLoadingStyles() {
+  return (
+    <style>
+      {`
+        @keyframes portfolio-ai-typing-bounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: .55; }
+          30% { transform: translateY(-4px); opacity: 1; }
+        }
+        @keyframes portfolio-ai-status-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: .42; transform: scale(.78); }
+        }
+      `}
+    </style>
+  );
+}
+
+function PortfolioTypingDots() {
+  return (
+    <div aria-label="AI đang trả lời" role="status" style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 12 }}>
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          style={{
+            width: 4,
+            height: 4,
+            borderRadius: 999,
+            background: "var(--t3)",
+            display: "inline-block",
+            animation: "portfolio-ai-typing-bounce .9s infinite",
+            animationDelay: `${index * 0.15}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function PortfolioMsgBubble({ role, text, panel = false }) {
   const isAi = role === "ai" || role === "typing";
   const isTyping = role === "typing";
@@ -616,8 +654,8 @@ function PortfolioMsgBubble({ role, text, panel = false }) {
           AI
         </span>
       )}
-      <div style={{ maxWidth: panel && isAi ? "calc(100% - 35px)" : isAi ? "82%" : panel ? "86%" : "78%", minWidth: 0, borderRadius: isAi ? "8px 8px 8px 3px" : "8px 8px 3px 8px", padding: panel ? "9px 11px" : "7px 9px", background: isAi ? "var(--elev)" : "var(--Bs)", border: `0.5px solid ${isAi ? "var(--bdr)" : "var(--Bb)"}`, color: isAi ? "var(--t2)" : "var(--t1)", fontSize: panel ? 12 : 11, lineHeight: 1.5, overflowWrap: "anywhere", opacity: isTyping ? 0.78 : 1 }}>
-        {isTyping ? <Loading compact label={text} style={{ marginBottom: 0 }} /> : <PortfolioMsgText text={text} />}
+      <div style={{ maxWidth: panel && isAi ? "calc(100% - 35px)" : isAi ? "82%" : panel ? "86%" : "78%", minWidth: 0, borderRadius: isAi ? "3px 8px 8px 8px" : "8px 3px 8px 8px", padding: isTyping ? (panel ? "7px 11px" : "5px 10px") : panel ? "9px 11px" : "7px 9px", background: isAi ? "var(--elev)" : "var(--Bs)", border: `0.5px solid ${isAi ? "var(--bdr)" : "var(--Bb)"}`, color: isAi ? "var(--t1)" : "var(--t1)", fontSize: panel ? 12 : 11, lineHeight: 1.5, overflowWrap: "anywhere" }}>
+        {isTyping ? <PortfolioTypingDots /> : <PortfolioMsgText text={text} />}
       </div>
     </div>
   );
@@ -863,6 +901,7 @@ function PortfolioBox({ rows, asOfDate }) {
 
   return (
     <>
+      <PortfolioAiLoadingStyles />
       <Card style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -934,7 +973,7 @@ function PortfolioBox({ rows, asOfDate }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: chatLoading ? "var(--A)" : "var(--G)" }}>
-              <span style={{ width: 5, height: 5, borderRadius: 999, background: chatLoading ? "var(--A)" : "var(--G)" }} />
+              <span style={{ width: 5, height: 5, borderRadius: 999, background: chatLoading ? "var(--A)" : "var(--G)", display: "inline-block", animation: "portfolio-ai-status-pulse 1.2s infinite" }} />
               {chatLoading ? "Đang hỏi" : "Sẵn sàng"}
             </span>
             <button type="button" onClick={() => setChatOpen(true)} style={{ border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--B)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 750, cursor: "pointer", whiteSpace: "nowrap" }}>

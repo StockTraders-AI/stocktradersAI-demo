@@ -278,11 +278,13 @@ export function ModDongTienCP() {
   const toggleDateSort = useCallback(() => {
     const next = dateSort === "desc" ? "asc" : "desc";
     const nextOrderedDates = next === "desc" ? datesDesc : [...datesDesc].reverse();
-    const displayIndex = nextOrderedDates.findIndex((bucket) => toDateInputValue(bucket.date) === dateInputValue);
-    const startIndex = selectedDate && displayIndex >= 0
+    const anchorDate = selectedDate || dateInputValue;
+    const displayIndex = nextOrderedDates.findIndex((bucket) => toDateInputValue(bucket.date) === anchorDate);
+    const startIndex = anchorDate && displayIndex >= 0
       ? next === "desc" ? displayIndex : Math.max(0, displayIndex - sessions + 1)
       : 0;
     setDateSort(next);
+    setSelectedDate(anchorDate);
     setPage(Math.floor(Math.max(0, startIndex) / sessions) + 1);
   }, [dateInputValue, dateSort, datesDesc, selectedDate, sessions]);
 
