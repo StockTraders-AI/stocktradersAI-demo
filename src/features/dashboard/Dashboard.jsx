@@ -17,6 +17,8 @@ import { PORTFOLIO_MAX_CODES, loadSavedPortfolio, parsePortfolioCodes, savePortf
 import { evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "../portfolio-analysis/stock4KeyEvaluator";
 import { isCashFlowCoreIndustry } from "../cash-flow-ticker/cashFlowUtils";
 import CardDoSong from "./CardDoSong";
+import PortfolioChatPanel, { PortfolioAiLoadingStyles } from "./PortfolioChatPanel";
+import "./wave-detector-donut.css";
 
 const SIG_ORDER = ["sn", "si", "so", "st"];
 const CORE_KEYS = new Set(CORE_BRANCHES.map((b) => b.key));
@@ -330,21 +332,37 @@ function Donut({ items, size = 180, badges = true }) {
   );
 }
 
-function SplitDonuts({ leftTitle, rightTitle, leftItems, rightItems }) {
+function DonutLoading({ size = 180 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", width: "100%", gap: 8 }}>
-      <MiniDonut title={leftTitle} items={leftItems} />
-      <div style={{ width: 1, background: "var(--bdr)", height: 100 }} />
-      <MiniDonut title={rightTitle} items={rightItems} />
+    <div
+      className="wtds-dashboard-donut-loading"
+      aria-label="Đang tải dữ liệu"
+      role="status"
+      style={{ "--wtds-donut-size": `${size}px` }}
+    >
+      <div className="wtds-donut-sk wtds-sk" />
+      <div className="wtds-donut-center">
+        <span className="wtds-sk wtds-sk-pill wtds-center-value-sk" />
+      </div>
     </div>
   );
 }
 
-function MiniDonut({ title, items }) {
+function SplitDonuts({ leftTitle, rightTitle, leftItems, rightItems, loading = false }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", width: "100%", gap: 8 }}>
+      <MiniDonut title={leftTitle} items={leftItems} loading={loading} />
+      <div style={{ width: 1, background: "var(--bdr)", height: 100 }} />
+      <MiniDonut title={rightTitle} items={rightItems} loading={loading} />
+    </div>
+  );
+}
+
+function MiniDonut({ title, items, loading = false }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: "var(--t3)" }}>{title}</div>
-      <Donut items={items} size={130} />
+      {loading ? <DonutLoading size={130} /> : <Donut items={items} size={130} />}
     </div>
   );
 }
@@ -429,11 +447,10 @@ function SmdtTabs({ active, onChange }) {
 
 function SmdtPreviewSectionLabel({ children }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 0" }}>
+    <div style={{ display: "flex", alignItems: "center", margin: "6px 0 0" }}>
       <span style={{ fontSize: 9, fontWeight: 850, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
         {children}
       </span>
-      <div style={{ flex: 1, height: 1, background: "var(--bdr)" }} />
     </div>
   );
 }
@@ -454,7 +471,7 @@ function SmdtPreviewLegend() {
   );
 }
 
-function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, defaultTab = "core", navId, showPrice = false }) {
+function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, defaultTab = "core", navId, showPrice = false, rowNameColor = "var(--t1)" }) {
   const [tab, setTab] = useState(defaultTab);
   const rows = tab === "core" ? leftRows : rightRows;
   const displayRows = rows.length ? [...rows, ...Array.from({ length: Math.max(0, 10 - rows.length) }, (_, index) => ({ key: `placeholder-${index}`, placeholder: true }))] : [];
@@ -478,7 +495,7 @@ function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, 
           <div key={row.key} aria-hidden={row.placeholder || undefined} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, minHeight: 36, padding: "2px 0", borderBottom: `0.5px solid ${row.placeholder ? "transparent" : "var(--bdr)"}` }}>
             {!row.placeholder && (
               <>
-                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--t1)", fontSize: 11, fontWeight: 700 }}>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: rowNameColor, fontSize: 11, fontWeight: 700 }}>
                   {row.name}
                 </span>
                 {showPrice && <PriceChip value={row.price} />}
@@ -603,74 +620,6 @@ function TopStrongTable({ rows, date, narrow }) {
   );
 }
 
-function PortfolioMsgText({ text }) {
-  return (
-    <>
-      {String(text || "").split("\n").map((line, index) => (
-        <span key={`${line}-${index}`}>
-          {line}
-          {index < String(text || "").split("\n").length - 1 && <br />}
-        </span>
-      ))}
-    </>
-  );
-}
-
-function PortfolioAiLoadingStyles() {
-  return (
-    <style>
-      {`
-        @keyframes portfolio-ai-typing-bounce {
-          0%, 60%, 100% { transform: translateY(0); opacity: .55; }
-          30% { transform: translateY(-4px); opacity: 1; }
-        }
-        @keyframes portfolio-ai-status-pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: .42; transform: scale(.78); }
-        }
-      `}
-    </style>
-  );
-}
-
-function PortfolioTypingDots() {
-  return (
-    <div aria-label="AI đang trả lời" role="status" style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 12 }}>
-      {[0, 1, 2].map((index) => (
-        <span
-          key={index}
-          style={{
-            width: 4,
-            height: 4,
-            borderRadius: 999,
-            background: "var(--t3)",
-            display: "inline-block",
-            animation: "portfolio-ai-typing-bounce .9s infinite",
-            animationDelay: `${index * 0.15}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function PortfolioMsgBubble({ role, text, panel = false }) {
-  const isAi = role === "ai" || role === "typing";
-  const isTyping = role === "typing";
-  return (
-    <div style={{ width: "100%", minWidth: 0, display: "flex", gap: 7, alignItems: "flex-start", justifyContent: isAi ? "flex-start" : "flex-end" }}>
-      {isAi && (
-        <span style={{ width: panel ? 28 : 22, height: panel ? 28 : 22, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: panel ? 12 : 10, fontWeight: 850, flexShrink: 0 }}>
-          AI
-        </span>
-      )}
-      <div style={{ maxWidth: panel && isAi ? "calc(100% - 35px)" : isAi ? "82%" : panel ? "86%" : "78%", minWidth: 0, borderRadius: isAi ? "3px 8px 8px 8px" : "8px 3px 8px 8px", padding: isTyping ? (panel ? "7px 11px" : "5px 10px") : panel ? "9px 11px" : "7px 9px", background: isAi ? "var(--elev)" : "var(--Bs)", border: `0.5px solid ${isAi ? "var(--bdr)" : "var(--Bb)"}`, color: isAi ? "var(--t1)" : "var(--t1)", fontSize: panel ? 12 : 11, lineHeight: 1.5, overflowWrap: "anywhere" }}>
-        {isTyping ? <PortfolioTypingDots /> : <PortfolioMsgText text={text} />}
-      </div>
-    </div>
-  );
-}
-
 function portfolioAutoMessage({ score, counts, total, analyzed }) {
   const good = analyzed.filter((row) => row.cat === "dd").map((row) => row.ticker).slice(0, 3).join(", ");
   const weak = analyzed.filter((row) => row.cat === "ss").map((row) => row.ticker).slice(0, 2).join(", ");
@@ -748,37 +697,6 @@ function PortfolioBox({ rows, asOfDate }) {
   const [msgs, setMsgs] = useState([
     { role: "ai", text: "Nhập mã và bấm Phân tích, sau đó hỏi tôi về mã đúng sóng, ngành dẫn dắt, mã nên cắt hoặc phân bổ tỷ trọng." },
   ]);
-  const [vv, setVv] = useState({ top: 0, height: "100%" });
-
-  useEffect(() => {
-    if (!chatOpen || !narrow) {
-      setVv({ top: 0, height: "100%" });
-      return undefined;
-    }
-
-    const updateViewport = () => {
-      if (window.visualViewport) {
-        setVv({
-          top: window.visualViewport.offsetTop,
-          height: window.visualViewport.height,
-        });
-      }
-    };
-
-    window.visualViewport?.addEventListener("resize", updateViewport);
-    window.visualViewport?.addEventListener("scroll", updateViewport);
-    updateViewport();
-
-    const timer = setTimeout(updateViewport, 100);
-
-    return () => {
-      window.visualViewport?.removeEventListener("resize", updateViewport);
-      window.visualViewport?.removeEventListener("scroll", updateViewport);
-      clearTimeout(timer);
-    };
-  }, [chatOpen, narrow]);
-
-  const panelRef = useRef(null);
   const picks = useMemo(() => parsePortfolioCodes(input), [input]);
   const rowMap = useMemo(() => new Map(rows.map((row) => [row.ticker, row])), [rows]);
   const analyzed = analyzedCodes.map((ticker) => {
@@ -829,19 +747,6 @@ function PortfolioBox({ rows, asOfDate }) {
     { key: "sd", color: "#9b7cf7", label: "Đúng ngành - sai sóng" },
     { key: "ss", color: "#e34948", label: "Sai sóng - sai ngành" },
   ];
-
-  useEffect(() => {
-    if (panelRef.current) panelRef.current.scrollTop = panelRef.current.scrollHeight;
-  }, [msgs, chatOpen]);
-
-  useEffect(() => {
-    if (!chatOpen) return undefined;
-    const onKey = (event) => {
-      if (event.key === "Escape") setChatOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [chatOpen]);
 
   const updateInput = (value) => {
     setInput(value);
@@ -1010,96 +915,21 @@ function PortfolioBox({ rows, asOfDate }) {
         </button>
       </Card>
 
-      {chatOpen && (
-        <>
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", backdropFilter: "blur(2px)", zIndex: 900 }} onClick={() => setChatOpen(false)} />
-          <aside style={{
-            position: "fixed",
-            top: narrow ? vv.top : 0,
-            height: narrow ? vv.height : "100%",
-            right: 0,
-            bottom: narrow ? undefined : 0,
-            width: narrow ? "100vw" : "min(460px,96vw)",
-            maxWidth: "100vw",
-            boxSizing: "border-box",
-            overflow: "hidden",
-            overscrollBehavior: "contain",
-            background: "var(--surf)",
-            borderLeft: narrow ? "none" : "0.5px solid var(--bdr)",
-            zIndex: 901,
-            display: "flex",
-            flexDirection: "column",
-            boxShadow: narrow ? "none" : "-24px 0 70px rgba(0,0,0,.35)"
-          }}>
-            <div style={{ padding: narrow ? "12px 14px" : "14px 16px", borderBottom: "0.5px solid var(--bdr)", background: "var(--elev)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <span style={{ width: 32, height: 32, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 850, flexShrink: 0 }}>✦</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Tư vấn AI danh mục</div>
-                  <div style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
-                </div>
-              </div>
-              <button type="button" onClick={() => setChatOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--t2)", cursor: "pointer", fontSize: 15, flexShrink: 0 }}>
-                ×
-              </button>
-            </div>
-
-            {hasAnalysis && (
-              <div style={{ margin: narrow ? "10px 14px 0" : "12px 16px 0", background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "10px 12px", flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
-                <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 7, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".05em" }}>Danh mục đang phân tích</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {analyzed.map((row) => {
-                    const cat = cats.find((item) => item.key === row.cat);
-                    return (
-                      <span key={row.ticker} style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 5, background: `${cat?.color || "var(--t3)"}20`, color: cat?.color || "var(--t3)", border: `0.5px solid ${cat?.color || "var(--bdr)"}44` }}>
-                        {row.ticker}
-                      </span>
-                    );
-                  })}
-                </div>
-                <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-                  <span style={{ fontSize: 18, fontWeight: 850, color: score >= 70 ? "#0ca30c" : score >= 50 ? "#eda100" : "#e34948", ...mono }}>{score}/100</span>
-                  <span style={{ flex: "1 1 180px", minWidth: 0, fontSize: 10, color: "var(--t3)", overflowWrap: "anywhere" }}>{counts.dd} đúng sóng đúng ngành · {counts.ss} sai sóng sai ngành</span>
-                </div>
-              </div>
-            )}
-
-            <div ref={panelRef} style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", gap: 10, padding: narrow ? "12px 14px" : "14px 16px", overscrollBehavior: "contain" }}>
-              {msgs.map((msg, index) => (
-                <PortfolioMsgBubble key={`panel-${msg.role}-${index}-${msg.text}`} role={msg.role} text={msg.text} panel />
-              ))}
-            </div>
-
-            <div style={{ padding: narrow ? "9px 14px" : "10px 16px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "0.5px solid var(--bdr)", minWidth: 0 }}>
-              {["Mã nào đúng sóng đúng ngành?", "Ngành nào đang dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng 3-5-2?", "So sánh các mã?"].map((text) => (
-                <button key={text} type="button" onClick={() => sendPortfolioMsg(text, true)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "5px 9px", fontSize: 11, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
-                  {text}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, padding: narrow ? "10px 14px calc(10px + env(safe-area-inset-bottom, 0px))" : "12px 16px", borderTop: "0.5px solid var(--bdr)", alignItems: "flex-end", minWidth: 0 }}>
-              <textarea
-                autoFocus
-                rows={1}
-                value={panelVal}
-                onChange={(event) => setPanelVal(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    sendPortfolioMsg(panelVal, true);
-                  }
-                }}
-                placeholder="Hỏi bất cứ điều gì về danh mục..."
-                style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 90, resize: "none", padding: "8px 12px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: narrow ? 16 : 12, lineHeight: 1.5, outline: "none", fontFamily: "inherit" }}
-              />
-              <button type="button" onClick={() => sendPortfolioMsg(panelVal, true)} disabled={chatLoading || !panelVal.trim()} style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: chatLoading || !panelVal.trim() ? "not-allowed" : "pointer", opacity: chatLoading || !panelVal.trim() ? 0.55 : 1, flexShrink: 0 }}>
-                ➤
-              </button>
-            </div>
-          </aside>
-        </>
-      )}
+      <PortfolioChatPanel
+        open={chatOpen}
+        narrow={narrow}
+        onClose={() => setChatOpen(false)}
+        msgs={msgs}
+        loading={chatLoading}
+        value={panelVal}
+        onChange={setPanelVal}
+        onSend={(text) => sendPortfolioMsg(text, true)}
+        hasAnalysis={hasAnalysis}
+        analyzed={analyzed}
+        cats={cats}
+        score={score}
+        counts={counts}
+      />
     </>
   );
 }
@@ -1190,8 +1020,8 @@ function WaveTimeline({ events, recentDates, narrow }) {
           const lastPoint = event.points.at(-1);
           const isActive = Boolean(recentCut && lastPoint && lastPoint.date >= recentCut);
           return (
-            <div key={event.key} style={{ display: "flex", alignItems: "center", minHeight: WAVE_ROW_HEIGHT, borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer", background: isActive ? "rgba(124,58,237,.04)" : undefined }} onClick={() => nav("lo-trinh-dan-song")}>
-              <div style={{ width: nameWidth, flexShrink: 0, fontSize: 10, fontWeight: event.isCore ? 750 : 550, padding: "0 8px", textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", borderRight: "0.5px solid var(--bdr)", color: event.isCore ? "#F59E0B" : "var(--t2)" }} title={event.name}>{event.name}</div>
+            <div key={event.key} style={{ display: "flex", alignItems: "center", minHeight: WAVE_ROW_HEIGHT, borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer" }} onClick={() => nav("lo-trinh-dan-song")}>
+              <div style={{ width: nameWidth, flexShrink: 0, fontSize: 10, fontWeight: event.isCore ? 750 : 550, padding: "0 8px", textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", borderRight: "0.5px solid var(--bdr)", color: "var(--t2)" }} title={event.name}>{event.name}</div>
               <div style={{ flex: 1, position: "relative", height: WAVE_ROW_HEIGHT, minWidth: 0 }}>
                 {ticks.map((tick) => <span key={tick.key} style={{ position: "absolute", top: 0, bottom: 0, left: `${tick.left}%`, width: 1, background: "var(--bdr)", opacity: 0.4 }} />)}
                 {event.points.map((point) => {
@@ -1347,7 +1177,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
       items.push({ kind: "ma", type: row.signal === "MUA" ? "mua" : "ban", time: row.date ? fmtFull(row.date) : "Live", title: row.ticker, tag: row.signal === "MUA" ? "MUA" : "BÁN", sub: `${row.signal === "MUA" ? "Tín hiệu mua" : "Tín hiệu bán"}${row.percent != null ? ` ${row.percent}%` : ""}${Number.isFinite(row.price) ? ` · Giá ${fmtNum(row.price)}` : ""}` });
     }
     for (const row of topRows.slice(0, 8)) {
-      items.push({ kind: "ma", type: "smdt", time: "SMDT", title: row.ticker, tag: "SMDT", sub: `${row.industry} · SMDT đạt ${row.smdt.toFixed(1)}% · ${sigLabel(row.sig)}` });
+      items.push({ kind: "ma", type: "smdt", time: "SMDT", title: row.ticker, tag: "SMDT", industry: row.industry, sub: `SMDT đạt ${row.smdt.toFixed(1)}% · ${sigLabel(row.sig)}` });
     }
     for (const row of branchRows.slice(0, 8)) {
       items.push({ kind: "ng", type: logToneForSig(row.sig), time: "Ngành", title: row.label, tag: sigLabel(row.sig), sub: `Dòng tiền ngành đang ở trạng thái ${sigLabel(row.sig).toLowerCase()}` });
@@ -1397,11 +1227,14 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
                 <i className={`ti ${item.kind === "ng" ? "ti-building-community" : tone.icon}`} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 650, color: "var(--t1)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 11, fontWeight: 650, color: item.kind === "ng" ? "var(--t2)" : "var(--t1)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   {item.title}
                   <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 3, whiteSpace: "nowrap", color: tone.color, background: tone.bg, border: `0.5px solid ${tone.color}33` }}>{item.tag}</span>
                 </div>
-                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, lineHeight: 1.5 }}>{item.sub}</div>
+                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, lineHeight: 1.5 }}>
+                  {item.industry && <><span style={{ color: "var(--t2)" }}>{item.industry}</span> · </>}
+                  {item.sub}
+                </div>
               </div>
               <div style={{ fontSize: 10, color: "var(--t4)", whiteSpace: "nowrap" }}>{item.time}</div>
             </div>
@@ -1707,6 +1540,9 @@ export function ModDashboard() {
   const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore)).slice(0, 10);
   const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore)).slice(0, 10);
   const signalLatestDate = latestStockSignalDate || stockSignalRows.find((row) => row.date)?.date || activeCashTickerDate;
+  const waveCircleLoading = stockWave.status === "loading" && !waveLatest;
+  const branchCashLoading = cashBranch.status === "loading" && !branchCashRows.length;
+  const tickerCashLoading = cashTicker.status === "loading" && !cashTickerRows.length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1716,6 +1552,7 @@ export function ModDashboard() {
           maCount={waveTotal}
           reliability={waveLatest?.reliability ?? 0}
           onDetail={() => nav("do-song")}
+          loading={waveCircleLoading}
         />
 
         <DashboardCard onClick={() => nav("dong-tien-nganh")}>
@@ -1725,6 +1562,7 @@ export function ModDashboard() {
             rightTitle="Ngành phụ"
             leftItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.core[sig], color: DONUT_COLORS[sig] }))}
             rightItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.other[sig], color: DONUT_COLORS[sig] }))}
+            loading={branchCashLoading}
           />
           <DotLegend square items={[
             { label: "Nhen nhóm", color: DONUT_COLORS.sn },
@@ -1741,6 +1579,7 @@ export function ModDashboard() {
             rightTitle="Phụ"
             leftItems={SIG_ORDER.map((sig) => ({ value: cashTickerCounts.core[sig], color: DONUT_COLORS[sig] }))}
             rightItems={SIG_ORDER.map((sig) => ({ value: cashTickerCounts.other[sig], color: DONUT_COLORS[sig] }))}
+            loading={tickerCashLoading}
           />
           <DotLegend square items={[
             { label: "Nhen nhóm", color: DONUT_COLORS.sn },
@@ -1761,6 +1600,7 @@ export function ModDashboard() {
           rightRows={smdtBranchOther}
           defaultTab="other"
           navId="smdt-nganh"
+          rowNameColor="var(--t2)"
         />
         <SmdtPreview
           title="SMDT cổ phiếu"

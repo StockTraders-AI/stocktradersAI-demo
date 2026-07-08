@@ -23,7 +23,7 @@ export function MobileDashboard() {
   const mod = MODULES[curMod];
 
   return (
-    <div style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", position: "relative", background: "var(--bg)", color: "var(--t1)" }}>
+    <div data-mobile-dashboard-scroll="true" style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", position: "relative", background: "var(--bg)", color: "var(--t1)" }}>
       {drawerOpen && (
         <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.66)", zIndex: 40, animation: "fadeIn .2s" }} />
       )}

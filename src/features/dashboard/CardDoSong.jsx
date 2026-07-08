@@ -72,11 +72,28 @@ const LEGEND = [
   { label: "Bán", c: "#e34948" },
 ];
 
+function WaveLoadingRing() {
+  return (
+    <div
+      className="wtds-dashboard-donut-loading"
+      aria-label="Đang tải dữ liệu"
+      role="status"
+      style={{ "--wtds-donut-size": "180px" }}
+    >
+      <div className="wtds-donut-sk wtds-sk" />
+      <div className="wtds-donut-center">
+        <span className="wtds-sk wtds-sk-pill wtds-center-value-sk" />
+      </div>
+    </div>
+  );
+}
+
 export default function CardDoSong({
   data = [],
   maCount = 0,
   reliability = 0,
   onDetail,
+  loading = false,
 }) {
   useEffect(() => {
     if (document.getElementById("ds-card-css")) return;
@@ -103,8 +120,12 @@ export default function CardDoSong({
           <div className="ds-title">Vòng tròn dò sóng</div>
           <div className="ds-rel">
             <span className="ds-rel-lbl">Tin cậy</span>
-            <span className="ds-rel-pct" style={{ color: relColor }}>{safeReliability}%</span>
-            {bigWave && <span className="ds-badge"><span>★</span> SÓNG LỚN</span>}
+            {loading ? (
+              <span className="wtds-sk wtds-sk-pill wtds-dashboard-confidence-sk" />
+            ) : (
+              <span className="ds-rel-pct" style={{ color: relColor }}>{safeReliability}%</span>
+            )}
+            {!loading && bigWave && <span className="ds-badge"><span>★</span> SÓNG LỚN</span>}
           </div>
         </div>
         <span
@@ -118,7 +139,7 @@ export default function CardDoSong({
         </span>
       </div>
 
-      <svg viewBox="0 0 220 220" width="100%" style={{ maxWidth: 180 }}>
+      {loading ? <WaveLoadingRing /> : <svg viewBox="0 0 220 220" width="100%" style={{ maxWidth: 180 }}>
         <circle cx={cx} cy={cy} r={r} fill="var(--elev,#171D2E)" stroke="var(--bdr,#242E42)" strokeWidth={0.5} />
         {arcs.map((arc, index) => (
           <path key={index} d={arc.path} stroke={arc.c} strokeWidth={sw} fill="none" strokeLinecap="round" />
@@ -138,7 +159,7 @@ export default function CardDoSong({
             </g>
           );
         })}
-      </svg>
+      </svg>}
 
       <div className="ds-lgd">
         {LEGEND.map((item) => (
