@@ -1,0 +1,20 @@
+export const HIST = [
+  {
+    date: "19/06",
+    dow: "T.5",
+    cm: 163,
+    mu: 32,
+    cb: 123,
+    ba: 84,
+    tc: 78,
+    today: true,
+  },
+  { date: "18/06", dow: "T.4", cm: 128, mu: 31, cb: 147, ba: 96, tc: 71 },
+  { date: "17/06", dow: "T.3", cm: 106, mu: 28, cb: 156, ba: 112, tc: 63 },
+  { date: "16/06", dow: "T.2", cm: 72, mu: 25, cb: 171, ba: 134, tc: 52 },
+  { date: "13/06", dow: "T.6", cm: 88, mu: 29, cb: 162, ba: 123, tc: 58 },
+  { date: "12/06", dow: "T.5", cm: 95, mu: 26, cb: 158, ba: 123, tc: 61 },
+  { date: "11/06", dow: "T.4", cm: 110, mu: 33, cb: 145, ba: 114, tc: 65 },
+  { date: "10/06", dow: "T.3", cm: 98, mu: 27, cb: 152, ba: 125, tc: 60 },
+  { date: "09/06", dow: "T.2", cm: 82, mu: 24, cb: 168, ba: 128, tc: 54 },
+];
