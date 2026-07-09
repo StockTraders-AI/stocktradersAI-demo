@@ -1594,8 +1594,6 @@ export function ModDashboard() {
         <SmdtPreview
           title="SMDT ngành"
           meta={`${fmtNum(branchSmdtRows.length)} ngành${smdtBranchDate ? ` · ${fmtFull(smdtBranchDate)}` : ""}`}
-          leftTitle="Chủ lực · top"
-          rightTitle="Ngành phụ · top"
           leftRows={smdtBranchCore}
           rightRows={smdtBranchOther}
           defaultTab="other"
@@ -1605,8 +1603,6 @@ export function ModDashboard() {
         <SmdtPreview
           title="SMDT cổ phiếu"
           meta={`${fmtNum(smdtTickerUniverse.length)} mã${smdtTickerDate ? ` · ${fmtFull(smdtTickerDate)}` : ""}`}
-          leftTitle="Chủ lực · top"
-          rightTitle="Ngành phụ · top"
           leftRows={tickerCoreRows}
           rightRows={tickerOtherRows}
           defaultTab="core"
