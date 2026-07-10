@@ -183,11 +183,11 @@ function strongStatusLabel(status) {
   return TOP_STATUS_META[status]?.label || "—";
 }
 
-function TopStatusBadge({ status }) {
+function TopStatusBadge({ status, compact = false }) {
   const meta = TOP_STATUS_META[status] || TOP_STATUS_META.tn;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, minWidth: 72, color: meta.color, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>
-      <i className={`ti ${meta.icon}`} style={{ fontSize: 11 }} />
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: compact ? 3 : 5, minWidth: compact ? 0 : 72, color: meta.color, fontSize: compact ? 9 : 10, fontWeight: 800, whiteSpace: "nowrap" }}>
+      <i className={`ti ${meta.icon}`} style={{ fontSize: compact ? 10 : 11 }} />
       {meta.label}
     </span>
   );
@@ -403,10 +403,10 @@ function SmdtScoreBadge({ value }) {
   );
 }
 
-function PriceChip({ value }) {
+function PriceText({ value }) {
   const price = toNumber(value);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 54, height: 24, padding: "0 8px", borderRadius: 8, border: "0.5px solid rgba(59,130,246,.30)", background: "rgba(59,130,246,.09)", color: "var(--t1)", fontSize: 10.5, fontWeight: 750, whiteSpace: "nowrap", ...mono }}>
+    <span style={{ flexShrink: 0, minWidth: 54, textAlign: "right", color: "var(--t1)", fontSize: 11, fontWeight: 650, whiteSpace: "nowrap", ...mono }}>
       {Number.isFinite(price) ? fmtNum(price) : "—"}
     </span>
   );
@@ -498,7 +498,7 @@ function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, 
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: rowNameColor, fontSize: 11, fontWeight: 700 }}>
                   {row.name}
                 </span>
-                {showPrice && <PriceChip value={row.price} />}
+                {showPrice && <PriceText value={row.price} />}
                 <SmdtScoreBadge value={row.value} />
               </>
             )}
@@ -557,6 +557,10 @@ function SignalPill({ sig, compact = false }) {
 function TopStrongTable({ rows, date, narrow }) {
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const cellPadding = narrow ? "6px 5px" : "6px 8px";
+  const firstCellPadding = narrow ? "6px 7px" : "6px 10px";
+  const headerPadding = narrow ? "5px 5px" : "5px 8px";
+  const firstHeaderPadding = narrow ? "5px 7px" : "5px 10px";
   const filtered = useMemo(() => {
     if (filter === "si") return rows.filter((row) => row.tickerSig === "si");
     if (filter === "sn") return rows.filter((row) => row.tickerSig === "sn");
@@ -589,23 +593,30 @@ function TopStrongTable({ rows, date, narrow }) {
           <Clink onClick={() => nav("top-ma-manh")}>Chi tiết ›</Clink>
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: narrow ? 520 : 0 }}>
+      <div style={{ overflowX: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 11 }}>
+          <colgroup>
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "22%" }} />
+          </colgroup>
           <thead>
             <tr style={{ background: "var(--elev)" }}>
               {["Mã", "Giá", "TH cổ phiếu", "TH ngành", "T.thái"].map((h, i) => (
-                <th key={h} style={{ padding: i === 0 ? "5px 10px" : "5px 8px", textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: i === 0 ? firstHeaderPadding : headerPadding, textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {visible.map((row) => (
               <tr key={row.ticker} onClick={() => nav("top-ma-manh")} style={{ borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer" }}>
-                <td style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{row.price ? fmtNum(row.price) : "—"}</td>
-                <td style={{ padding: "6px 8px" }}><SignalPill sig={row.tickerSig} /></td>
-                <td style={{ padding: "6px 8px" }}><SignalPill sig={row.branchSig} /></td>
-                <td style={{ padding: "6px 8px" }}><TopStatusBadge status={row.status} /></td>
+                <td style={{ padding: firstCellPadding, fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
+                <td style={{ padding: cellPadding, textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{row.price ? fmtNum(row.price) : "—"}</td>
+                <td style={{ padding: cellPadding }}><SignalPill sig={row.tickerSig} /></td>
+                <td style={{ padding: cellPadding }}><SignalPill sig={row.branchSig} /></td>
+                <td style={{ padding: cellPadding }}><TopStatusBadge status={row.status} compact={narrow} /></td>
               </tr>
             ))}
           </tbody>
@@ -1064,11 +1075,11 @@ function smdtChipTone(value) {
   return { color: "var(--t4)", bg: "var(--elev)", border: "var(--bdr)" };
 }
 
-function SmdtBarCell({ value }) {
+function SmdtBarCell({ value, compact = false }) {
   if (!Number.isFinite(value)) return <span style={{ color: "var(--t4)" }}>—</span>;
   const tone = smdtChipTone(value);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, minWidth: 62, padding: "4px 8px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap", ...mono }}>
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, minWidth: compact ? 0 : 62, padding: compact ? "3px 4px" : "4px 8px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: compact ? 10 : 11, fontWeight: 800, whiteSpace: "nowrap", ...mono }}>
       {value.toFixed(1)}
     </span>
   );
@@ -1082,6 +1093,7 @@ function PnlCell({ price, ave }) {
 }
 
 function SignalPortfolio({ rows, date, live }) {
+  const narrow = useNarrow();
   const [tab, setTab] = useState("MUA");
   const [page, setPage] = useState(1);
   const sortByTicker = (items) => [...items].sort((a, b) => a.ticker.localeCompare(b.ticker));
@@ -1118,27 +1130,27 @@ function SignalPortfolio({ rows, date, live }) {
           <Clink onClick={() => nav("top-ma-manh")}>Xem tất cả ›</Clink>
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 11, minWidth: 500 }}>
+      <div style={{ overflowX: narrow ? "hidden" : "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 11, minWidth: narrow ? 0 : 500 }}>
           <colgroup>
             {cols.map((col) => <col key={col.label} style={{ width: col.width }} />)}
           </colgroup>
           <thead>
             <tr style={{ background: "var(--elev)" }}>
               {cols.map((col, i) => (
-                <th key={col.label} style={{ padding: i === 0 ? "6px 12px" : "6px 8px", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
+                <th key={col.label} style={{ padding: narrow ? (i === 0 ? "6px 4px 6px 8px" : i === cols.length - 1 ? "6px 8px 6px 4px" : "6px 4px") : i === 0 ? "6px 12px" : "6px 8px", fontSize: narrow ? 8 : 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {visible.map((row) => (
               <tr key={`${row.ticker}-${row.date}`} style={{ borderBottom: "0.5px solid var(--bdrs)" }}>
-                <td style={{ padding: "7px 12px", fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
-                <td style={{ padding: "7px 8px", textAlign: "center" }}><SignalPill compact sig={row.cashSig || signalToSig(row.signal)} /></td>
-                <td style={{ padding: "7px 8px", textAlign: "center" }}><SmdtBarCell value={row.smdt} /></td>
-                <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{Number.isFinite(row.price) ? fmtNum(row.price) : "—"}</td>
-                <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--t2)", ...mono }}>{Number.isFinite(row.ave) ? fmtNum(row.ave) : "—"}</td>
-                <td style={{ padding: "7px 8px", textAlign: "right" }}><PnlCell price={row.price} ave={row.ave} /></td>
+                <td style={{ padding: narrow ? "7px 4px 7px 8px" : "7px 12px", fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "center" }}><SignalPill compact sig={row.cashSig || signalToSig(row.signal)} /></td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "center" }}><SmdtBarCell value={row.smdt} compact={narrow} /></td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{Number.isFinite(row.price) ? fmtNum(row.price) : "—"}</td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "right", color: "var(--t2)", ...mono }}>{Number.isFinite(row.ave) ? fmtNum(row.ave) : "—"}</td>
+                <td style={{ padding: narrow ? "7px 8px 7px 4px" : "7px 8px", textAlign: "right" }}><PnlCell price={row.price} ave={row.ave} /></td>
               </tr>
             ))}
           </tbody>
