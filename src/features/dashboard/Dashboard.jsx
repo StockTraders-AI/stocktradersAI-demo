@@ -412,49 +412,6 @@ function PriceText({ value }) {
   );
 }
 
-function SmdtTabs({ active, onChange }) {
-  const { dark } = useTheme();
-  const tabStyle = (selected, tone = "neutral") => {
-    const purple = tone === "purple";
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 5,
-      padding: "4px 10px",
-      borderRadius: 999,
-      border: selected ? `0.5px solid ${purple ? "var(--B)" : dark ? "rgba(80,95,125,.55)" : "var(--bdr)"}` : "0.5px solid transparent",
-      background: selected ? (purple ? "rgba(124,58,237,.12)" : dark ? "#101522" : "var(--surf)") : "transparent",
-      color: selected ? (purple ? "var(--B)" : "var(--t1)") : "var(--t3)",
-      fontSize: 10.5,
-      fontWeight: 800,
-      cursor: "pointer",
-      whiteSpace: "nowrap",
-      boxShadow: selected ? (dark ? "0 1px 0 rgba(255,255,255,.06) inset, 0 1px 6px rgba(0,0,0,.25)" : "0 1px 4px rgba(15,23,42,.08)") : "none",
-    };
-  };
-
-  return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: 3, borderRadius: 8, background: dark ? "#151B2C" : "var(--elev)", border: `0.5px solid ${dark ? "rgba(27,32,48,.75)" : "var(--bdr)"}`, maxWidth: "100%" }}>
-      <button type="button" aria-pressed={active === "core"} onClick={(event) => { event.stopPropagation(); onChange("core"); }} style={tabStyle(active === "core", "purple")}>
-        ⭐ Chủ lực
-      </button>
-      <button type="button" aria-pressed={active === "other"} onClick={(event) => { event.stopPropagation(); onChange("other"); }} style={tabStyle(active === "other", "purple")}>
-        Ngành phụ
-      </button>
-    </div>
-  );
-}
-
-function SmdtPreviewSectionLabel({ children }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", margin: "6px 0 0" }}>
-      <span style={{ fontSize: 9, fontWeight: 850, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
-        {children}
-      </span>
-    </div>
-  );
-}
-
 function SmdtPreviewLegend() {
   return (
     <div style={{ display: "flex", gap: "6px 12px", flexWrap: "wrap", paddingTop: 7, marginTop: 2, borderTop: "0.5px solid var(--bdr)" }}>
@@ -471,11 +428,9 @@ function SmdtPreviewLegend() {
   );
 }
 
-function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, defaultTab = "core", navId, showPrice = false, rowNameColor = "var(--t1)" }) {
-  const [tab, setTab] = useState(defaultTab);
-  const rows = tab === "core" ? leftRows : rightRows;
+function SmdtPreview({ title, meta, leftRows, rightRows, defaultTab = "core", navId, showPrice = false, rowNameColor = "var(--t1)" }) {
+  const rows = defaultTab === "core" ? leftRows : rightRows;
   const displayRows = rows.length ? [...rows, ...Array.from({ length: Math.max(0, 10 - rows.length) }, (_, index) => ({ key: `placeholder-${index}`, placeholder: true }))] : [];
-  const sectionTitle = tab === "core" ? leftTitle : rightTitle;
 
   return (
     <Card style={{ padding: "15px 16px", display: "flex", flexDirection: "column", gap: 7, cursor: "pointer", minWidth: 0, alignSelf: "start" }} onClick={() => nav(navId)}>
@@ -486,9 +441,6 @@ function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, 
         </div>
         <Clink onClick={() => nav(navId)}>Chi tiết ›</Clink>
       </div>
-
-      <SmdtTabs active={tab} onChange={setTab} />
-      <SmdtPreviewSectionLabel>{sectionTitle}</SmdtPreviewSectionLabel>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", columnGap: 18, alignContent: "start" }}>
         {displayRows.length ? displayRows.map((row) => (
