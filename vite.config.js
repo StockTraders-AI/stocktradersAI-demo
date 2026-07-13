@@ -32,7 +32,9 @@ let stockSignalDevCache = null;
 let stockSignalDevLastFetched = 0;
 let branchPathDevCache = null;
 let branchPathDevLastFetched = 0;
+const performanceDevCache = new Map();
 const BRANCH_PATH_CACHE_DURATION = 5 * 60 * 1000; // Thành phần ngành/mã ít đổi → cache dài hơn.
+const PERFORMANCE_CACHE_DURATION = 30 * 1000;
 const TOTAL_TRADE_CACHE_DURATION = 5 * 60 * 1000;
 const TOTAL_TRADE_REAL_CACHE_DURATION = 10 * 1000;
 const CACHE_DURATION = 3 * 1000; // Realtime là đường chính; proxy chỉ phục vụ snapshot ban đầu + lưới dự phòng, giữ ngắn để tươi.
@@ -908,6 +910,55 @@ function smdtDevPlugin() {
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Cache-Control", "no-store, max-age=0");
           res.end(JSON.stringify(stockSignalDevCache));
+        } else if (reqUrl.startsWith("/api/performance")) {
+          const host = req.headers.host || "localhost:3000";
+          const parsedUrl = new URL(reqUrl, `http://${host}`);
+          const branchPath = String(parsedUrl.searchParams.get("branch_path") || "").trim();
+          const date = String(parsedUrl.searchParams.get("date") || "").trim();
+          if (!branchPath) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Missing branch_path" }));
+            return;
+          }
+
+          const now = Date.now();
+          const cacheKey = `${branchPath}:${date || "latest"}`;
+          const cached = performanceDevCache.get(cacheKey);
+          if (!cached || now - cached.lastFetched > PERFORMANCE_CACHE_DURATION) {
+            try {
+              const params = new URLSearchParams({ branch_path: branchPath });
+              if (date) params.set("date", date);
+              const response = await fetch(
+                `https://stocktradersai.vn/service/data/getPerformance?${params.toString()}`,
+                {
+                  method: "POST",
+                  headers: { Accept: "application/json", "Content-Type": "application/json" },
+                  body: JSON.stringify({ branch_path: branchPath, ...(date ? { date } : {}) }),
+                },
+              );
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const data = await response.json();
+              if (data?.status && data.status !== "ok")
+                throw new Error(`API response status ${data.status}`);
+              if (!Array.isArray(data?.data))
+                throw new Error("API response missing data");
+              performanceDevCache.set(cacheKey, { data, lastFetched: now });
+            } catch (err) {
+              console.error("Local dev performance proxy fetch error:", err);
+              if (!cached) {
+                res.statusCode = 502;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ error: err.message }));
+                return;
+              }
+            }
+          }
+
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store, max-age=0");
+          res.end(JSON.stringify(performanceDevCache.get(cacheKey)?.data || cached.data));
         } else if (reqUrl.startsWith("/api/branch-path")) {
           const now = Date.now();
           if (
