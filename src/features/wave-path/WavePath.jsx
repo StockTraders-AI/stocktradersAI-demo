@@ -1100,10 +1100,19 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
       </div>
       <div style={{ overflowX: "auto" }}>
         <table style={styles.table}>
+          <colgroup>
+            <col style={{ width: 54 }} />
+            <col style={{ width: 250 }} />
+            <col style={{ width: 250 }} />
+            <col style={{ width: 120 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 126 }} />
+            <col style={{ width: 128 }} />
+          </colgroup>
           <thead>
             <tr>
               {["STT", "Mã", "Ngành", "SMDT", "HIỆU SUẤT", "Tín hiệu", "Phiên"].map((col, index) => (
-                <th key={col} style={{ ...styles.th, textAlign: index >= 3 && index <= 4 ? "right" : "left" }}>{col}</th>
+                <th key={col} style={{ ...styles.th, textAlign: index === 3 ? "center" : index === 4 ? "right" : "left" }}>{col}</th>
               ))}
             </tr>
           </thead>
@@ -1123,7 +1132,7 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
                   <div style={styles.tickerName}>{item.name}</div>
                 </td>
                 <td style={styles.tdMuted}>{item.branch}</td>
-                <td style={{ ...styles.td, textAlign: "right" }}>
+                <td style={{ ...styles.td, textAlign: "center" }}>
                   {item.value == null ? (
                     <span style={{ color: "var(--t4)" }}>--</span>
                   ) : (
@@ -1573,7 +1582,7 @@ const styles = {
   expandHint: { color: "var(--t4)", fontSize: 9, fontWeight: 700 },
   tablePanel: { marginTop: 12, background: "var(--bg)", border: "0.5px solid var(--bdr)", borderRadius: 10, padding: "12px 14px" },
   tableTitle: { display: "flex", justifyContent: "space-between", gap: 10, color: "var(--t3)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 720 },
+  table: { width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 1060 },
   th: { background: "var(--elev)", borderBottom: "0.5px solid var(--bdr)", padding: "7px 10px", color: "var(--t4)", fontSize: 9, fontWeight: 850, textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" },
   td: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t2)", fontSize: 11, verticalAlign: "middle" },
   tdMuted: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t3)", fontSize: 11 },
