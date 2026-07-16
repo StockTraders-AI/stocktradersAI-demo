@@ -1033,6 +1033,9 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
     proxy: {
       // Proxy SMDT API to avoid CORS during local dev
       "/service": {
@@ -1046,6 +1049,11 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/stocktraders-api/, ""),
       },
+    },
+  },
+  preview: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
     },
   },
 });

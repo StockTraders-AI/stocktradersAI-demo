@@ -17,6 +17,25 @@ npm run dev      # dev server on http://localhost:3000
 | `npm run build`   | Production build to `dist/`          |
 | `npm run preview` | Preview the production build         |
 
+## Auth environment
+
+Google social login uses `@react-oauth/google`.
+
+```bash
+VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+```
+
+Add local origins to the OAuth Client's Authorized JavaScript origins:
+
+```text
+http://localhost
+http://localhost:3000
+http://127.0.0.1
+http://127.0.0.1:3000
+```
+
+Then add the production domain before deployment.
+
 ## Project structure
 
 ```

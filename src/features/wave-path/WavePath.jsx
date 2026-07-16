@@ -96,7 +96,13 @@ function aliasesOfIndustry(name) {
   return INDUSTRY_ALIAS_GROUPS.find((group) => group.some((item) => normalizeName(item) === normalized)) || [name];
 }
 
+function isResidentialRealEstateServiceName(name) {
+  const normalized = normalizeName(name);
+  return normalized.includes("dịch vụ") && (normalized.includes("bđs dân cư") || (normalized.includes("bất động sản") && normalized.includes("dân cư")));
+}
+
 function pinnedOrderOfIndustry(name) {
+  if (isResidentialRealEstateServiceName(name)) return -1;
   const names = aliasesOfIndustry(name).map(normalizeName);
   return PINNED_KEYS.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeName(alias))));
 }

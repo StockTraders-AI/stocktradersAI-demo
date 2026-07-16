@@ -3,7 +3,7 @@ import { MODULES, ModuleView } from "../../app/modules";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
-export function MobileDashboard() {
+export function MobileDashboard({ session, onLogout }) {
   const [curMod, setCurMod] = useState("dashboard");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -37,7 +37,7 @@ export function MobileDashboard() {
         <Sidebar curMod={curMod} onNav={sw} compact />
       </div>
 
-      <Topbar mod={mod} isMobile onMenuToggle={() => setDrawerOpen((o) => !o)} />
+      <Topbar mod={mod} isMobile onMenuToggle={() => setDrawerOpen((o) => !o)} session={session} onLogout={onLogout} />
 
       <div style={{ padding: "14px 13px calc(18px + env(safe-area-inset-bottom,0px))", display: "flex", flexDirection: "column", gap: 13 }}>
         <ModuleView id={curMod} />

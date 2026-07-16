@@ -41,7 +41,7 @@ const INDUSTRY_ALIAS_GROUPS = [
   ["Xây dựng"],
   ["Sản xuất và Khai thác dầu khí", "Dầu khí"],
 ];
-const WAVE_CORE_BRANCH_NAMES = ["Ngân hàng", "Chứng khoán", "BĐS Dân cư", "Thép", "Xây dựng", "Sóng ngành Vin"];
+const WAVE_CORE_BRANCH_NAMES = ["Ngân hàng", "Chứng khoán", "Thép", "BĐS Dân cư", "Xây dựng", "Sóng ngành Vin"];
 const DONUT_COLORS = {
   si: "#0ca30c",
   sn: "#1baf7a",
@@ -237,9 +237,14 @@ function isCoreBranchName(name) {
   return aliasesOfIndustry(name).some((alias) => CORE_LABELS.has(alias));
 }
 
-function isWaveCoreBranchName(name) {
-  const coreNames = new Set(WAVE_CORE_BRANCH_NAMES.flatMap((item) => aliasesOfIndustry(item)).map(normalizeIndustryName));
-  return aliasesOfIndustry(name).some((alias) => coreNames.has(normalizeIndustryName(alias)));
+function isResidentialRealEstateServiceName(name) {
+  const normalized = normalizeIndustryName(name);
+  return normalized.includes("dịch vụ") && (normalized.includes("bđs dân cư") || (normalized.includes("bất động sản") && normalized.includes("dân cư")));
+}
+
+function waveCoreOrderOfIndustry(name) {
+  const names = aliasesOfIndustry(name).map(normalizeIndustryName);
+  return WAVE_CORE_BRANCH_NAMES.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeIndustryName(alias))));
 }
 
 function getLatestTrade(totalTrade, ticker) {
@@ -253,14 +258,17 @@ function EmptyHint({ children }) {
   return <div style={{ padding: 18, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>{children}</div>;
 }
 
-function DashHeader({ title, meta, action, onClick }) {
+function DashHeader({ title, meta, action, onClick, rightExtra }) {
   return (
     <div style={{ width: "100%", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>{title}</div>
         {meta && <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta}</div>}
       </div>
-      {action && <Clink onClick={onClick}>{action}</Clink>}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+        {rightExtra}
+        {action && <Clink onClick={onClick}>{action}</Clink>}
+      </div>
     </div>
   );
 }
@@ -354,6 +362,83 @@ function SplitDonuts({ leftTitle, rightTitle, leftItems, rightItems, loading = f
       <MiniDonut title={leftTitle} items={leftItems} loading={loading} />
       <div style={{ width: 1, background: "var(--bdr)", height: 100 }} />
       <MiniDonut title={rightTitle} items={rightItems} loading={loading} />
+    </div>
+  );
+}
+
+function HeaderIconButton({ icon, title, onClick }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
+      style={{
+        width: 25,
+        height: 25,
+        borderRadius: 7,
+        border: "0.5px solid var(--bdr)",
+        background: "var(--elev)",
+        color: "var(--B)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        flexShrink: 0,
+      }}
+    >
+      <i className={`ti ${icon}`} style={{ fontSize: 14 }} />
+    </button>
+  );
+}
+
+function CashFlowSignalView({ groups, loading = false }) {
+  if (loading) return <Loading label="Đang tải dữ liệu…" rows={4} pillHeight={26} style={{ width: "100%", margin: "2px 0" }} />;
+
+  const cards = [
+    { sig: "sn", icon: "ti-sprout" },
+    { sig: "si", icon: "ti-arrow-big-down-lines" },
+    { sig: "so", icon: "ti-arrow-big-up-lines" },
+    { sig: "st", icon: "ti-logout" },
+  ];
+
+  return (
+    <div style={{ width: "100%", minHeight: 166, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+      {cards.map(({ sig, icon }) => {
+        const rows = groups[sig] || [];
+        const visible = rows.slice(0, 2);
+        const extra = rows.length - visible.length;
+        const color = DONUT_COLORS[sig];
+        return (
+          <div key={sig} style={{ position: "relative", minWidth: 0, minHeight: 79, padding: "9px 10px 9px 12px", borderRadius: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 8, overflow: "hidden" }}>
+            <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: color, opacity: 0.85 }} />
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: "var(--t1)", fontSize: 22, fontWeight: 850, lineHeight: 1, ...mono }}>{fmtNum(rows.length)}</div>
+                <div style={{ marginTop: 3, color: "var(--t3)", fontSize: 9, fontWeight: 750, textTransform: "uppercase", whiteSpace: "nowrap" }}>ngành</div>
+              </div>
+              <div style={{ minWidth: 0, textAlign: "right" }}>
+                <div style={{ color: "var(--t1)", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>{sigLabel(sig)}</div>
+                <i className={`ti ${icon}`} style={{ color, fontSize: 15, marginTop: 4, opacity: 0.78 }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, overflow: "hidden", minHeight: 20 }}>
+              {visible.length ? visible.map((row) => (
+                <span key={row.key} title={row.label} style={{ maxWidth: 72, padding: "3px 6px", borderRadius: 6, background: "var(--surf)", border: "0.5px solid var(--bdr)", color: row.isCore ? "var(--t1)" : "var(--t2)", fontSize: 9, fontWeight: row.isCore ? 750 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {row.isCore && <i className="ti ti-star-filled" style={{ color: "var(--A)", fontSize: 8, marginRight: 3 }} />}
+                  {row.label}
+                </span>
+              )) : (
+                <span style={{ color: "var(--t4)", fontSize: 10 }}>—</span>
+              )}
+              {extra > 0 && <span style={{ color: "var(--t3)", fontSize: 9, fontWeight: 750, whiteSpace: "nowrap", ...mono }}>+{extra}</span>}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -897,7 +982,7 @@ function PortfolioBox({ rows, asOfDate }) {
   );
 }
 
-const WAVE_PALETTE = ["#7C3AED", "#06B6D4", "#FF9F0A", "#FF2D55", "#14B8A6", "#F59E0B", "#EC4899", "#8B5CF6", "#3DD68C", "#84CC16", "#F97316", "#A78BFA", "#6366F1", "#0EA5E9", "#22C55E", "#64748B", "#0891B2", "#DC2626"];
+const WAVE_PALETTE = ["#7C3AED", "#3DD68C", "#FF9F0A", "#06B6D4", "#1A8A4A", "#FF2D55", "#EC4899", "#F59E0B", "#8B5CF6", "#14B8A6", "#84CC16", "#F97316", "#6366F1", "#0EA5E9", "#D946EF", "#22C55E"];
 const WAVE_PAGE_SIZE = 6;
 const WAVE_AXIS_HEIGHT = 24;
 const WAVE_ROW_HEIGHT = 30;
@@ -926,16 +1011,16 @@ function monthTicks(startMs, endMs) {
 function WaveTimeline({ events, recentDates, narrow }) {
   const [mode, setMode] = useState("core");
   const [page, setPage] = useState(1);
-  const colorByKey = useMemo(() => {
-    const map = new Map();
-    events.forEach((event, index) => map.set(event.key, WAVE_PALETTE[index % WAVE_PALETTE.length]));
-    return map;
-  }, [events]);
 
   const filtered = useMemo(() => {
     return events
       .filter((event) => (mode === "core" ? event.isCore : !event.isCore))
-      .sort((a, b) => (b.points.at(-1)?.date || "").localeCompare(a.points.at(-1)?.date || ""));
+      .sort((a, b) => {
+        if (mode === "core" && a.coreOrder !== b.coreOrder) return a.coreOrder - b.coreOrder;
+        if (mode === "other" && a.isResidentialService !== b.isResidentialService) return a.isResidentialService ? 1 : -1;
+        const latest = (b.points.at(-1)?.date || "").localeCompare(a.points.at(-1)?.date || "");
+        return latest || b.peak - a.peak || a.name.localeCompare(b.name, "vi");
+      });
   }, [events, mode]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / WAVE_PAGE_SIZE));
@@ -979,7 +1064,7 @@ function WaveTimeline({ events, recentDates, narrow }) {
       </div>
       <div>
         {visible.map((event) => {
-          const color = colorByKey.get(event.key) || "#7C3AED";
+          const color = event.color || "#7C3AED";
           const lastPoint = event.points.at(-1);
           const isActive = Boolean(recentCut && lastPoint && lastPoint.date >= recentCut);
           return (
@@ -1216,6 +1301,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
 
 export function ModDashboard() {
   const narrow = useNarrow();
+  const [branchCashView, setBranchCashView] = useState("donut");
   const smdt = useSMDT();
   const cashBranch = useCashFlowBranch();
   const smdtTicker = useSMDTTicker();
@@ -1379,6 +1465,17 @@ export function ModDashboard() {
     return counts;
   }, [branchCashRows]);
 
+  const branchCashSignalGroups = useMemo(() => {
+    const groups = { si: [], sn: [], so: [], st: [] };
+    for (const row of branchCashRows) {
+      if (groups[row.sig]) groups[row.sig].push(row);
+    }
+    for (const sig of SIG_ORDER) {
+      groups[sig].sort((a, b) => Number(b.isCore) - Number(a.isCore) || a.label.localeCompare(b.label, "vi"));
+    }
+    return groups;
+  }, [branchCashRows]);
+
   const stockSignalByTicker = useMemo(() => new Map(stockSignal.rows.map((row) => [row.ticker, row])), [stockSignal.rows]);
   const smdtTickerDatesDesc = useMemo(() => sortDatesDesc(smdtTicker.datesAsc), [smdtTicker.datesAsc]);
   const smdtTickerDateIndex = useMemo(() => findDateIndex(smdtTickerDatesDesc, toDateInputValue(smdtTickerDate)), [smdtTickerDate, smdtTickerDatesDesc]);
@@ -1475,15 +1572,31 @@ export function ModDashboard() {
 
   const waveEvents = useMemo(() => {
     const windowStart = waveWindowDates[0] || "";
-    return branchCross.branches.map((branch) => {
+    return branchCross.branches.map((branch, index) => {
       const row = branchCross.matrix[branch.key] || {};
       const points = Object.keys(row)
         .filter((date) => date >= windowStart)
         .sort()
         .map((date) => ({ date, value: toNumber(row[date]) }))
         .filter((point) => Number.isFinite(point.value));
-      return { key: branch.key, name: branch.label, isCore: isWaveCoreBranchName(branch.key) || isWaveCoreBranchName(branch.label), points, peak: Math.max(0, ...points.map((p) => p.value)) };
-    }).sort((a, b) => b.peak - a.peak);
+      const isResidentialService = isResidentialRealEstateServiceName(branch.key) || isResidentialRealEstateServiceName(branch.label);
+      const coreOrder = isResidentialService ? -1 : Math.max(waveCoreOrderOfIndustry(branch.key), waveCoreOrderOfIndustry(branch.label));
+      const isCore = coreOrder >= 0;
+      return {
+        key: branch.key,
+        name: branch.key === "BĐS Dân cư" ? "BĐS Dân cư" : branch.label,
+        color: WAVE_PALETTE[index % WAVE_PALETTE.length],
+        isCore,
+        isResidentialService,
+        coreOrder: isCore ? coreOrder : 999,
+        points,
+        peak: Math.max(0, ...points.map((p) => p.value)),
+      };
+    }).sort((a, b) => {
+      if (a.coreOrder !== b.coreOrder) return a.coreOrder - b.coreOrder;
+      if (a.isResidentialService !== b.isResidentialService) return a.isResidentialService ? 1 : -1;
+      return b.peak - a.peak || a.name.localeCompare(b.name, "vi");
+    });
   }, [branchCross.branches, branchCross.matrix, waveWindowDates]);
 
   const marketWaveItems = useMemo(() => {
@@ -1520,20 +1633,38 @@ export function ModDashboard() {
         />
 
         <DashboardCard onClick={() => nav("dong-tien-nganh")}>
-          <DashHeader title="Dòng tiền ngành" meta={`${fmtNum(branchCashRows.length)} ngành${cashBranchDate ? ` · ${fmtFull(cashBranchDate)}` : ""}`} action="Chi tiết ›" onClick={() => nav("dong-tien-nganh")} />
-          <SplitDonuts
-            leftTitle="Chủ lực"
-            rightTitle="Ngành phụ"
-            leftItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.core[sig], color: DONUT_COLORS[sig] }))}
-            rightItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.other[sig], color: DONUT_COLORS[sig] }))}
-            loading={branchCashLoading}
+          <DashHeader
+            title="Dòng tiền ngành"
+            meta={`${fmtNum(branchCashRows.length)} ngành${cashBranchDate ? ` · ${fmtFull(cashBranchDate)}` : ""}`}
+            action="Chi tiết ›"
+            onClick={() => nav("dong-tien-nganh")}
+            rightExtra={(
+              <HeaderIconButton
+                icon={branchCashView === "donut" ? "ti-list-details" : "ti-chart-donut"}
+                title={branchCashView === "donut" ? "Xem theo tín hiệu dòng tiền" : "Xem dạng vòng tròn"}
+                onClick={() => setBranchCashView((view) => (view === "donut" ? "signal" : "donut"))}
+              />
+            )}
           />
-          <DotLegend square items={[
-            { label: "Nhen nhóm", color: DONUT_COLORS.sn },
-            { label: "Đổ vào", color: DONUT_COLORS.si },
-            { label: "Đang thoát", color: DONUT_COLORS.so },
-            { label: "Thoát ra", color: DONUT_COLORS.st },
-          ]} />
+          {branchCashView === "donut" ? (
+            <>
+              <SplitDonuts
+                leftTitle="Chủ lực"
+                rightTitle="Ngành phụ"
+                leftItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.core[sig], color: DONUT_COLORS[sig] }))}
+                rightItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.other[sig], color: DONUT_COLORS[sig] }))}
+                loading={branchCashLoading}
+              />
+              <DotLegend square items={[
+                { label: "Nhen nhóm", color: DONUT_COLORS.sn },
+                { label: "Đổ vào", color: DONUT_COLORS.si },
+                { label: "Đang thoát", color: DONUT_COLORS.so },
+                { label: "Thoát ra", color: DONUT_COLORS.st },
+              ]} />
+            </>
+          ) : (
+            <CashFlowSignalView groups={branchCashSignalGroups} loading={branchCashLoading} />
+          )}
         </DashboardCard>
 
         <DashboardCard onClick={() => nav("dong-tien-cp")}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMarketIndices } from "../../data/useMarketIndices";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
@@ -15,11 +15,63 @@ function useClock() {
   return now;
 }
 
-export function Topbar({ mod, isMobile, onMenuToggle }) {
+function readSessionName(session) {
+  return (
+    session?.reply?.name ||
+    session?.reply?.fullName ||
+    session?.reply?.user_name ||
+    session?.userName ||
+    session?.account ||
+    "Người dùng"
+  );
+}
+
+function readInitials(session) {
+  const source = readSessionName(session);
+  const parts = String(source)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) return "NA";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout }) {
   const { t, dark, toggle } = useTheme();
   const { indices } = useMarketIndices();
   const now = useClock();
+  const accountMenuRef = useRef(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const stamp = `${now.toLocaleDateString("vi-VN")} · ${now.toLocaleTimeString("vi-VN")}`;
+  const displayName = readSessionName(session);
+  const initials = readInitials(session);
+
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+
+    const closeOnPointerDown = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) {
+        setAccountOpen(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setAccountOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountOpen]);
+
+  const handleLogout = () => {
+    setAccountOpen(false);
+    onLogout?.();
+  };
 
   return (
     <header
@@ -76,7 +128,47 @@ export function Topbar({ mod, isMobile, onMenuToggle }) {
         <div onClick={toggle} title="Đổi Sáng/Tối" style={iconBtn}>
           <i className={`ti ${dark ? "ti-sun" : "ti-moon"}`} style={{ fontSize: 15 }} />
         </div>
-        <div style={{ width: 32, height: 32, borderRadius: "50%", background: t.Bs, border: `0.5px solid ${t.Bb}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: t.B, flexShrink: 0 }}>NA</div>
+        <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setAccountOpen((open) => !open)}
+            aria-label="Mở tài khoản"
+            aria-haspopup="menu"
+            aria-expanded={accountOpen}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: t.Bs,
+              border: `0.5px solid ${t.Bb}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              fontWeight: 700,
+              color: t.B,
+              cursor: "pointer",
+            }}
+          >
+            {initials}
+          </button>
+          {accountOpen && (
+            <div role="menu" style={accountMenu}>
+              <div style={accountHeader}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {displayName}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
+                  PREMIUM
+                </div>
+              </div>
+              <button type="button" role="menuitem" onClick={handleLogout} style={logoutBtn}>
+                <i className="ti ti-logout" style={{ fontSize: 15 }} />
+                Đăng xuất
+              </button>
+            </div>
+          )}
+        </div>
         {!isMobile && <div style={{ fontSize: 9, background: t.P, color: "#fff", borderRadius: 4, padding: "2px 6px", fontWeight: 700 }}>PREMIUM</div>}
       </div>
     </header>
@@ -86,4 +178,41 @@ export function Topbar({ mod, isMobile, onMenuToggle }) {
 const iconBtn = {
   width: 32, height: 32, borderRadius: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)",
   display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", cursor: "pointer", flexShrink: 0,
+};
+
+const accountMenu = {
+  position: "absolute",
+  top: "calc(100% + 8px)",
+  right: 0,
+  width: 184,
+  background: "var(--surf)",
+  border: "0.5px solid var(--bdr)",
+  borderRadius: 8,
+  boxShadow: "0 18px 48px rgba(0,0,0,.16)",
+  padding: 6,
+  zIndex: 80,
+};
+
+const accountHeader = {
+  padding: "8px 9px 9px",
+  borderBottom: "0.5px solid var(--bdr)",
+  marginBottom: 5,
+  minWidth: 0,
+};
+
+const logoutBtn = {
+  width: "100%",
+  height: 34,
+  border: "none",
+  borderRadius: 7,
+  background: "transparent",
+  color: "var(--R)",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "0 9px",
+  fontSize: 12,
+  fontWeight: 750,
+  cursor: "pointer",
+  textAlign: "left",
 };

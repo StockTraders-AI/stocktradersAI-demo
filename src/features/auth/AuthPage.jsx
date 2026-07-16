@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
+import { useGoogleLogin } from "@react-oauth/google";
 import { useMarketIndices } from "../../data/useMarketIndices";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
-import { loginUser } from "./authApi";
+import {
+  AccessDeniedError,
+  changePassword,
+  getAccessRights,
+  loginUser,
+  loginWithSocial,
+  registerUser,
+} from "./authApi";
 
 const NAV_ITEMS = [
   { icon: "ti-layout-dashboard", label: "Dashboard", dim: false },
@@ -14,6 +22,25 @@ const NAV_ITEMS = [
   { icon: "ti-book", label: "Kiến thức", dim: false },
   { icon: "ti-users", label: "Cộng đồng", dim: false },
 ];
+
+const SOCIAL_PROVIDERS = [
+  { id: "2", key: "google", icon: "ti-brand-google", label: "Google" },
+];
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
+async function fetchGoogleUserInfo(accessToken) {
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Không thể lấy thông tin tài khoản Google.");
+  }
+
+  return response.json();
+}
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -125,7 +152,51 @@ function TextField({ label, ...props }) {
   );
 }
 
-function LoginForm({ onSubmit, isSubmitting, error }) {
+function SocialButtons({ onSelect, disabled, prefix = "Tiếp tục với" }) {
+  const provider = SOCIAL_PROVIDERS[0];
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect?.(provider)}
+      disabled={disabled}
+      title={`${prefix} ${provider.label}`}
+      style={{ ...styles.socialBtn, ...(disabled ? styles.disabledBtn : null) }}
+    >
+      <i className={`ti ${provider.icon}`} />
+      <span>{prefix} {provider.label}</span>
+    </button>
+  );
+}
+
+function StatusMessage({ type = "notice", children }) {
+  if (!children) return null;
+  const isError = type === "error";
+  return (
+    <div role={isError ? "alert" : "status"} style={isError ? styles.errorBox : styles.noticeBox}>
+      <i className={`ti ${isError ? "ti-alert-circle" : "ti-info-circle"}`} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function AccessLockedNotice({ notice }) {
+  if (!notice) return null;
+
+  return (
+    <div role="status" style={styles.accessLockedBox}>
+      <div style={styles.accessLockedTitle}>
+        <i className="ti ti-lock-star" />
+        Tài khoản chưa có quyền truy cập
+      </div>
+      <div style={styles.accessLockedBody}>
+        Tài khoản {notice.account ? <strong>{notice.account}</strong> : "này"} đã đăng ký nhưng chưa có gói Premium hoặc chưa được mở quyền, nên chưa thể vào xem tính năng. Vui lòng mua gói hoặc liên hệ quản trị viên để kích hoạt.
+      </div>
+    </div>
+  );
+}
+
+function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, error, accessNotice }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -135,10 +206,7 @@ function LoginForm({ onSubmit, isSubmitting, error }) {
       e.preventDefault();
       onSubmit?.({ identifier, password, remember });
     }}>
-      <button type="button" style={styles.socialBtn}>
-        <i className="ti ti-brand-google" />
-        Tiếp tục với Google
-      </button>
+      <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} />
       <div style={styles.divider}><span>hoặc</span></div>
 
       <TextField label="Email hoặc số điện thoại" type="text" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
@@ -149,15 +217,11 @@ function LoginForm({ onSubmit, isSubmitting, error }) {
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} disabled={isSubmitting} />
           Ghi nhớ đăng nhập
         </label>
-        <button type="button" style={styles.linkBtn}>Quên mật khẩu?</button>
+        <button type="button" onClick={onForgotPassword} disabled={isSubmitting} style={styles.linkBtn}>Quên mật khẩu?</button>
       </div>
 
-      {error && (
-        <div role="alert" style={styles.errorBox}>
-          <i className="ti ti-alert-circle" />
-          <span>{error}</span>
-        </div>
-      )}
+      <StatusMessage type="error">{error}</StatusMessage>
+      <AccessLockedNotice notice={accessNotice} />
 
       <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
@@ -166,92 +230,256 @@ function LoginForm({ onSubmit, isSubmitting, error }) {
   );
 }
 
-function RegisterForm({ onSubmit }) {
+function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message }) {
   const [fullName, setFullName] = useState("");
-  const [identifier, setIdentifier] = useState("");
+  const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
 
   return (
     <form onSubmit={(e) => {
       e.preventDefault();
-      if (onSubmit) {
-        onSubmit({ fullName, identifier, password });
-        return;
-      }
-      setMessage("Chức năng đăng ký chưa được cấu hình API.");
+      onSubmit?.({ fullName, userName, email, phoneNumber, password });
     }}>
-      <button type="button" style={styles.socialBtn}>
-        <i className="ti ti-brand-google" />
-        Đăng ký với Google
-      </button>
+      <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} prefix="Đăng ký với" />
       <div style={styles.divider}><span>hoặc</span></div>
 
-      <TextField label="Họ và tên" type="text" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-      <TextField label="Email hoặc số điện thoại" type="text" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
-      <TextField label="Mật khẩu" type="password" placeholder="Tối thiểu 8 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <TextField label="Họ và tên" type="text" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Tài khoản" type="text" placeholder="admindemo" value={userName} onChange={(e) => setUserName(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Email" type="email" placeholder="admin@yahoo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Số điện thoại" type="tel" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Mật khẩu" type="password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
 
-      {message && (
-        <div role="status" style={styles.noticeBox}>
-          <i className="ti ti-info-circle" />
-          <span>{message}</span>
-        </div>
-      )}
+      <StatusMessage type="error">{error}</StatusMessage>
+      <StatusMessage>{message}</StatusMessage>
 
-      <button type="submit" style={styles.submitBtn}>Tạo tài khoản</button>
+      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
+        {isSubmitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+      </button>
       <div style={styles.note}>
         <i className="ti ti-info-circle" style={{ fontSize: 14 }} />
-        Tài khoản mới mặc định non-paid. Nâng cấp Premium để xem đầy đủ dữ liệu SMDT, dòng tiền và lịch sử không giới hạn.
+        Tài khoản mới mặc định non-paid. Nâng cấp Premium để xem đầy đủ dữ liệu không giới hạn.
       </div>
     </form>
   );
 }
 
-function AuthCard({ onLogin, onRegister }) {
+function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) {
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [password, setPassword] = useState("");
+
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      onSubmit?.({ phoneNumber, password });
+    }}>
+      <div style={styles.formHead}>
+        <button type="button" onClick={onBack} disabled={isSubmitting} style={styles.backBtn} title="Quay lại">
+          <i className="ti ti-arrow-left" />
+        </button>
+        <div>
+          <div style={styles.formTitle}>Quên mật khẩu</div>
+          <div style={styles.formSub}>Cập nhật mật khẩu theo số điện thoại.</div>
+        </div>
+      </div>
+
+      <TextField label="Số điện thoại" type="tel" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Mật khẩu mới" type="password" placeholder="123456" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
+
+      <StatusMessage type="error">{error}</StatusMessage>
+      <StatusMessage>{message}</StatusMessage>
+
+      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
+        {isSubmitting ? "Đang cập nhật..." : "Đổi mật khẩu"}
+      </button>
+    </form>
+  );
+}
+
+function AuthCard({ onLogin }) {
   const { t } = useTheme();
   const [tab, setTab] = useState("login");
-  const [loginState, setLoginState] = useState({ loading: false, error: "" });
+  const [state, setState] = useState({ loading: false, error: "", message: "", accessNotice: null });
   const isLogin = tab === "login";
+  const isRegister = tab === "register";
+
+  const resetState = () => setState({ loading: false, error: "", message: "", accessNotice: null });
+
+  const openTab = (nextTab) => {
+    resetState();
+    setTab(nextTab);
+  };
+
+  const completeLogin = async (session, remember = true) => {
+    const account = session.accessAccount || session.account || session.userName;
+    const accessRights = await getAccessRights({ account });
+    onLogin?.({ ...session, accessRights, remember });
+  };
+
+  const showAccessNotice = (error, account) => {
+    setState({
+      loading: false,
+      error: "",
+      message: "",
+      accessNotice: {
+        account: error?.account || account,
+        detail: error?.message,
+      },
+    });
+  };
+
+  const submitGoogleProfile = async (tokenResponse) => {
+    try {
+      const profile = await fetchGoogleUserInfo(tokenResponse.access_token);
+      const session = await loginWithSocial({
+        provider: "2",
+        socialId: profile.sub,
+        phoneNumber: "",
+        userName: profile.email || profile.sub,
+        email: profile.email || "",
+        fullName: profile.name || "",
+        avatar: profile.picture || "",
+      });
+      await completeLogin(session, true);
+    } catch (error) {
+      if (error instanceof AccessDeniedError || error?.code === "ACCESS_DENIED") {
+        showAccessNotice(error, error?.account);
+        return;
+      }
+      setState({ loading: false, error: error?.message || "Không thể đăng nhập Google.", message: "", accessNotice: null });
+    }
+  };
+
+  const googleLogin = useGoogleLogin({
+    scope: "openid email profile",
+    prompt: "select_account",
+    onSuccess: submitGoogleProfile,
+    onError: (error) => {
+      setState({
+        loading: false,
+        error: error?.error_description || error?.error || "Không thể đăng nhập Google.",
+        message: "",
+        accessNotice: null,
+      });
+    },
+    onNonOAuthError: () => {
+      setState({
+        loading: false,
+        error: "Cửa sổ đăng nhập Google đã bị đóng hoặc bị trình duyệt chặn.",
+        message: "",
+        accessNotice: null,
+      });
+    },
+  });
 
   const handleLogin = async (credentials) => {
-    setLoginState({ loading: true, error: "" });
+    setState({ loading: true, error: "", message: "", accessNotice: null });
     try {
       const session = await loginUser(credentials);
-      onLogin?.({ ...session, remember: credentials.remember });
+      await completeLogin(session, credentials.remember);
     } catch (error) {
-      setLoginState({ loading: false, error: error?.message || "Không thể đăng nhập. Vui lòng thử lại." });
+      if (error instanceof AccessDeniedError || error?.code === "ACCESS_DENIED") {
+        showAccessNotice(error, credentials.identifier);
+        return;
+      }
+      setState({ loading: false, error: error?.message || "Không thể đăng nhập. Vui lòng thử lại.", message: "", accessNotice: null });
+    }
+  };
+
+  const handleSocialLogin = async () => {
+    setState({ loading: true, error: "", message: "", accessNotice: null });
+    if (!GOOGLE_CLIENT_ID) {
+      setState({
+        loading: false,
+        error: "Thiếu VITE_GOOGLE_CLIENT_ID để đăng nhập Google.",
+        message: "",
+        accessNotice: null,
+      });
+      return;
+    }
+    googleLogin();
+  };
+
+  const handleRegister = async (payload) => {
+    setState({ loading: true, error: "", message: "", accessNotice: null });
+    try {
+      await registerUser(payload);
+      setState({
+        loading: false,
+        error: "",
+        message: "Tạo tài khoản thành công. Vui lòng đăng nhập để kiểm tra quyền truy cập.",
+        accessNotice: null,
+      });
+    } catch (error) {
+      setState({ loading: false, error: error?.message || "Không thể tạo tài khoản.", message: "", accessNotice: null });
+    }
+  };
+
+  const handleChangePassword = async (payload) => {
+    setState({ loading: true, error: "", message: "", accessNotice: null });
+    try {
+      await changePassword(payload);
+      setState({ loading: false, error: "", message: "Đổi mật khẩu thành công. Bạn có thể quay lại đăng nhập.", accessNotice: null });
+    } catch (error) {
+      setState({ loading: false, error: error?.message || "Không thể đổi mật khẩu.", message: "", accessNotice: null });
     }
   };
 
   return (
     <section style={styles.card}>
-      <div style={styles.tabs} role="tablist" aria-label="Chọn hình thức xác thực">
+      {tab !== "forgot" && (
+        <div style={styles.tabs} role="tablist" aria-label="Chọn hình thức xác thực">
         <button
           type="button"
-          onClick={() => setTab("login")}
+          onClick={() => openTab("login")}
           style={{ ...styles.tab, ...(isLogin ? { background: t.B, color: "#fff" } : null) }}
         >
           Đăng nhập
         </button>
         <button
           type="button"
-          onClick={() => setTab("register")}
-          style={{ ...styles.tab, ...(!isLogin ? { background: t.B, color: "#fff" } : null) }}
+          onClick={() => openTab("register")}
+          style={{ ...styles.tab, ...(isRegister ? { background: t.B, color: "#fff" } : null) }}
         >
           Đăng ký
         </button>
-      </div>
+        </div>
+      )}
 
-      {isLogin ? (
-        <LoginForm onSubmit={handleLogin} isSubmitting={loginState.loading} error={loginState.error} />
-      ) : (
-        <RegisterForm onSubmit={onRegister} />
+      {tab === "login" && (
+        <LoginForm
+          onSubmit={handleLogin}
+          onForgotPassword={() => openTab("forgot")}
+          onSocialLogin={handleSocialLogin}
+          isSubmitting={state.loading}
+          error={state.error}
+          accessNotice={state.accessNotice}
+        />
+      )}
+      {tab === "register" && (
+        <RegisterForm
+          onSubmit={handleRegister}
+          onSocialLogin={handleSocialLogin}
+          isSubmitting={state.loading}
+          error={state.error}
+          message={state.message}
+        />
+      )}
+      {tab === "forgot" && (
+        <ForgotPasswordForm
+          onBack={() => openTab("login")}
+          onSubmit={handleChangePassword}
+          isSubmitting={state.loading}
+          error={state.error}
+          message={state.message}
+        />
       )}
     </section>
   );
 }
 
-export function AuthPage({ onLogin, onRegister }) {
+export function AuthPage({ onLogin }) {
   const [width, setWidth] = useState(() => window.innerWidth);
   const isMobile = width < 768;
 
@@ -267,7 +495,7 @@ export function AuthPage({ onLogin, onRegister }) {
       <div style={styles.content}>
         {!isMobile && <AuthSidebar />}
         <main style={{ ...styles.main, padding: isMobile ? "24px 14px" : "40px 24px" }}>
-          <AuthCard onLogin={onLogin} onRegister={onRegister} />
+          <AuthCard onLogin={onLogin} />
         </main>
       </div>
     </div>
@@ -438,6 +666,26 @@ const styles = {
     fontWeight: 700,
     cursor: "pointer",
   },
+  socialGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 8,
+  },
+  socialIconBtn: {
+    height: 40,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    background: "var(--elev)",
+    border: "0.5px solid var(--bdr)",
+    borderRadius: 8,
+    color: "var(--t1)",
+    fontSize: 12,
+    fontWeight: 750,
+    cursor: "pointer",
+    minWidth: 0,
+  },
   divider: {
     display: "flex",
     alignItems: "center",
@@ -458,6 +706,37 @@ const styles = {
     outline: "none",
     padding: "0 11px",
     fontSize: 13,
+  },
+  formHead: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 18,
+  },
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    background: "var(--elev)",
+    border: "0.5px solid var(--bdr)",
+    color: "var(--t2)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  formTitle: {
+    color: "var(--t1)",
+    fontSize: 16,
+    fontWeight: 850,
+    lineHeight: 1.2,
+  },
+  formSub: {
+    color: "var(--t3)",
+    fontSize: 11,
+    lineHeight: 1.45,
+    marginTop: 4,
   },
   helperRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 7, fontSize: 11, color: "var(--t3)" },
   checkboxLabel: { display: "flex", alignItems: "center", gap: 7, minWidth: 0 },
@@ -487,6 +766,30 @@ const styles = {
     color: "var(--B)",
     fontSize: 11,
     lineHeight: 1.45,
+  },
+  accessLockedBox: {
+    marginTop: 14,
+    padding: "11px 12px",
+    borderRadius: 8,
+    background: "rgba(245,158,11,.1)",
+    border: "0.5px solid rgba(245,158,11,.36)",
+    color: "var(--t1)",
+    fontSize: 11,
+    lineHeight: 1.5,
+  },
+  accessLockedTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    color: "#D97706",
+    fontSize: 11,
+    fontWeight: 850,
+    textTransform: "uppercase",
+    letterSpacing: ".04em",
+    marginBottom: 5,
+  },
+  accessLockedBody: {
+    color: "var(--t2)",
   },
   submitBtn: {
     width: "100%",
