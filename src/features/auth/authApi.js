@@ -213,13 +213,17 @@ function readAccessAllowed(reply) {
       "allowed",
       "hasaccess",
       "hasright",
+      "hasrights",
       "isaccess",
       "isallowed",
       "ispaid",
+      "isright",
+      "isrights",
       "paid",
       "premium",
       "permission",
       "right",
+      "rights",
     ]),
   );
   const accessDecision = toAccessDecision(accessValue);

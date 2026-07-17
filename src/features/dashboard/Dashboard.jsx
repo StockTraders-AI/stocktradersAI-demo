@@ -1628,6 +1628,7 @@ export function ModDashboard() {
           data={marketWaveItems}
           maCount={waveTotal}
           reliability={waveLatest?.reliability ?? 0}
+          dateLabel={waveLatest?.date ? fmtFull(waveLatest.date) : ""}
           onDetail={() => nav("do-song")}
           loading={waveCircleLoading}
         />

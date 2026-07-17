@@ -12,10 +12,17 @@ if (!document.getElementById("st-global")) {
   document.head.appendChild(s);
 }
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const app = googleClientId ? (
+  <GoogleOAuthProvider clientId={googleClientId}>
+    <App />
+  </GoogleOAuthProvider>
+) : (
+  <App />
+);
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ""}>
-      <App />
-    </GoogleOAuthProvider>
+    {app}
   </StrictMode>
 );

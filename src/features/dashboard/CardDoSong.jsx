@@ -50,7 +50,9 @@ const CSS = `
 }
 .ds-card:hover{background:var(--elev,#171D2E)}
 .ds-hdr{width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.ds-hdr-main{min-width:0}
 .ds-title{font-size:12px;font-weight:750;color:var(--t1,#F0F4FF);white-space:nowrap}
+.ds-date{font-size:10px;color:var(--t3,#5C7090);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ds-rel{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
 .ds-rel-lbl{font-size:10px;color:var(--t3,#5C7090)}
 .ds-rel-pct{font-size:11px;font-weight:750}
@@ -92,6 +94,7 @@ export default function CardDoSong({
   data = [],
   maCount = 0,
   reliability = 0,
+  dateLabel = "",
   onDetail,
   loading = false,
 }) {
@@ -116,8 +119,9 @@ export default function CardDoSong({
   return (
     <div className="ds-card" onClick={onDetail}>
       <div className="ds-hdr">
-        <div>
+        <div className="ds-hdr-main">
           <div className="ds-title">Vòng tròn dò sóng</div>
+          {dateLabel && <div className="ds-date">{dateLabel}</div>}
           <div className="ds-rel">
             <span className="ds-rel-lbl">Tin cậy</span>
             {loading ? (

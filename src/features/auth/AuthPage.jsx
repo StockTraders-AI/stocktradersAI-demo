@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useMarketIndices } from "../../data/useMarketIndices";
 import { mono } from "../../styles/tokens";
@@ -169,6 +169,26 @@ function SocialButtons({ onSelect, disabled, prefix = "Tiếp tục với" }) {
   );
 }
 
+function GoogleLoginBridge({ requestKey, onSuccess, onError, onNonOAuthError }) {
+  const handledRequestRef = useRef(0);
+  const googleLogin = useGoogleLogin({
+    scope: "openid email profile",
+    prompt: "select_account",
+    onSuccess,
+    onError,
+    onNonOAuthError,
+  });
+
+  useEffect(() => {
+    if (!requestKey) return;
+    if (handledRequestRef.current === requestKey) return;
+    handledRequestRef.current = requestKey;
+    googleLogin();
+  }, [googleLogin, requestKey]);
+
+  return null;
+}
+
 function StatusMessage({ type = "notice", children }) {
   if (!children) return null;
   const isError = type === "error";
@@ -301,6 +321,7 @@ function AuthCard({ onLogin }) {
   const { t } = useTheme();
   const [tab, setTab] = useState("login");
   const [state, setState] = useState({ loading: false, error: "", message: "", accessNotice: null });
+  const [googleLoginRequest, setGoogleLoginRequest] = useState(0);
   const isLogin = tab === "login";
   const isRegister = tab === "register";
 
@@ -351,28 +372,6 @@ function AuthCard({ onLogin }) {
     }
   };
 
-  const googleLogin = useGoogleLogin({
-    scope: "openid email profile",
-    prompt: "select_account",
-    onSuccess: submitGoogleProfile,
-    onError: (error) => {
-      setState({
-        loading: false,
-        error: error?.error_description || error?.error || "Không thể đăng nhập Google.",
-        message: "",
-        accessNotice: null,
-      });
-    },
-    onNonOAuthError: () => {
-      setState({
-        loading: false,
-        error: "Cửa sổ đăng nhập Google đã bị đóng hoặc bị trình duyệt chặn.",
-        message: "",
-        accessNotice: null,
-      });
-    },
-  });
-
   const handleLogin = async (credentials) => {
     setState({ loading: true, error: "", message: "", accessNotice: null });
     try {
@@ -398,7 +397,7 @@ function AuthCard({ onLogin }) {
       });
       return;
     }
-    googleLogin();
+    setGoogleLoginRequest((request) => request + 1);
   };
 
   const handleRegister = async (payload) => {
@@ -428,6 +427,28 @@ function AuthCard({ onLogin }) {
 
   return (
     <section style={styles.card}>
+      {GOOGLE_CLIENT_ID && (
+        <GoogleLoginBridge
+          requestKey={googleLoginRequest}
+          onSuccess={submitGoogleProfile}
+          onError={(error) => {
+            setState({
+              loading: false,
+              error: error?.error_description || error?.error || "Không thể đăng nhập Google.",
+              message: "",
+              accessNotice: null,
+            });
+          }}
+          onNonOAuthError={() => {
+            setState({
+              loading: false,
+              error: "Cửa sổ đăng nhập Google đã bị đóng hoặc bị trình duyệt chặn.",
+              message: "",
+              accessNotice: null,
+            });
+          }}
+        />
+      )}
       {tab !== "forgot" && (
         <div style={styles.tabs} role="tablist" aria-label="Chọn hình thức xác thực">
         <button
