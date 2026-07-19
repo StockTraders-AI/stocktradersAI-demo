@@ -10,6 +10,8 @@ import {
   loginUser,
   loginWithSocial,
   registerUser,
+  requestOtp,
+  verifyOtp,
 } from "./authApi";
 
 const NAV_ITEMS = [
@@ -143,11 +145,31 @@ function AuthSidebar() {
   );
 }
 
-function TextField({ label, ...props }) {
+function TextField({ label, placeholder, onFocus, onBlur, ...props }) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <label style={styles.fieldGroup}>
       <span style={styles.fieldLabel}>{label}</span>
-      <input {...props} style={styles.fieldInput} />
+      <input
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        data-lpignore="true"
+        data-1p-ignore="true"
+        placeholder={focused ? "" : placeholder}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
+        {...props}
+        style={styles.fieldInput}
+      />
     </label>
   );
 }
@@ -166,6 +188,92 @@ function SocialButtons({ onSelect, disabled, prefix = "Tiếp tục với" }) {
       <i className={`ti ${provider.icon}`} />
       <span>{prefix} {provider.label}</span>
     </button>
+  );
+}
+
+function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
+  const [otp, setOtp] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [verified, setVerified] = useState(false);
+
+  useEffect(() => {
+    setOtp("");
+    setChallengeToken("");
+    setError("");
+    setMessage("");
+    setVerified(false);
+    onVerified?.("");
+  }, [phoneNumber, purpose, onVerified]);
+
+  const handleSendOtp = async () => {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    setVerified(false);
+    onVerified?.("");
+    try {
+      const result = await requestOtp({ phoneNumber, purpose });
+      setChallengeToken(result.challengeToken);
+      setOtp("");
+      setMessage(result.debugOtp ? `Đã gửi OTP. Mã test: ${result.debugOtp}` : "Đã gửi OTP đến số điện thoại của bạn.");
+    } catch (err) {
+      setError(err?.message || "Không thể gửi OTP.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await verifyOtp({ phoneNumber, purpose, otp, challengeToken });
+      setVerified(true);
+      setMessage("Xác thực OTP thành công.");
+      onVerified?.(result.verificationToken);
+    } catch (err) {
+      setVerified(false);
+      onVerified?.("");
+      setError(err?.message || "Không thể xác thực OTP.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isDisabled = disabled || busy;
+  const canVerify = Boolean(challengeToken && otp.trim().length === 6);
+
+  return (
+    <div style={styles.otpBox}>
+      <div style={styles.otpGrid}>
+        <label style={styles.otpField}>
+          <span style={styles.fieldLabel}>Mã OTP</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            placeholder="123456"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            disabled={isDisabled || verified}
+            style={styles.fieldInput}
+          />
+        </label>
+        <button type="button" onClick={handleSendOtp} disabled={isDisabled || !phoneNumber} style={{ ...styles.otpBtn, ...(isDisabled || !phoneNumber ? styles.disabledBtn : null) }}>
+          {busy ? "..." : "Gửi OTP"}
+        </button>
+        <button type="button" onClick={handleVerifyOtp} disabled={isDisabled || !canVerify || verified} style={{ ...styles.otpBtn, ...(isDisabled || !canVerify || verified ? styles.disabledBtn : null) }}>
+          {verified ? "Đã xác thực" : "Xác thực"}
+        </button>
+      </div>
+      <StatusMessage type="error">{error}</StatusMessage>
+      <StatusMessage>{message}</StatusMessage>
+    </div>
   );
 }
 
@@ -207,10 +315,10 @@ function AccessLockedNotice({ notice }) {
     <div role="status" style={styles.accessLockedBox}>
       <div style={styles.accessLockedTitle}>
         <i className="ti ti-lock-star" />
-        Tài khoản chưa có quyền truy cập
+        Chưa thuộc diện trải nghiệm Web
       </div>
       <div style={styles.accessLockedBody}>
-        Tài khoản {notice.account ? <strong>{notice.account}</strong> : "này"} đã đăng ký nhưng chưa có gói Premium hoặc chưa được mở quyền, nên chưa thể vào xem tính năng. Vui lòng mua gói hoặc liên hệ quản trị viên để kích hoạt.
+        Bạn không thuộc diện được trải nghiệm phiên bản Web đợt này, hiện chỉ dành cho khách đang sử dụng gói Premium.
       </div>
     </div>
   );
@@ -229,8 +337,8 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} />
       <div style={styles.divider}><span>hoặc</span></div>
 
-      <TextField label="Email hoặc số điện thoại" type="text" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Mật khẩu" type="password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Email hoặc số điện thoại" type="text" autoComplete="new-password" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
 
       <div style={styles.helperRow}>
         <label style={styles.checkboxLabel}>
@@ -246,6 +354,10 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
       <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
       </button>
+      <div style={styles.note}>
+        <i className="ti ti-info-circle" style={{ fontSize: 14 }} />
+        Tài khoản mới mặc định non-paid. Nâng cấp Premium để xem đầy đủ dữ liệu không giới hạn.
+      </div>
     </form>
   );
 }
@@ -256,25 +368,27 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message })
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [otpVerificationToken, setOtpVerificationToken] = useState("");
 
   return (
     <form onSubmit={(e) => {
       e.preventDefault();
-      onSubmit?.({ fullName, userName, email, phoneNumber, password });
+      onSubmit?.({ fullName, userName, email, phoneNumber, password, otpVerificationToken });
     }}>
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} prefix="Đăng ký với" />
       <div style={styles.divider}><span>hoặc</span></div>
 
-      <TextField label="Họ và tên" type="text" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Tài khoản" type="text" placeholder="admindemo" value={userName} onChange={(e) => setUserName(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Email" type="email" placeholder="admin@yahoo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Số điện thoại" type="tel" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Mật khẩu" type="password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Họ và tên" type="text" autoComplete="new-password" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Tài khoản" type="text" autoComplete="new-password" placeholder="admindemo" value={userName} onChange={(e) => setUserName(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Email" type="email" autoComplete="new-password" placeholder="admin@yahoo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Số điện thoại" type="tel" autoComplete="new-password" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} />
+      <OtpControls phoneNumber={phoneNumber} purpose="register" disabled={isSubmitting} onVerified={setOtpVerificationToken} />
+      <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
 
       <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
 
-      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
+      <button type="submit" disabled={isSubmitting || !otpVerificationToken} style={{ ...styles.submitBtn, ...(isSubmitting || !otpVerificationToken ? styles.disabledBtn : null) }}>
         {isSubmitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
       </button>
       <div style={styles.note}>
@@ -288,11 +402,12 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message })
 function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [otpVerificationToken, setOtpVerificationToken] = useState("");
 
   return (
     <form onSubmit={(e) => {
       e.preventDefault();
-      onSubmit?.({ phoneNumber, password });
+      onSubmit?.({ phoneNumber, password, otpVerificationToken });
     }}>
       <div style={styles.formHead}>
         <button type="button" onClick={onBack} disabled={isSubmitting} style={styles.backBtn} title="Quay lại">
@@ -305,12 +420,13 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
       </div>
 
       <TextField label="Số điện thoại" type="tel" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} />
+      <OtpControls phoneNumber={phoneNumber} purpose="change-password" disabled={isSubmitting} onVerified={setOtpVerificationToken} />
       <TextField label="Mật khẩu mới" type="password" placeholder="123456" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
 
       <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
 
-      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
+      <button type="submit" disabled={isSubmitting || !otpVerificationToken} style={{ ...styles.submitBtn, ...(isSubmitting || !otpVerificationToken ? styles.disabledBtn : null) }}>
         {isSubmitting ? "Đang cập nhật..." : "Đổi mật khẩu"}
       </button>
     </form>
@@ -727,6 +843,32 @@ const styles = {
     outline: "none",
     padding: "0 11px",
     fontSize: 13,
+  },
+  otpBox: {
+    margin: "-2px 0 14px",
+  },
+  otpGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 78px 88px",
+    gap: 8,
+    alignItems: "end",
+  },
+  otpField: {
+    display: "block",
+    minWidth: 0,
+  },
+  otpBtn: {
+    height: 38,
+    border: "0.5px solid var(--bdr)",
+    borderRadius: 8,
+    background: "var(--elev)",
+    color: "var(--t1)",
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
+    whiteSpace: "normal",
+    lineHeight: 1.1,
+    padding: "0 8px",
   },
   formHead: {
     display: "flex",

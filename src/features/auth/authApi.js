@@ -1,8 +1,10 @@
 const LOGIN_API_URL = import.meta.env.VITE_LOGIN_API_URL || "/service/data/getUserLogin";
 const SOCIAL_API_URL = import.meta.env.VITE_SOCIAL_LOGIN_API_URL || "/service/data/getStockSocial";
-const REGISTER_API_URL = import.meta.env.VITE_REGISTER_API_URL || "/service/data/getUserRegister";
+const REGISTER_API_URL = import.meta.env.VITE_REGISTER_API_URL || "/api/auth/register";
 const ACCESS_RIGHTS_API_URL = import.meta.env.VITE_ACCESS_RIGHTS_API_URL || "/service/data/getAccessRights";
-const CHANGE_PASSWORD_API_URL = import.meta.env.VITE_CHANGE_PASSWORD_API_URL || "/service/api/getUserChangePassword";
+const CHANGE_PASSWORD_API_URL = import.meta.env.VITE_CHANGE_PASSWORD_API_URL || "/api/auth/change-password";
+const REQUEST_OTP_API_URL = import.meta.env.VITE_REQUEST_OTP_API_URL || "/api/auth/request-otp";
+const VERIFY_OTP_API_URL = import.meta.env.VITE_VERIFY_OTP_API_URL || "/api/auth/verify-otp";
 const SUCCESS_CODE = "S0000";
 const DEVICE_ID_KEY = "st-auth-device-id";
 
@@ -372,7 +374,7 @@ export async function loginWithSocial({
   };
 }
 
-export async function registerUser({ fullName, userName, email, phoneNumber, password }) {
+export async function registerUser({ fullName, userName, email, phoneNumber, password, otpVerificationToken }) {
   const normalizedUserName = normalizeText(userName);
   const normalizedEmail = normalizeText(email);
   const normalizedPhone = normalizeText(phoneNumber);
@@ -384,6 +386,7 @@ export async function registerUser({ fullName, userName, email, phoneNumber, pas
   const { data, reply } = await postJson(
     REGISTER_API_URL,
     {
+      otpVerificationToken,
       UserRegisterRequest: {
         user_name: normalizedUserName,
         password,
@@ -402,6 +405,58 @@ export async function registerUser({ fullName, userName, email, phoneNumber, pas
     reply,
     raw: data,
   };
+}
+
+export async function requestOtp({ phoneNumber, purpose }) {
+  const normalizedPhone = normalizeText(phoneNumber);
+  const normalizedPurpose = normalizeText(purpose);
+
+  if (!normalizedPhone) {
+    throw new Error("Vui lòng nhập số điện thoại để nhận OTP.");
+  }
+
+  const response = await fetch(REQUEST_OTP_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phoneNumber: normalizedPhone,
+      purpose: normalizedPurpose,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || "Không thể gửi OTP.");
+  }
+
+  return data;
+}
+
+export async function verifyOtp({ phoneNumber, purpose, otp, challengeToken }) {
+  const normalizedPhone = normalizeText(phoneNumber);
+  const normalizedOtp = normalizeText(otp);
+
+  if (!normalizedPhone || !normalizedOtp || !challengeToken) {
+    throw new Error("Vui lòng gửi OTP và nhập mã xác thực.");
+  }
+
+  const response = await fetch(VERIFY_OTP_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phoneNumber: normalizedPhone,
+      purpose: normalizeText(purpose),
+      otp: normalizedOtp,
+      challengeToken,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || "Không thể xác thực OTP.");
+  }
+
+  return data;
 }
 
 export async function getAccessRights({ account }) {
@@ -441,7 +496,7 @@ export async function getAccessRights({ account }) {
   };
 }
 
-export async function changePassword({ phoneNumber, password }) {
+export async function changePassword({ phoneNumber, password, otpVerificationToken }) {
   const normalizedPhone = normalizeText(phoneNumber);
 
   if (!normalizedPhone || !password) {
@@ -451,6 +506,7 @@ export async function changePassword({ phoneNumber, password }) {
   const { data, reply } = await postJson(
     CHANGE_PASSWORD_API_URL,
     {
+      otpVerificationToken,
       UserChangePasswordRequest: {
         phone_number: normalizedPhone,
         password,

@@ -1,5 +1,17 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import changePasswordHandler from "./api/auth/change-password.js";
+import registerHandler from "./api/auth/register.js";
+import requestOtpHandler from "./api/auth/request-otp.js";
+import verifyOtpHandler from "./api/auth/verify-otp.js";
+import smsDlrHandler from "./api/sms/dlr.js";
+
+const serverEnv = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
+for (const [key, value] of Object.entries(serverEnv)) {
+  if (process.env[key] == null) {
+    process.env[key] = value;
+  }
+}
 
 const APP_CACHE_VERSION =
   process.env.VITE_APP_CACHE_VERSION ||
@@ -46,6 +58,13 @@ const CASH_FLOW_TICKER_REPLY_KEYS = [
 ];
 const SMDT_TICKER_REPLY_KEYS = ["SMDTTickerReply", "SMDTTickerRequest"];
 const MARKET_INDEX_TICKERS = new Set(["VNINDEX", "HNXINDEX", "UPCOM"]);
+const LOCAL_API_HANDLERS = new Map([
+  ["/api/auth/request-otp", requestOtpHandler],
+  ["/api/auth/verify-otp", verifyOtpHandler],
+  ["/api/auth/register", registerHandler],
+  ["/api/auth/change-password", changePasswordHandler],
+  ["/api/sms/dlr", smsDlrHandler],
+]);
 
 function normalizeMarketTicker(value) {
   return String(value || "")
@@ -329,6 +348,37 @@ function parseOptionalLimit(value) {
   return Number.isFinite(limit) && limit > 0 ? limit : 150;
 }
 
+function attachLocalApiResponseHelpers(res) {
+  if (!res.status) {
+    res.status = (statusCode) => {
+      res.statusCode = statusCode;
+      return res;
+    };
+  }
+  if (!res.json) {
+    res.json = (payload) => {
+      if (!res.headersSent) {
+        res.setHeader("Content-Type", "application/json");
+      }
+      res.end(JSON.stringify(payload));
+      return res;
+    };
+  }
+  return res;
+}
+
+async function handleLocalApiRoute(req, res, reqUrl) {
+  const host = req.headers.host || "localhost:3000";
+  const parsedUrl = new URL(reqUrl, `http://${host}`);
+  const handler = LOCAL_API_HANDLERS.get(parsedUrl.pathname);
+  if (!handler) return false;
+
+  req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+  attachLocalApiResponseHelpers(res);
+  await handler(req, res);
+  return true;
+}
+
 function smdtDevPlugin() {
   return {
     name: "smdt-dev-plugin",
@@ -336,6 +386,10 @@ function smdtDevPlugin() {
       server.middlewares.use(async (req, res, next) => {
         // Parse request URL
         const reqUrl = req.url || "";
+        if (await handleLocalApiRoute(req, res, reqUrl)) {
+          return;
+        }
+
         if (reqUrl.startsWith("/api/smdt-ticker")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
