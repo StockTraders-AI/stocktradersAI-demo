@@ -366,83 +366,6 @@ function SplitDonuts({ leftTitle, rightTitle, leftItems, rightItems, loading = f
   );
 }
 
-function HeaderIconButton({ icon, title, onClick }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick?.();
-      }}
-      style={{
-        width: 25,
-        height: 25,
-        borderRadius: 7,
-        border: "0.5px solid var(--bdr)",
-        background: "var(--elev)",
-        color: "var(--B)",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        flexShrink: 0,
-      }}
-    >
-      <i className={`ti ${icon}`} style={{ fontSize: 14 }} />
-    </button>
-  );
-}
-
-function CashFlowSignalView({ groups, loading = false }) {
-  if (loading) return <Loading label="Đang tải dữ liệu…" rows={4} pillHeight={26} style={{ width: "100%", margin: "2px 0" }} />;
-
-  const cards = [
-    { sig: "sn", icon: "ti-sprout" },
-    { sig: "si", icon: "ti-arrow-big-down-lines" },
-    { sig: "so", icon: "ti-arrow-big-up-lines" },
-    { sig: "st", icon: "ti-logout" },
-  ];
-
-  return (
-    <div style={{ width: "100%", minHeight: 166, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-      {cards.map(({ sig, icon }) => {
-        const rows = groups[sig] || [];
-        const visible = rows.slice(0, 2);
-        const extra = rows.length - visible.length;
-        const color = DONUT_COLORS[sig];
-        return (
-          <div key={sig} style={{ position: "relative", minWidth: 0, minHeight: 79, padding: "9px 10px 9px 12px", borderRadius: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 8, overflow: "hidden" }}>
-            <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: color, opacity: 0.85 }} />
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ color: "var(--t1)", fontSize: 22, fontWeight: 850, lineHeight: 1, ...mono }}>{fmtNum(rows.length)}</div>
-                <div style={{ marginTop: 3, color: "var(--t3)", fontSize: 9, fontWeight: 750, textTransform: "uppercase", whiteSpace: "nowrap" }}>ngành</div>
-              </div>
-              <div style={{ minWidth: 0, textAlign: "right" }}>
-                <div style={{ color: "var(--t1)", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>{sigLabel(sig)}</div>
-                <i className={`ti ${icon}`} style={{ color, fontSize: 15, marginTop: 4, opacity: 0.78 }} />
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, overflow: "hidden", minHeight: 20 }}>
-              {visible.length ? visible.map((row) => (
-                <span key={row.key} title={row.label} style={{ maxWidth: 72, padding: "3px 6px", borderRadius: 6, background: "var(--surf)", border: "0.5px solid var(--bdr)", color: row.isCore ? "var(--t1)" : "var(--t2)", fontSize: 9, fontWeight: row.isCore ? 750 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {row.isCore && <i className="ti ti-star-filled" style={{ color: "var(--A)", fontSize: 8, marginRight: 3 }} />}
-                  {row.label}
-                </span>
-              )) : (
-                <span style={{ color: "var(--t4)", fontSize: 10 }}>—</span>
-              )}
-              {extra > 0 && <span style={{ color: "var(--t3)", fontSize: 9, fontWeight: 750, whiteSpace: "nowrap", ...mono }}>+{extra}</span>}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function MiniDonut({ title, items, loading = false }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
@@ -1301,7 +1224,6 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
 
 export function ModDashboard() {
   const narrow = useNarrow();
-  const [branchCashView, setBranchCashView] = useState("donut");
   const smdt = useSMDT();
   const cashBranch = useCashFlowBranch();
   const smdtTicker = useSMDTTicker();
@@ -1463,17 +1385,6 @@ export function ModDashboard() {
       counts.all[row.sig] += 1;
     }
     return counts;
-  }, [branchCashRows]);
-
-  const branchCashSignalGroups = useMemo(() => {
-    const groups = { si: [], sn: [], so: [], st: [] };
-    for (const row of branchCashRows) {
-      if (groups[row.sig]) groups[row.sig].push(row);
-    }
-    for (const sig of SIG_ORDER) {
-      groups[sig].sort((a, b) => Number(b.isCore) - Number(a.isCore) || a.label.localeCompare(b.label, "vi"));
-    }
-    return groups;
   }, [branchCashRows]);
 
   const stockSignalByTicker = useMemo(() => new Map(stockSignal.rows.map((row) => [row.ticker, row])), [stockSignal.rows]);
@@ -1639,33 +1550,20 @@ export function ModDashboard() {
             meta={`${fmtNum(branchCashRows.length)} ngành${cashBranchDate ? ` · ${fmtFull(cashBranchDate)}` : ""}`}
             action="Chi tiết ›"
             onClick={() => nav("dong-tien-nganh")}
-            rightExtra={(
-              <HeaderIconButton
-                icon={branchCashView === "donut" ? "ti-list-details" : "ti-chart-donut"}
-                title={branchCashView === "donut" ? "Xem theo tín hiệu dòng tiền" : "Xem dạng vòng tròn"}
-                onClick={() => setBranchCashView((view) => (view === "donut" ? "signal" : "donut"))}
-              />
-            )}
           />
-          {branchCashView === "donut" ? (
-            <>
-              <SplitDonuts
-                leftTitle="Chủ lực"
-                rightTitle="Ngành phụ"
-                leftItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.core[sig], color: DONUT_COLORS[sig] }))}
-                rightItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.other[sig], color: DONUT_COLORS[sig] }))}
-                loading={branchCashLoading}
-              />
-              <DotLegend square items={[
-                { label: "Nhen nhóm", color: DONUT_COLORS.sn },
-                { label: "Đổ vào", color: DONUT_COLORS.si },
-                { label: "Đang thoát", color: DONUT_COLORS.so },
-                { label: "Thoát ra", color: DONUT_COLORS.st },
-              ]} />
-            </>
-          ) : (
-            <CashFlowSignalView groups={branchCashSignalGroups} loading={branchCashLoading} />
-          )}
+          <SplitDonuts
+            leftTitle="Chủ lực"
+            rightTitle="Ngành phụ"
+            leftItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.core[sig], color: DONUT_COLORS[sig] }))}
+            rightItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.other[sig], color: DONUT_COLORS[sig] }))}
+            loading={branchCashLoading}
+          />
+          <DotLegend square items={[
+            { label: "Nhen nhóm", color: DONUT_COLORS.sn },
+            { label: "Đổ vào", color: DONUT_COLORS.si },
+            { label: "Đang thoát", color: DONUT_COLORS.so },
+            { label: "Thoát ra", color: DONUT_COLORS.st },
+          ]} />
         </DashboardCard>
 
         <DashboardCard onClick={() => nav("dong-tien-cp")}>
