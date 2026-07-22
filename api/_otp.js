@@ -99,7 +99,8 @@ export function getEnvConfig() {
     phoneHourlyLimit: readPositiveInt(process.env.FPT_SMS_OTP_PHONE_HOURLY_LIMIT, DEFAULT_OTP_PHONE_HOURLY_LIMIT),
     phoneDailyLimit: readPositiveInt(process.env.FPT_SMS_OTP_PHONE_DAILY_LIMIT, DEFAULT_OTP_PHONE_DAILY_LIMIT),
     ipHourlyLimit: readPositiveInt(process.env.FPT_SMS_OTP_IP_HOURLY_LIMIT, DEFAULT_OTP_IP_HOURLY_LIMIT),
-    turnstileSecretKey: normalizeText(process.env.TURNSTILE_SECRET_KEY),
+    turnstileSecretKey: normalizeText(process.env.TURNSTILE_SECRET || process.env.TURNSTILE_SECRET_KEY),
+    turnstileSiteKey: normalizeText(process.env.VITE_TURNSTILE_SITE_KEY),
     exposeDebugOtp: process.env.FPT_SMS_EXPOSE_TEST_OTP === "1" && process.env.NODE_ENV !== "production",
     debugLog:
       process.env.FPT_SMS_DEBUG_LOG === "1" ||
@@ -114,7 +115,12 @@ export function getRequestIp(req) {
 }
 
 export async function verifyTurnstileToken({ config, token, remoteIp }) {
-  if (!config.turnstileSecretKey) return;
+  if (!config.turnstileSecretKey) {
+    if (config.turnstileSiteKey || process.env.NODE_ENV === "production") {
+      throw new Error("Thiếu TURNSTILE_SECRET để xác minh CAPTCHA server-side.");
+    }
+    return;
+  }
 
   const normalizedToken = normalizeText(token);
   if (!normalizedToken) {

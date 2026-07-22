@@ -54,7 +54,7 @@ FPT_SMS_OTP_PHONE_HOURLY_LIMIT=5
 FPT_SMS_OTP_PHONE_DAILY_LIMIT=2
 FPT_SMS_OTP_IP_HOURLY_LIMIT=20
 VITE_TURNSTILE_SITE_KEY=your-cloudflare-turnstile-site-key
-TURNSTILE_SECRET_KEY=your-cloudflare-turnstile-secret-key
+TURNSTILE_SECRET=your-cloudflare-turnstile-secret-key
 ```
 
 Production FPT base URL can be `https://api01.sms.fpt.net`. Configure FPT's DLR callback URL as `/api/sms/dlr`.

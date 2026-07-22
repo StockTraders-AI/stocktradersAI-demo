@@ -232,6 +232,7 @@ function TurnstileWidget({ siteKey, resetKey, disabled, onToken }) {
         if (cancelled || !containerRef.current || widgetRef.current) return;
         widgetRef.current = turnstile.render(containerRef.current, {
           sitekey: siteKey,
+          action: "turnstile-spin-v2",
           callback: (token) => onToken?.(token),
           "expired-callback": () => onToken?.(""),
           "error-callback": () => onToken?.(""),

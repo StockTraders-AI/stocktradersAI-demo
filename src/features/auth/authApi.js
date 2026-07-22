@@ -1,10 +1,10 @@
 const LOGIN_API_URL = import.meta.env.VITE_LOGIN_API_URL || "/service/data/getUserLogin";
 const SOCIAL_API_URL = import.meta.env.VITE_SOCIAL_LOGIN_API_URL || "/service/data/getStockSocial";
-const REGISTER_API_URL = import.meta.env.VITE_REGISTER_API_URL || "/api/auth/register";
 const ACCESS_RIGHTS_API_URL = import.meta.env.VITE_ACCESS_RIGHTS_API_URL || "/service/data/getAccessRights";
-const CHANGE_PASSWORD_API_URL = import.meta.env.VITE_CHANGE_PASSWORD_API_URL || "/api/auth/change-password";
-const REQUEST_OTP_API_URL = import.meta.env.VITE_REQUEST_OTP_API_URL || "/api/auth/request-otp";
-const VERIFY_OTP_API_URL = import.meta.env.VITE_VERIFY_OTP_API_URL || "/api/auth/verify-otp";
+const REGISTER_API_URL = "/api/auth/register";
+const CHANGE_PASSWORD_API_URL = "/api/auth/change-password";
+const REQUEST_OTP_API_URL = "/api/auth/request-otp";
+const VERIFY_OTP_API_URL = "/api/auth/verify-otp";
 const SUCCESS_CODE = "S0000";
 const DEVICE_ID_KEY = "st-auth-device-id";
 
