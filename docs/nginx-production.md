@@ -49,6 +49,20 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Must be placed before the generic /api/ location.
+    location = /api/portfolio-chat {
+        proxy_pass http://112.213.91.235:8000/api/portfolio-chat;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host 112.213.91.235;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:3000;
 
@@ -103,6 +117,14 @@ The Docker container handles these paths:
 
 These routes are implemented by `server.mjs`, which adapts the existing `api/*.js` handlers for Docker runtime.
 
+`/api/portfolio-chat` is different: it is configured by `VITE_PORTFOLIO_CHAT_API_URL` and should proxy to the Portfolio Chat backend. Use a same-origin value at build time:
+
+```env
+VITE_PORTFOLIO_CHAT_API_URL=/api/portfolio-chat
+```
+
+Do not build production with an absolute `http://...` portfolio chat URL if the app is served over HTTPS. The browser will call that URL directly, which can cause mixed-content or CORS failures and bypasses your domain Nginx proxy.
+
 ## Socket.IO Realtime
 
 Some modules connect to Socket.IO namespace `/realtime`.
@@ -136,6 +158,7 @@ sudo systemctl reload nginx
 curl -I http://127.0.0.1:3000
 curl -I http://your-domain.com
 curl -I http://your-domain.com/api/total-trade-real
+curl -I http://your-domain.com/api/portfolio-chat
 curl -I http://your-domain.com/service/data/getStockWave
 curl -I http://your-domain.com/stocktraders-api/service/data/getStockWave
 ```

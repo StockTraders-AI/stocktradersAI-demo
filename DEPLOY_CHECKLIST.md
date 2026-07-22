@@ -10,6 +10,7 @@
 [ ] Refresh route con không lỗi
 [ ] /service/... proxy được
 [ ] /stocktraders-api/... proxy được
+[ ] /api/portfolio-chat proxy được tới Portfolio Chat backend
 [ ] /socket.io/... proxy được cho Socket.IO realtime
 [ ] Các /api/... path hiện frontend đang gọi đã có backend/proxy production tương ứng
 [ ] Assets JS/CSS load đúng
