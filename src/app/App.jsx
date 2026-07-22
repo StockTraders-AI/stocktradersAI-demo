@@ -43,11 +43,26 @@ export default function App() {
     setSession(nextSession);
   };
 
+  const logout = () => {
+    try {
+      localStorage.removeItem(LEGACY_AUTH_SESSION_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+      sessionStorage.removeItem(AUTH_USER_KEY);
+    } catch {
+      /* ignore */
+    }
+    setSession(null);
+  };
+
   const isMobile = width < 768;
   return (
     <ThemeProvider>
       {session ? (
-        isMobile ? <MobileDashboard /> : <DesktopDashboard />
+        isMobile ? (
+          <MobileDashboard session={session} onLogout={logout} />
+        ) : (
+          <DesktopDashboard session={session} onLogout={logout} />
+        )
       ) : (
         <AuthPage onLogin={enterApp} />
       )}

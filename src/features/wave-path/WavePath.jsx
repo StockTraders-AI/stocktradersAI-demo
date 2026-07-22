@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNarrow } from "../../app/useNarrow";
 import { useBranchPath } from "../../data/useBranchPath";
+import { usePerformance } from "../../data/usePerformance";
 import { CORE_BRANCHES } from "../../data/useSMDT";
 import { useRealtimeSMDTBranchCrossFeed, useRealtimeSMDTTickerCrossFeed, useSMDTBranchCross, useSMDTTickerCross } from "../../data/useSMDTCross";
 import { mono } from "../../styles/tokens";
@@ -73,6 +74,15 @@ function fmtShort(date) {
   return date.slice(0, 5);
 }
 
+function toPerformanceMonth(date) {
+  if (!date) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [y, m] = date.split("-");
+    return `${m}-${y}`;
+  }
+  return date;
+}
+
 function normalizeName(value) {
   return String(value || "")
     .normalize("NFC")
@@ -86,7 +96,13 @@ function aliasesOfIndustry(name) {
   return INDUSTRY_ALIAS_GROUPS.find((group) => group.some((item) => normalizeName(item) === normalized)) || [name];
 }
 
+function isResidentialRealEstateServiceName(name) {
+  const normalized = normalizeName(name);
+  return normalized.includes("dịch vụ") && (normalized.includes("bđs dân cư") || (normalized.includes("bất động sản") && normalized.includes("dân cư")));
+}
+
 function pinnedOrderOfIndustry(name) {
+  if (isResidentialRealEstateServiceName(name)) return -1;
   const names = aliasesOfIndustry(name).map(normalizeName);
   return PINNED_KEYS.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeName(alias))));
 }
@@ -138,8 +154,26 @@ function branchAliases(row) {
   return aliases;
 }
 
+function resolveBranchPath(row, branchPath) {
+  const aliases = branchAliases(row);
+  for (const branch of branchPath.branches || []) {
+    if (branch?.path && aliases.has(normalizeName(branch.name))) return branch.path;
+  }
+  for (const alias of aliases) {
+    const path = branchPath.branchToPath?.[alias];
+    if (path) return path;
+  }
+  return "";
+}
+
 function sortTickerAsc(a, b) {
   return a.ticker.localeCompare(b.ticker, "en", { sensitivity: "base", numeric: true });
+}
+
+function resolveActiveEventDate(row, preferredDate) {
+  const events = row?.events || [];
+  if (preferredDate && events.some((event) => event.date === preferredDate)) return preferredDate;
+  return events[events.length - 1]?.date || null;
 }
 
 function getValueAtOrBefore(matrix, datesAsc, ticker, date) {
@@ -1001,58 +1035,90 @@ function MaDrawer({ item, peers, row, eventDate, tickerData, smdtData, onClose }
 function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
   const { t } = useTheme();
   const [openTicker, setOpenTicker] = useState(null);
+  const selectedBranchPath = useMemo(() => resolveBranchPath(row, branchPath), [branchPath, row]);
+  const performanceMonth = toPerformanceMonth(eventDate);
+  const performance = usePerformance(selectedBranchPath, performanceMonth);
 
   useEffect(() => {
     setOpenTicker(null);
   }, [eventDate, row.key]);
 
   const rows = useMemo(() => {
-    const aliases = branchAliases(row);
-    const allowed = Object.entries(branchPath.tickerToBranch || {})
-      .filter(([, branch]) => aliases.has(normalizeName(branch)))
-      .map(([ticker]) => ticker);
+    const uniqueByTicker = new Map();
+    for (const perf of performance.rows) {
+      const ticker = perf.ticker;
+      if (!ticker || uniqueByTicker.has(ticker)) continue;
+      const meta = tickerData.tickers.find((item) => item.key === ticker);
+      const point = getValueAtOrBefore(tickerData.matrix, tickerData.datesAsc, ticker, eventDate);
+      const signal = point.value == null
+        ? { label: "Theo dõi", color: t.t3, bg: "var(--elev)" }
+        : signalMeta(point.value, point.prev, t);
+      uniqueByTicker.set(ticker, {
+        ticker,
+        name: meta?.name || ticker,
+        branch: perf.branch || row.label,
+        value: point.value,
+        prev: point.prev,
+        date: point.date,
+        leadDate: perf.leadDate,
+        bottomDate: perf.bottomDate,
+        topDate: perf.topDate,
+        bottomPrice: perf.bottomPrice,
+        topPrice: perf.topPrice,
+        delta: perf.performancePct,
+        signal,
+      });
+    }
 
-    return allowed
-      .map((ticker) => {
-        const meta = tickerData.tickers.find((item) => item.key === ticker);
-        const point = getValueAtOrBefore(tickerData.matrix, tickerData.datesAsc, ticker, eventDate);
-        if (point.value == null) return null;
-        const signal = signalMeta(point.value, point.prev, t);
-        return {
-          ticker,
-          name: meta?.name || ticker,
-          value: point.value,
-          prev: point.prev,
-          date: point.date,
-          delta: Number.isFinite(point.prev) ? point.value - point.prev : null,
-          signal,
-        };
-      })
-      .filter(Boolean)
-      .sort(sortTickerAsc)
-      .slice(0, 60);
-  }, [branchPath.tickerToBranch, eventDate, row, t, tickerData.datesAsc, tickerData.matrix, tickerData.tickers]);
+    return [...uniqueByTicker.values()].sort(sortTickerAsc).slice(0, 60);
+  }, [eventDate, performance.rows, row.label, t, tickerData.datesAsc, tickerData.matrix, tickerData.tickers]);
 
-  if (branchPath.status === "loading" || tickerData.status === "loading") {
-    return <Loading label="Đang tải danh sách mã trong ngành…" compact style={{ marginBottom: 0, padding: "12px 4px" }} />;
+  if (branchPath.status === "loading" && !selectedBranchPath) {
+    return <Loading label="Đang tải path ngành…" compact style={{ marginBottom: 0, padding: "12px 4px" }} />;
+  }
+
+  if (!selectedBranchPath) {
+    return <div style={styles.tableNotice}>Chưa tìm được branch_path cho ngành {row.label} từ API BranchPath.</div>;
+  }
+
+  if (performance.status === "loading" && !rows.length) {
+    return <Loading label="Đang tải hiệu suất mã trong ngành…" compact style={{ marginBottom: 0, padding: "12px 4px" }} />;
+  }
+
+  if (performance.status === "error" && !rows.length) {
+    return (
+      <div style={styles.tableNotice}>
+        Lỗi tải performance: {performance.error}{" "}
+        <button type="button" onClick={performance.refresh} style={styles.textBtn}>Thử lại</button>
+      </div>
+    );
   }
 
   if (!rows.length) {
-    return <div style={styles.tableNotice}>Chưa có mã khớp ngành này từ API BranchPath/SMDT cổ phiếu.</div>;
+    return <div style={styles.tableNotice}>Chưa có mã performance cho branch_path {selectedBranchPath}.</div>;
   }
 
   return (
     <div style={styles.tablePanel}>
       <div style={styles.tableTitle}>
         <span>Mã trong dòng · {fmtDate(eventDate)}</span>
-        <span style={{ color: "var(--t4)", fontWeight: 600 }}>{rows.length} mã · <span style={{ color: "var(--A)" }}>click mã để xem chi tiết</span></span>
+        <span style={{ color: "var(--t4)", fontWeight: 600 }}>{rows.length} mã · branch_path {selectedBranchPath}</span>
       </div>
       <div style={{ overflowX: "auto" }}>
         <table style={styles.table}>
+          <colgroup>
+            <col style={{ width: 54 }} />
+            <col style={{ width: 250 }} />
+            <col style={{ width: 250 }} />
+            <col style={{ width: 120 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 126 }} />
+            <col style={{ width: 128 }} />
+          </colgroup>
           <thead>
             <tr>
-              {["STT", "Mã", "Ngành", "SMDT", "Δ", "Tín hiệu", "Phiên"].map((col, index) => (
-                <th key={col} style={{ ...styles.th, textAlign: index >= 3 && index <= 4 ? "right" : "left" }}>{col}</th>
+              {["STT", "Mã", "Ngành", "SMDT", "HIỆU SUẤT", "Tín hiệu", "Phiên"].map((col, index) => (
+                <th key={col} style={{ ...styles.th, textAlign: index === 3 ? "center" : index === 4 ? "right" : "left" }}>{col}</th>
               ))}
             </tr>
           </thead>
@@ -1060,27 +1126,42 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
             {rows.map((item, index) => (
               <tr
                 key={item.ticker}
-                onClick={() => setOpenTicker((cur) => (cur === item.ticker ? null : item.ticker))}
-                style={{ cursor: "pointer", background: openTicker === item.ticker ? "var(--Bs)" : "transparent" }}
+                onClick={() => {
+                  if (item.value == null) return;
+                  setOpenTicker((cur) => (cur === item.ticker ? null : item.ticker));
+                }}
+                style={{ cursor: item.value == null ? "default" : "pointer", background: openTicker === item.ticker ? "var(--Bs)" : "transparent" }}
               >
                 <td style={styles.tdMuted}>{index + 1}</td>
                 <td style={styles.td}>
                   <div style={{ fontWeight: 850, color: "var(--t1)", ...mono }}>{item.ticker}</div>
                   <div style={styles.tickerName}>{item.name}</div>
                 </td>
-                <td style={styles.tdMuted}>{row.label}</td>
-                <td style={{ ...styles.td, textAlign: "right" }}>
-                  <span style={{ ...styles.smdtPill, color: smdtColor(item.value, t), background: `${smdtColor(item.value, t)}18`, borderColor: `${smdtColor(item.value, t)}33`, ...mono }}>
-                    {item.value.toFixed(1)}%
-                  </span>
+                <td style={styles.tdMuted}>{item.branch}</td>
+                <td style={{ ...styles.td, textAlign: "center" }}>
+                  {item.value == null ? (
+                    <span style={{ color: "var(--t4)" }}>--</span>
+                  ) : (
+                    <span style={{ ...styles.smdtPill, color: smdtColor(item.value, t), background: `${smdtColor(item.value, t)}18`, borderColor: `${smdtColor(item.value, t)}33`, ...mono }}>
+                      {item.value.toFixed(1)}%
+                    </span>
+                  )}
                 </td>
-                <td style={{ ...styles.td, textAlign: "right", color: item.delta == null ? "var(--t4)" : item.delta >= 0 ? t.G : t.R, ...mono }}>
-                  {item.delta == null ? "--" : `${item.delta >= 0 ? "+" : ""}${item.delta.toFixed(1)}`}
+                <td
+                  style={{ ...styles.td, textAlign: "right", color: item.delta == null ? "var(--t4)" : item.delta >= 0 ? t.G : t.R, ...mono }}
+                  title={[
+                    item.bottomDate && `Đáy ${fmtDate(item.bottomDate)}${Number.isFinite(item.bottomPrice) ? `: ${item.bottomPrice}` : ""}`,
+                    item.topDate && `Đỉnh ${fmtDate(item.topDate)}${Number.isFinite(item.topPrice) ? `: ${item.topPrice}` : ""}`,
+                  ].filter(Boolean).join(" · ")}
+                >
+                  {item.delta == null ? "--" : `${item.delta >= 0 ? "+" : ""}${item.delta.toFixed(2)}%`}
                 </td>
                 <td style={styles.td}>
                   <span style={{ ...styles.signalPill, background: item.signal.bg, color: item.signal.color }}>{item.signal.label}</span>
                 </td>
-                <td style={styles.tdMuted}>{fmtDate(item.date)}</td>
+                <td style={styles.tdMuted} title="Phiên SMDT từ getSMDTTickerCross">
+                  {fmtDate(item.date)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1106,11 +1187,11 @@ function TickerTable({ row, eventDate, tickerData, branchPath, smdtData }) {
 }
 
 function DetailPanel({ row, highlightDate, onClose, tickerData, branchPath, smdtData }) {
-  const [activeDate, setActiveDate] = useState(highlightDate || row.events[row.events.length - 1]?.date || null);
+  const [activeDate, setActiveDate] = useState(() => resolveActiveEventDate(row, highlightDate));
   const panelRef = useRef(null);
 
   useEffect(() => {
-    setActiveDate(highlightDate || row.events[row.events.length - 1]?.date || null);
+    setActiveDate(resolveActiveEventDate(row, highlightDate));
   }, [highlightDate, row.key, row.events]);
 
   useEffect(() => {
@@ -1507,7 +1588,7 @@ const styles = {
   expandHint: { color: "var(--t4)", fontSize: 9, fontWeight: 700 },
   tablePanel: { marginTop: 12, background: "var(--bg)", border: "0.5px solid var(--bdr)", borderRadius: 10, padding: "12px 14px" },
   tableTitle: { display: "flex", justifyContent: "space-between", gap: 10, color: "var(--t3)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 720 },
+  table: { width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 1060 },
   th: { background: "var(--elev)", borderBottom: "0.5px solid var(--bdr)", padding: "7px 10px", color: "var(--t4)", fontSize: 9, fontWeight: 850, textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" },
   td: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t2)", fontSize: 11, verticalAlign: "middle" },
   tdMuted: { borderBottom: "0.5px solid var(--bdrs)", padding: "8px 10px", color: "var(--t3)", fontSize: 11 },

@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { useTheme } from "../../theme";
 import { useNarrow } from "../../app/useNarrow";
 import { useRealtimeStockWaveFeed, useStockWave } from "../../data/useStockWave";
-import WaveMobileModDoSong from "./components/stocktraders-mobile/modules/ModDoSong";
-import WavePcModDoSong from "./components/stocktrader-pc/modules/ModDoSong";
+import ModDoSongMobile from "./ModDoSongMobile";
+import ModDoSongDesktop from "./ModDoSongDesktop";
 
 function formatDate(dateString) {
   if (!dateString) return "--";
@@ -47,7 +47,7 @@ export function ModDoSong() {
     [rowsDesc],
   );
   const todayReliability = Number(waveData?.reliability || 0);
-  const Component = compact ? WaveMobileModDoSong : WavePcModDoSong;
+  const Component = compact ? ModDoSongMobile : ModDoSongDesktop;
 
   return (
     <Component

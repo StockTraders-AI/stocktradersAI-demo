@@ -17,6 +17,42 @@ npm run dev      # dev server on http://localhost:3000
 | `npm run build`   | Production build to `dist/`          |
 | `npm run preview` | Preview the production build         |
 
+## Auth environment
+
+Google social login uses `@react-oauth/google`.
+
+```bash
+VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+```
+
+Add local origins to the OAuth Client's Authorized JavaScript origins:
+
+```text
+http://localhost
+http://localhost:3000
+http://127.0.0.1
+http://127.0.0.1:3000
+```
+
+Then add the production domain before deployment.
+
+### FPT SMS OTP
+
+Register and forgot-password flows use serverless APIs under `/api/auth/*` so FPT credentials are never exposed to the browser.
+
+```bash
+FPT_SMS_BASE_URL=http://sandbox.sms.fpt.net
+FPT_SMS_CLIENT_ID=your-fpt-client-id
+FPT_SMS_CLIENT_SECRET=your-fpt-client-secret
+FPT_SMS_BRANDNAME=your-registered-brandname
+FPT_SMS_SCOPE=send_brandname_otp
+FPT_SMS_OTP_TEMPLATE=Ma OTP StockTraders AI cua ban la {OTP}. Ma co hieu luc trong {MINUTES} phut.
+FPT_SMS_OTP_SIGNING_SECRET=long-random-secret
+FPT_SMS_DLR_AUTHORIZATION_KEY=secret-key-shared-with-fpt
+```
+
+Production FPT base URL can be `https://api01.sms.fpt.net`. Configure FPT's DLR callback URL as `/api/sms/dlr`.
+
 ## Project structure
 
 ```

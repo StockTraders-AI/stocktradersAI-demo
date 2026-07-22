@@ -15,7 +15,7 @@ import { readDataCache, writeDataCache } from "./cacheStorage";
 
 const API_URL = "/api/branch-path";
 const CACHE_KEY = "branch_path_data_cache";
-const CACHE_SCHEMA_VERSION = 1;
+const CACHE_SCHEMA_VERSION = 2;
 
 let globalCache = null; // Giữ qua các lần remount hook.
 
@@ -32,24 +32,32 @@ function normalizeTickers(tickers) {
   return [];
 }
 
-/** payload API → { branches:[{name,val}], tickerToBranch: {ticker: name} }. */
+/** payload API → { branches:[{name,path,val}], tickerToBranch: {ticker: name} }. */
 function normalize(reply) {
   const branchs = reply?.BranchPathReply?.branchs ?? [];
   const tickerToBranch = {};
+  const tickerToBranchPath = {};
+  const branchToPath = {};
   const branches = [];
 
   for (const branch of branchs) {
     const name = normalizeName(branch?.name);
     if (!name) continue;
-    branches.push({ name, val: branch?.val });
+    const path = String(branch?.path || branch?.branch_path || "").trim();
+    branches.push({ name, path, val: branch?.val });
+    if (path && !(name in branchToPath)) branchToPath[name] = path;
+    if (path && !(name.toLowerCase() in branchToPath)) branchToPath[name.toLowerCase()] = path;
     for (const ticker of normalizeTickers(branch?.tickers)) {
       const tk = String(ticker || "").trim().toUpperCase();
       // Một mã có thể thuộc nhiều ngành; giữ ngành đầu tiên gặp.
-      if (tk && !(tk in tickerToBranch)) tickerToBranch[tk] = name;
+      if (tk && !(tk in tickerToBranch)) {
+        tickerToBranch[tk] = name;
+        if (path) tickerToBranchPath[tk] = path;
+      }
     }
   }
 
-  return { branches, tickerToBranch };
+  return { branches, tickerToBranch, tickerToBranchPath, branchToPath };
 }
 
 function getCachedData() {
@@ -60,6 +68,8 @@ function getCachedData() {
       globalCache = {
         branches: parsed.branches || [],
         tickerToBranch: parsed.tickerToBranch,
+        tickerToBranchPath: parsed.tickerToBranchPath || {},
+        branchToPath: parsed.branchToPath || {},
         updatedAt: parsed.updatedAt ? new Date(parsed.updatedAt) : null,
       };
       return globalCache;
@@ -82,7 +92,7 @@ export function useBranchPath() {
   const inFlightRef = useRef(null);
   const cached = getCachedData();
 
-  const [state, setState] = useState(() => cached || { branches: [], tickerToBranch: {} });
+  const [state, setState] = useState(() => cached || { branches: [], tickerToBranch: {}, tickerToBranchPath: {}, branchToPath: {} });
   const [status, setStatus] = useState(() => (cached ? "ready" : "loading"));
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(() => cached?.updatedAt || null);

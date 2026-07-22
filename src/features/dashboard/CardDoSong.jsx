@@ -50,7 +50,9 @@ const CSS = `
 }
 .ds-card:hover{background:var(--elev,#171D2E)}
 .ds-hdr{width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.ds-hdr-main{min-width:0}
 .ds-title{font-size:12px;font-weight:750;color:var(--t1,#F0F4FF);white-space:nowrap}
+.ds-date{font-size:10px;color:var(--t3,#5C7090);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ds-rel{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
 .ds-rel-lbl{font-size:10px;color:var(--t3,#5C7090)}
 .ds-rel-pct{font-size:11px;font-weight:750}
@@ -72,11 +74,29 @@ const LEGEND = [
   { label: "Bán", c: "#e34948" },
 ];
 
+function WaveLoadingRing() {
+  return (
+    <div
+      className="wtds-dashboard-donut-loading"
+      aria-label="Đang tải dữ liệu"
+      role="status"
+      style={{ "--wtds-donut-size": "180px" }}
+    >
+      <div className="wtds-donut-sk wtds-sk" />
+      <div className="wtds-donut-center">
+        <span className="wtds-sk wtds-sk-pill wtds-center-value-sk" />
+      </div>
+    </div>
+  );
+}
+
 export default function CardDoSong({
   data = [],
   maCount = 0,
   reliability = 0,
+  dateLabel = "",
   onDetail,
+  loading = false,
 }) {
   useEffect(() => {
     if (document.getElementById("ds-card-css")) return;
@@ -99,12 +119,17 @@ export default function CardDoSong({
   return (
     <div className="ds-card" onClick={onDetail}>
       <div className="ds-hdr">
-        <div>
+        <div className="ds-hdr-main">
           <div className="ds-title">Vòng tròn dò sóng</div>
+          {dateLabel && <div className="ds-date">{dateLabel}</div>}
           <div className="ds-rel">
             <span className="ds-rel-lbl">Tin cậy</span>
-            <span className="ds-rel-pct" style={{ color: relColor }}>{safeReliability}%</span>
-            {bigWave && <span className="ds-badge"><span>★</span> SÓNG LỚN</span>}
+            {loading ? (
+              <span className="wtds-sk wtds-sk-pill wtds-dashboard-confidence-sk" />
+            ) : (
+              <span className="ds-rel-pct" style={{ color: relColor }}>{safeReliability}%</span>
+            )}
+            {!loading && bigWave && <span className="ds-badge"><span>★</span> SÓNG LỚN</span>}
           </div>
         </div>
         <span
@@ -118,7 +143,7 @@ export default function CardDoSong({
         </span>
       </div>
 
-      <svg viewBox="0 0 220 220" width="100%" style={{ maxWidth: 180 }}>
+      {loading ? <WaveLoadingRing /> : <svg viewBox="0 0 220 220" width="100%" style={{ maxWidth: 180 }}>
         <circle cx={cx} cy={cy} r={r} fill="var(--elev,#171D2E)" stroke="var(--bdr,#242E42)" strokeWidth={0.5} />
         {arcs.map((arc, index) => (
           <path key={index} d={arc.path} stroke={arc.c} strokeWidth={sw} fill="none" strokeLinecap="round" />
@@ -138,7 +163,7 @@ export default function CardDoSong({
             </g>
           );
         })}
-      </svg>
+      </svg>}
 
       <div className="ds-lgd">
         {LEGEND.map((item) => (

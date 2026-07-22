@@ -4,7 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 /* ─────────────────────────── DESKTOP LAYOUT ──────────────────────────── */
-export function DesktopDashboard() {
+export function DesktopDashboard({ session, onLogout }) {
   const [curMod, setCurMod] = useState("dashboard");
   const mainRef = useRef(null);
 
@@ -26,7 +26,7 @@ export function DesktopDashboard() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "224px 1fr", gridTemplateRows: "52px 1fr", height: "100vh", background: "var(--bg)", color: "var(--t1)" }}>
       <Sidebar curMod={curMod} onNav={sw} />
-      <Topbar mod={mod} />
+      <Topbar mod={mod} session={session} onLogout={onLogout} />
       <main ref={mainRef} style={{ gridColumn: 2, overflowY: "auto", overflowX: "hidden", background: "var(--bg)", scrollbarWidth: "thin" }}>
         <div style={{ padding: "18px 22px 32px" }}>
           <ModuleView id={curMod} />

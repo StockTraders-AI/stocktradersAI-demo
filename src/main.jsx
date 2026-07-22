@@ -1,4 +1,5 @@
 import { StrictMode } from "react";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { createRoot } from "react-dom/client";
 import App from "./app/App.jsx";
 import { GLOBAL_CSS } from "./styles/tokens";
@@ -11,8 +12,17 @@ if (!document.getElementById("st-global")) {
   document.head.appendChild(s);
 }
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const app = googleClientId ? (
+  <GoogleOAuthProvider clientId={googleClientId}>
+    <App />
+  </GoogleOAuthProvider>
+) : (
+  <App />
+);
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
+    {app}
   </StrictMode>
 );

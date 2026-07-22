@@ -17,6 +17,8 @@ import { PORTFOLIO_MAX_CODES, loadSavedPortfolio, parsePortfolioCodes, savePortf
 import { evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "../portfolio-analysis/stock4KeyEvaluator";
 import { isCashFlowCoreIndustry } from "../cash-flow-ticker/cashFlowUtils";
 import CardDoSong from "./CardDoSong";
+import PortfolioChatPanel, { PortfolioAiLoadingStyles } from "./PortfolioChatPanel";
+import "./wave-detector-donut.css";
 
 const SIG_ORDER = ["sn", "si", "so", "st"];
 const CORE_KEYS = new Set(CORE_BRANCHES.map((b) => b.key));
@@ -39,7 +41,7 @@ const INDUSTRY_ALIAS_GROUPS = [
   ["Xây dựng"],
   ["Sản xuất và Khai thác dầu khí", "Dầu khí"],
 ];
-const WAVE_CORE_BRANCH_NAMES = ["Ngân hàng", "Chứng khoán", "BĐS Dân cư", "Thép", "Xây dựng", "Sóng ngành Vin"];
+const WAVE_CORE_BRANCH_NAMES = ["Ngân hàng", "Chứng khoán", "Thép", "BĐS Dân cư", "Xây dựng", "Sóng ngành Vin"];
 const DONUT_COLORS = {
   si: "#0ca30c",
   sn: "#1baf7a",
@@ -181,11 +183,11 @@ function strongStatusLabel(status) {
   return TOP_STATUS_META[status]?.label || "—";
 }
 
-function TopStatusBadge({ status }) {
+function TopStatusBadge({ status, compact = false }) {
   const meta = TOP_STATUS_META[status] || TOP_STATUS_META.tn;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, minWidth: 72, color: meta.color, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>
-      <i className={`ti ${meta.icon}`} style={{ fontSize: 11 }} />
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: compact ? 3 : 5, minWidth: compact ? 0 : 72, color: meta.color, fontSize: compact ? 9 : 10, fontWeight: 800, whiteSpace: "nowrap" }}>
+      <i className={`ti ${meta.icon}`} style={{ fontSize: compact ? 10 : 11 }} />
       {meta.label}
     </span>
   );
@@ -235,9 +237,14 @@ function isCoreBranchName(name) {
   return aliasesOfIndustry(name).some((alias) => CORE_LABELS.has(alias));
 }
 
-function isWaveCoreBranchName(name) {
-  const coreNames = new Set(WAVE_CORE_BRANCH_NAMES.flatMap((item) => aliasesOfIndustry(item)).map(normalizeIndustryName));
-  return aliasesOfIndustry(name).some((alias) => coreNames.has(normalizeIndustryName(alias)));
+function isResidentialRealEstateServiceName(name) {
+  const normalized = normalizeIndustryName(name);
+  return normalized.includes("dịch vụ") && (normalized.includes("bđs dân cư") || (normalized.includes("bất động sản") && normalized.includes("dân cư")));
+}
+
+function waveCoreOrderOfIndustry(name) {
+  const names = aliasesOfIndustry(name).map(normalizeIndustryName);
+  return WAVE_CORE_BRANCH_NAMES.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeIndustryName(alias))));
 }
 
 function getLatestTrade(totalTrade, ticker) {
@@ -251,14 +258,17 @@ function EmptyHint({ children }) {
   return <div style={{ padding: 18, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>{children}</div>;
 }
 
-function DashHeader({ title, meta, action, onClick }) {
+function DashHeader({ title, meta, action, onClick, rightExtra }) {
   return (
     <div style={{ width: "100%", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>{title}</div>
         {meta && <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta}</div>}
       </div>
-      {action && <Clink onClick={onClick}>{action}</Clink>}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+        {rightExtra}
+        {action && <Clink onClick={onClick}>{action}</Clink>}
+      </div>
     </div>
   );
 }
@@ -330,21 +340,37 @@ function Donut({ items, size = 180, badges = true }) {
   );
 }
 
-function SplitDonuts({ leftTitle, rightTitle, leftItems, rightItems }) {
+function DonutLoading({ size = 180 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", width: "100%", gap: 8 }}>
-      <MiniDonut title={leftTitle} items={leftItems} />
-      <div style={{ width: 1, background: "var(--bdr)", height: 100 }} />
-      <MiniDonut title={rightTitle} items={rightItems} />
+    <div
+      className="wtds-dashboard-donut-loading"
+      aria-label="Đang tải dữ liệu"
+      role="status"
+      style={{ "--wtds-donut-size": `${size}px` }}
+    >
+      <div className="wtds-donut-sk wtds-sk" />
+      <div className="wtds-donut-center">
+        <span className="wtds-sk wtds-sk-pill wtds-center-value-sk" />
+      </div>
     </div>
   );
 }
 
-function MiniDonut({ title, items }) {
+function SplitDonuts({ leftTitle, rightTitle, leftItems, rightItems, loading = false }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", width: "100%", gap: 8 }}>
+      <MiniDonut title={leftTitle} items={leftItems} loading={loading} />
+      <div style={{ width: 1, background: "var(--bdr)", height: 100 }} />
+      <MiniDonut title={rightTitle} items={rightItems} loading={loading} />
+    </div>
+  );
+}
+
+function MiniDonut({ title, items, loading = false }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: "var(--t3)" }}>{title}</div>
-      <Donut items={items} size={130} />
+      {loading ? <DonutLoading size={130} /> : <Donut items={items} size={130} />}
     </div>
   );
 }
@@ -385,47 +411,12 @@ function SmdtScoreBadge({ value }) {
   );
 }
 
-function SmdtTabs({ active, onChange }) {
-  const { dark } = useTheme();
-  const tabStyle = (selected, tone = "neutral") => {
-    const purple = tone === "purple";
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 5,
-      padding: "4px 10px",
-      borderRadius: 999,
-      border: selected ? `0.5px solid ${purple ? "var(--B)" : dark ? "rgba(80,95,125,.55)" : "var(--bdr)"}` : "0.5px solid transparent",
-      background: selected ? (purple ? "rgba(124,58,237,.12)" : dark ? "#101522" : "var(--surf)") : "transparent",
-      color: selected ? (purple ? "var(--B)" : "var(--t1)") : "var(--t3)",
-      fontSize: 10.5,
-      fontWeight: 800,
-      cursor: "pointer",
-      whiteSpace: "nowrap",
-      boxShadow: selected ? (dark ? "0 1px 0 rgba(255,255,255,.06) inset, 0 1px 6px rgba(0,0,0,.25)" : "0 1px 4px rgba(15,23,42,.08)") : "none",
-    };
-  };
-
+function PriceText({ value }) {
+  const price = toNumber(value);
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: 3, borderRadius: 8, background: dark ? "#151B2C" : "var(--elev)", border: `0.5px solid ${dark ? "rgba(27,32,48,.75)" : "var(--bdr)"}`, maxWidth: "100%" }}>
-      <button type="button" aria-pressed={active === "core"} onClick={(event) => { event.stopPropagation(); onChange("core"); }} style={tabStyle(active === "core", "purple")}>
-        ⭐ Chủ lực
-      </button>
-      <button type="button" aria-pressed={active === "other"} onClick={(event) => { event.stopPropagation(); onChange("other"); }} style={tabStyle(active === "other", "purple")}>
-        Ngành phụ
-      </button>
-    </div>
-  );
-}
-
-function SmdtPreviewSectionLabel({ children }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 0" }}>
-      <span style={{ fontSize: 9, fontWeight: 850, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>
-        {children}
-      </span>
-      <div style={{ flex: 1, height: 1, background: "var(--bdr)" }} />
-    </div>
+    <span style={{ flexShrink: 0, minWidth: 54, textAlign: "right", color: "var(--t1)", fontSize: 11, fontWeight: 650, whiteSpace: "nowrap", ...mono }}>
+      {Number.isFinite(price) ? fmtNum(price) : "—"}
+    </span>
   );
 }
 
@@ -445,11 +436,9 @@ function SmdtPreviewLegend() {
   );
 }
 
-function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, defaultTab = "core", navId }) {
-  const [tab, setTab] = useState(defaultTab);
-  const rows = tab === "core" ? leftRows : rightRows;
+function SmdtPreview({ title, meta, leftRows, rightRows, defaultTab = "core", navId, showPrice = false, rowNameColor = "var(--t1)" }) {
+  const rows = defaultTab === "core" ? leftRows : rightRows;
   const displayRows = rows.length ? [...rows, ...Array.from({ length: Math.max(0, 10 - rows.length) }, (_, index) => ({ key: `placeholder-${index}`, placeholder: true }))] : [];
-  const sectionTitle = tab === "core" ? leftTitle : rightTitle;
 
   return (
     <Card style={{ padding: "15px 16px", display: "flex", flexDirection: "column", gap: 7, cursor: "pointer", minWidth: 0, alignSelf: "start" }} onClick={() => nav(navId)}>
@@ -461,17 +450,15 @@ function SmdtPreview({ title, meta, leftTitle, rightTitle, leftRows, rightRows, 
         <Clink onClick={() => nav(navId)}>Chi tiết ›</Clink>
       </div>
 
-      <SmdtTabs active={tab} onChange={setTab} />
-      <SmdtPreviewSectionLabel>{sectionTitle}</SmdtPreviewSectionLabel>
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", columnGap: 18, alignContent: "start" }}>
         {displayRows.length ? displayRows.map((row) => (
           <div key={row.key} aria-hidden={row.placeholder || undefined} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, minHeight: 36, padding: "2px 0", borderBottom: `0.5px solid ${row.placeholder ? "transparent" : "var(--bdr)"}` }}>
             {!row.placeholder && (
               <>
-                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--t1)", fontSize: 11, fontWeight: 700 }}>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: rowNameColor, fontSize: 11, fontWeight: 700 }}>
                   {row.name}
                 </span>
+                {showPrice && <PriceText value={row.price} />}
                 <SmdtScoreBadge value={row.value} />
               </>
             )}
@@ -530,6 +517,10 @@ function SignalPill({ sig, compact = false }) {
 function TopStrongTable({ rows, date, narrow }) {
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const cellPadding = narrow ? "6px 5px" : "6px 8px";
+  const firstCellPadding = narrow ? "6px 7px" : "6px 10px";
+  const headerPadding = narrow ? "5px 5px" : "5px 8px";
+  const firstHeaderPadding = narrow ? "5px 7px" : "5px 10px";
   const filtered = useMemo(() => {
     if (filter === "si") return rows.filter((row) => row.tickerSig === "si");
     if (filter === "sn") return rows.filter((row) => row.tickerSig === "sn");
@@ -562,23 +553,30 @@ function TopStrongTable({ rows, date, narrow }) {
           <Clink onClick={() => nav("top-ma-manh")}>Chi tiết ›</Clink>
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: narrow ? 520 : 0 }}>
+      <div style={{ overflowX: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 11 }}>
+          <colgroup>
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "22%" }} />
+          </colgroup>
           <thead>
             <tr style={{ background: "var(--elev)" }}>
               {["Mã", "Giá", "TH cổ phiếu", "TH ngành", "T.thái"].map((h, i) => (
-                <th key={h} style={{ padding: i === 0 ? "5px 10px" : "5px 8px", textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: i === 0 ? firstHeaderPadding : headerPadding, textAlign: i === 1 ? "right" : "left", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {visible.map((row) => (
               <tr key={row.ticker} onClick={() => nav("top-ma-manh")} style={{ borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer" }}>
-                <td style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{row.price ? fmtNum(row.price) : "—"}</td>
-                <td style={{ padding: "6px 8px" }}><SignalPill sig={row.tickerSig} /></td>
-                <td style={{ padding: "6px 8px" }}><SignalPill sig={row.branchSig} /></td>
-                <td style={{ padding: "6px 8px" }}><TopStatusBadge status={row.status} /></td>
+                <td style={{ padding: firstCellPadding, fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
+                <td style={{ padding: cellPadding, textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{row.price ? fmtNum(row.price) : "—"}</td>
+                <td style={{ padding: cellPadding }}><SignalPill sig={row.tickerSig} /></td>
+                <td style={{ padding: cellPadding }}><SignalPill sig={row.branchSig} /></td>
+                <td style={{ padding: cellPadding }}><TopStatusBadge status={row.status} compact={narrow} /></td>
               </tr>
             ))}
           </tbody>
@@ -590,36 +588,6 @@ function TopStrongTable({ rows, date, narrow }) {
         <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
       </div>
     </Card>
-  );
-}
-
-function PortfolioMsgText({ text }) {
-  return (
-    <>
-      {String(text || "").split("\n").map((line, index) => (
-        <span key={`${line}-${index}`}>
-          {line}
-          {index < String(text || "").split("\n").length - 1 && <br />}
-        </span>
-      ))}
-    </>
-  );
-}
-
-function PortfolioMsgBubble({ role, text, panel = false }) {
-  const isAi = role === "ai" || role === "typing";
-  const isTyping = role === "typing";
-  return (
-    <div style={{ width: "100%", minWidth: 0, display: "flex", gap: 7, alignItems: "flex-start", justifyContent: isAi ? "flex-start" : "flex-end" }}>
-      {isAi && (
-        <span style={{ width: panel ? 28 : 22, height: panel ? 28 : 22, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: panel ? 12 : 10, fontWeight: 850, flexShrink: 0 }}>
-          AI
-        </span>
-      )}
-      <div style={{ maxWidth: panel && isAi ? "calc(100% - 35px)" : isAi ? "82%" : panel ? "86%" : "78%", minWidth: 0, borderRadius: isAi ? "8px 8px 8px 3px" : "8px 8px 3px 8px", padding: panel ? "9px 11px" : "7px 9px", background: isAi ? "var(--elev)" : "var(--Bs)", border: `0.5px solid ${isAi ? "var(--bdr)" : "var(--Bb)"}`, color: isAi ? "var(--t2)" : "var(--t1)", fontSize: panel ? 12 : 11, lineHeight: 1.5, overflowWrap: "anywhere", opacity: isTyping ? 0.78 : 1 }}>
-        {isTyping ? <Loading compact label={text} style={{ marginBottom: 0 }} /> : <PortfolioMsgText text={text} />}
-      </div>
-    </div>
   );
 }
 
@@ -700,7 +668,6 @@ function PortfolioBox({ rows, asOfDate }) {
   const [msgs, setMsgs] = useState([
     { role: "ai", text: "Nhập mã và bấm Phân tích, sau đó hỏi tôi về mã đúng sóng, ngành dẫn dắt, mã nên cắt hoặc phân bổ tỷ trọng." },
   ]);
-  const panelRef = useRef(null);
   const picks = useMemo(() => parsePortfolioCodes(input), [input]);
   const rowMap = useMemo(() => new Map(rows.map((row) => [row.ticker, row])), [rows]);
   const analyzed = analyzedCodes.map((ticker) => {
@@ -751,19 +718,6 @@ function PortfolioBox({ rows, asOfDate }) {
     { key: "sd", color: "#9b7cf7", label: "Đúng ngành - sai sóng" },
     { key: "ss", color: "#e34948", label: "Sai sóng - sai ngành" },
   ];
-
-  useEffect(() => {
-    if (panelRef.current) panelRef.current.scrollTop = panelRef.current.scrollHeight;
-  }, [msgs, chatOpen]);
-
-  useEffect(() => {
-    if (!chatOpen) return undefined;
-    const onKey = (event) => {
-      if (event.key === "Escape") setChatOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [chatOpen]);
 
   const updateInput = (value) => {
     setInput(value);
@@ -833,6 +787,7 @@ function PortfolioBox({ rows, asOfDate }) {
 
   return (
     <>
+      <PortfolioAiLoadingStyles />
       <Card style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -846,7 +801,7 @@ function PortfolioBox({ rows, asOfDate }) {
             value={input}
             onChange={(e) => updateInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && analyzePortfolio()}
-            style={{ flex: 1, minWidth: 0, padding: "7px 11px", borderRadius: 7, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: 11, outline: "none" }}
+            style={{ flex: 1, minWidth: 0, padding: "7px 11px", borderRadius: 7, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: narrow ? 16 : 11, outline: "none" }}
             placeholder="VCG, HHV, BVS, TCB..."
           />
           <button
@@ -904,7 +859,7 @@ function PortfolioBox({ rows, asOfDate }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: chatLoading ? "var(--A)" : "var(--G)" }}>
-              <span style={{ width: 5, height: 5, borderRadius: 999, background: chatLoading ? "var(--A)" : "var(--G)" }} />
+              <span style={{ width: 5, height: 5, borderRadius: 999, background: chatLoading ? "var(--A)" : "var(--G)", display: "inline-block", animation: "portfolio-ai-status-pulse 1.2s infinite" }} />
               {chatLoading ? "Đang hỏi" : "Sẵn sàng"}
             </span>
             <button type="button" onClick={() => setChatOpen(true)} style={{ border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--B)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 750, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -931,84 +886,26 @@ function PortfolioBox({ rows, asOfDate }) {
         </button>
       </Card>
 
-      {chatOpen && (
-        <>
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", backdropFilter: "blur(2px)", zIndex: 900 }} onClick={() => setChatOpen(false)} />
-          <aside style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: narrow ? "100vw" : "min(460px,96vw)", maxWidth: "100vw", boxSizing: "border-box", overflowX: "hidden", background: "var(--surf)", borderLeft: narrow ? "none" : "0.5px solid var(--bdr)", zIndex: 901, display: "flex", flexDirection: "column", boxShadow: narrow ? "none" : "-24px 0 70px rgba(0,0,0,.35)" }}>
-            <div style={{ padding: narrow ? "12px 14px" : "14px 16px", borderBottom: "0.5px solid var(--bdr)", background: "var(--elev)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <span style={{ width: 32, height: 32, borderRadius: 999, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 850, flexShrink: 0 }}>✦</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Tư vấn AI danh mục</div>
-                  <div style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hỏi về danh mục, sóng ngành, chiến lược</div>
-                </div>
-              </div>
-              <button type="button" onClick={() => setChatOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--surf)", color: "var(--t2)", cursor: "pointer", fontSize: 15, flexShrink: 0 }}>
-                ×
-              </button>
-            </div>
-
-            {hasAnalysis && (
-              <div style={{ margin: narrow ? "10px 14px 0" : "12px 16px 0", background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "10px 12px", flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
-                <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 7, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".05em" }}>Danh mục đang phân tích</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {analyzed.map((row) => {
-                    const cat = cats.find((item) => item.key === row.cat);
-                    return (
-                      <span key={row.ticker} style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 5, background: `${cat?.color || "var(--t3)"}20`, color: cat?.color || "var(--t3)", border: `0.5px solid ${cat?.color || "var(--bdr)"}44` }}>
-                        {row.ticker}
-                      </span>
-                    );
-                  })}
-                </div>
-                <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-                  <span style={{ fontSize: 18, fontWeight: 850, color: score >= 70 ? "#0ca30c" : score >= 50 ? "#eda100" : "#e34948", ...mono }}>{score}/100</span>
-                  <span style={{ flex: "1 1 180px", minWidth: 0, fontSize: 10, color: "var(--t3)", overflowWrap: "anywhere" }}>{counts.dd} đúng sóng đúng ngành · {counts.ss} sai sóng sai ngành</span>
-                </div>
-              </div>
-            )}
-
-            <div ref={panelRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", gap: 10, padding: narrow ? "12px 14px" : "14px 16px" }}>
-              {msgs.map((msg, index) => (
-                <PortfolioMsgBubble key={`panel-${msg.role}-${index}-${msg.text}`} role={msg.role} text={msg.text} panel />
-              ))}
-            </div>
-
-            <div style={{ padding: narrow ? "9px 14px" : "10px 16px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "0.5px solid var(--bdr)", minWidth: 0 }}>
-              {["Mã nào đúng sóng đúng ngành?", "Ngành nào đang dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng 3-5-2?", "So sánh các mã?"].map((text) => (
-                <button key={text} type="button" onClick={() => sendPortfolioMsg(text, true)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "5px 9px", fontSize: 11, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
-                  {text}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, padding: narrow ? "10px 14px calc(10px + env(safe-area-inset-bottom))" : "12px 16px", borderTop: "0.5px solid var(--bdr)", alignItems: "flex-end", minWidth: 0 }}>
-              <textarea
-                autoFocus
-                rows={1}
-                value={panelVal}
-                onChange={(event) => setPanelVal(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    sendPortfolioMsg(panelVal, true);
-                  }
-                }}
-                placeholder="Hỏi bất cứ điều gì về danh mục..."
-                style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 90, resize: "none", padding: "8px 12px", borderRadius: 8, border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t1)", fontSize: 12, lineHeight: 1.5, outline: "none", fontFamily: "inherit" }}
-              />
-              <button type="button" onClick={() => sendPortfolioMsg(panelVal, true)} disabled={chatLoading || !panelVal.trim()} style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "var(--B)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: chatLoading || !panelVal.trim() ? "not-allowed" : "pointer", opacity: chatLoading || !panelVal.trim() ? 0.55 : 1, flexShrink: 0 }}>
-                ➤
-              </button>
-            </div>
-          </aside>
-        </>
-      )}
+      <PortfolioChatPanel
+        open={chatOpen}
+        narrow={narrow}
+        onClose={() => setChatOpen(false)}
+        msgs={msgs}
+        loading={chatLoading}
+        value={panelVal}
+        onChange={setPanelVal}
+        onSend={(text) => sendPortfolioMsg(text, true)}
+        hasAnalysis={hasAnalysis}
+        analyzed={analyzed}
+        cats={cats}
+        score={score}
+        counts={counts}
+      />
     </>
   );
 }
 
-const WAVE_PALETTE = ["#7C3AED", "#06B6D4", "#FF9F0A", "#FF2D55", "#14B8A6", "#F59E0B", "#EC4899", "#8B5CF6", "#3DD68C", "#84CC16", "#F97316", "#A78BFA", "#6366F1", "#0EA5E9", "#22C55E", "#64748B", "#0891B2", "#DC2626"];
+const WAVE_PALETTE = ["#7C3AED", "#3DD68C", "#FF9F0A", "#06B6D4", "#1A8A4A", "#FF2D55", "#EC4899", "#F59E0B", "#8B5CF6", "#14B8A6", "#84CC16", "#F97316", "#6366F1", "#0EA5E9", "#D946EF", "#22C55E"];
 const WAVE_PAGE_SIZE = 6;
 const WAVE_AXIS_HEIGHT = 24;
 const WAVE_ROW_HEIGHT = 30;
@@ -1037,16 +934,16 @@ function monthTicks(startMs, endMs) {
 function WaveTimeline({ events, recentDates, narrow }) {
   const [mode, setMode] = useState("core");
   const [page, setPage] = useState(1);
-  const colorByKey = useMemo(() => {
-    const map = new Map();
-    events.forEach((event, index) => map.set(event.key, WAVE_PALETTE[index % WAVE_PALETTE.length]));
-    return map;
-  }, [events]);
 
   const filtered = useMemo(() => {
     return events
       .filter((event) => (mode === "core" ? event.isCore : !event.isCore))
-      .sort((a, b) => (b.points.at(-1)?.date || "").localeCompare(a.points.at(-1)?.date || ""));
+      .sort((a, b) => {
+        if (mode === "core" && a.coreOrder !== b.coreOrder) return a.coreOrder - b.coreOrder;
+        if (mode === "other" && a.isResidentialService !== b.isResidentialService) return a.isResidentialService ? 1 : -1;
+        const latest = (b.points.at(-1)?.date || "").localeCompare(a.points.at(-1)?.date || "");
+        return latest || b.peak - a.peak || a.name.localeCompare(b.name, "vi");
+      });
   }, [events, mode]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / WAVE_PAGE_SIZE));
@@ -1090,12 +987,12 @@ function WaveTimeline({ events, recentDates, narrow }) {
       </div>
       <div>
         {visible.map((event) => {
-          const color = colorByKey.get(event.key) || "#7C3AED";
+          const color = event.color || "#7C3AED";
           const lastPoint = event.points.at(-1);
           const isActive = Boolean(recentCut && lastPoint && lastPoint.date >= recentCut);
           return (
-            <div key={event.key} style={{ display: "flex", alignItems: "center", minHeight: WAVE_ROW_HEIGHT, borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer", background: isActive ? "rgba(124,58,237,.04)" : undefined }} onClick={() => nav("lo-trinh-dan-song")}>
-              <div style={{ width: nameWidth, flexShrink: 0, fontSize: 10, fontWeight: event.isCore ? 750 : 550, padding: "0 8px", textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", borderRight: "0.5px solid var(--bdr)", color: event.isCore ? "#F59E0B" : "var(--t2)" }} title={event.name}>{event.name}</div>
+            <div key={event.key} style={{ display: "flex", alignItems: "center", minHeight: WAVE_ROW_HEIGHT, borderBottom: "0.5px solid var(--bdrs)", cursor: "pointer" }} onClick={() => nav("lo-trinh-dan-song")}>
+              <div style={{ width: nameWidth, flexShrink: 0, fontSize: 10, fontWeight: event.isCore ? 750 : 550, padding: "0 8px", textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", borderRight: "0.5px solid var(--bdr)", color: "var(--t2)" }} title={event.name}>{event.name}</div>
               <div style={{ flex: 1, position: "relative", height: WAVE_ROW_HEIGHT, minWidth: 0 }}>
                 {ticks.map((tick) => <span key={tick.key} style={{ position: "absolute", top: 0, bottom: 0, left: `${tick.left}%`, width: 1, background: "var(--bdr)", opacity: 0.4 }} />)}
                 {event.points.map((point) => {
@@ -1138,11 +1035,11 @@ function smdtChipTone(value) {
   return { color: "var(--t4)", bg: "var(--elev)", border: "var(--bdr)" };
 }
 
-function SmdtBarCell({ value }) {
+function SmdtBarCell({ value, compact = false }) {
   if (!Number.isFinite(value)) return <span style={{ color: "var(--t4)" }}>—</span>;
   const tone = smdtChipTone(value);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, minWidth: 62, padding: "4px 8px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap", ...mono }}>
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, minWidth: compact ? 0 : 62, padding: compact ? "3px 4px" : "4px 8px", borderRadius: 7, background: tone.bg, border: `0.5px solid ${tone.border}`, color: tone.color, fontSize: compact ? 10 : 11, fontWeight: 800, whiteSpace: "nowrap", ...mono }}>
       {value.toFixed(1)}
     </span>
   );
@@ -1156,6 +1053,7 @@ function PnlCell({ price, ave }) {
 }
 
 function SignalPortfolio({ rows, date, live }) {
+  const narrow = useNarrow();
   const [tab, setTab] = useState("MUA");
   const [page, setPage] = useState(1);
   const sortByTicker = (items) => [...items].sort((a, b) => a.ticker.localeCompare(b.ticker));
@@ -1192,27 +1090,27 @@ function SignalPortfolio({ rows, date, live }) {
           <Clink onClick={() => nav("top-ma-manh")}>Xem tất cả ›</Clink>
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 11, minWidth: 500 }}>
+      <div style={{ overflowX: narrow ? "hidden" : "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 11, minWidth: narrow ? 0 : 500 }}>
           <colgroup>
             {cols.map((col) => <col key={col.label} style={{ width: col.width }} />)}
           </colgroup>
           <thead>
             <tr style={{ background: "var(--elev)" }}>
               {cols.map((col, i) => (
-                <th key={col.label} style={{ padding: i === 0 ? "6px 12px" : "6px 8px", fontSize: 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
+                <th key={col.label} style={{ padding: narrow ? (i === 0 ? "6px 4px 6px 8px" : i === cols.length - 1 ? "6px 8px 6px 4px" : "6px 4px") : i === 0 ? "6px 12px" : "6px 8px", fontSize: narrow ? 8 : 9, fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", borderBottom: "0.5px solid var(--bdr)", textAlign: col.align, whiteSpace: "nowrap" }}>{col.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {visible.map((row) => (
               <tr key={`${row.ticker}-${row.date}`} style={{ borderBottom: "0.5px solid var(--bdrs)" }}>
-                <td style={{ padding: "7px 12px", fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
-                <td style={{ padding: "7px 8px", textAlign: "center" }}><SignalPill compact sig={row.cashSig || signalToSig(row.signal)} /></td>
-                <td style={{ padding: "7px 8px", textAlign: "center" }}><SmdtBarCell value={row.smdt} /></td>
-                <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{Number.isFinite(row.price) ? fmtNum(row.price) : "—"}</td>
-                <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--t2)", ...mono }}>{Number.isFinite(row.ave) ? fmtNum(row.ave) : "—"}</td>
-                <td style={{ padding: "7px 8px", textAlign: "right" }}><PnlCell price={row.price} ave={row.ave} /></td>
+                <td style={{ padding: narrow ? "7px 4px 7px 8px" : "7px 12px", fontWeight: 800, color: "var(--t1)" }}>{row.ticker}</td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "center" }}><SignalPill compact sig={row.cashSig || signalToSig(row.signal)} /></td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "center" }}><SmdtBarCell value={row.smdt} compact={narrow} /></td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "right", fontWeight: 650, color: "var(--t1)", ...mono }}>{Number.isFinite(row.price) ? fmtNum(row.price) : "—"}</td>
+                <td style={{ padding: narrow ? "7px 4px" : "7px 8px", textAlign: "right", color: "var(--t2)", ...mono }}>{Number.isFinite(row.ave) ? fmtNum(row.ave) : "—"}</td>
+                <td style={{ padding: narrow ? "7px 8px 7px 4px" : "7px 8px", textAlign: "right" }}><PnlCell price={row.price} ave={row.ave} /></td>
               </tr>
             ))}
           </tbody>
@@ -1251,7 +1149,7 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
       items.push({ kind: "ma", type: row.signal === "MUA" ? "mua" : "ban", time: row.date ? fmtFull(row.date) : "Live", title: row.ticker, tag: row.signal === "MUA" ? "MUA" : "BÁN", sub: `${row.signal === "MUA" ? "Tín hiệu mua" : "Tín hiệu bán"}${row.percent != null ? ` ${row.percent}%` : ""}${Number.isFinite(row.price) ? ` · Giá ${fmtNum(row.price)}` : ""}` });
     }
     for (const row of topRows.slice(0, 8)) {
-      items.push({ kind: "ma", type: "smdt", time: "SMDT", title: row.ticker, tag: "SMDT", sub: `${row.industry} · SMDT đạt ${row.smdt.toFixed(1)}% · ${sigLabel(row.sig)}` });
+      items.push({ kind: "ma", type: "smdt", time: "SMDT", title: row.ticker, tag: "SMDT", industry: row.industry, sub: `SMDT đạt ${row.smdt.toFixed(1)}% · ${sigLabel(row.sig)}` });
     }
     for (const row of branchRows.slice(0, 8)) {
       items.push({ kind: "ng", type: logToneForSig(row.sig), time: "Ngành", title: row.label, tag: sigLabel(row.sig), sub: `Dòng tiền ngành đang ở trạng thái ${sigLabel(row.sig).toLowerCase()}` });
@@ -1301,11 +1199,14 @@ function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
                 <i className={`ti ${item.kind === "ng" ? "ti-building-community" : tone.icon}`} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 650, color: "var(--t1)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 11, fontWeight: 650, color: item.kind === "ng" ? "var(--t2)" : "var(--t1)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   {item.title}
                   <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 3, whiteSpace: "nowrap", color: tone.color, background: tone.bg, border: `0.5px solid ${tone.color}33` }}>{item.tag}</span>
                 </div>
-                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, lineHeight: 1.5 }}>{item.sub}</div>
+                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, lineHeight: 1.5 }}>
+                  {item.industry && <><span style={{ color: "var(--t2)" }}>{item.industry}</span> · </>}
+                  {item.sub}
+                </div>
               </div>
               <div style={{ fontSize: 10, color: "var(--t4)", whiteSpace: "nowrap" }}>{item.time}</div>
             </div>
@@ -1441,14 +1342,17 @@ export function ModDashboard() {
     }
     return map;
   }, [activeCashTickerDate, cashTicker.buckets, cashTickerDatesDesc, cashTickerUniverse]);
+  const smdtTickerUniverse = useMemo(() => {
+    const source = smdtTicker.tickers.length ? smdtTicker.tickers.map((tk) => tk.key) : Object.keys(smdtTicker.matrix);
+    return [...new Set(source)].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [smdtTicker.matrix, smdtTicker.tickers]);
+  const smdtTickerByKey = useMemo(() => new Map(smdtTicker.tickers.map((tk) => [tk.key, tk])), [smdtTicker.tickers]);
   const smdtTickerPool = useMemo(() => {
-    return smdtTicker.tickers
-      .flatMap((tk) => {
-        const industry = branchPath.tickerToBranch[tk.key];
-        return industry ? [{ ...tk, industry }] : [];
-      })
-      .sort((a, b) => a.key.localeCompare(b.key));
-  }, [branchPath.tickerToBranch, smdtTicker.tickers]);
+    return smdtTickerUniverse.map((ticker) => {
+      const tk = smdtTickerByKey.get(ticker) || { key: ticker, name: ticker };
+      return { ...tk, industry: branchPath.tickerToBranch[ticker] || "" };
+    });
+  }, [branchPath.tickerToBranch, smdtTickerByKey, smdtTickerUniverse]);
 
   const cashTickerCounts = useMemo(() => {
     const byGroup = {
@@ -1579,15 +1483,31 @@ export function ModDashboard() {
 
   const waveEvents = useMemo(() => {
     const windowStart = waveWindowDates[0] || "";
-    return branchCross.branches.map((branch) => {
+    return branchCross.branches.map((branch, index) => {
       const row = branchCross.matrix[branch.key] || {};
       const points = Object.keys(row)
         .filter((date) => date >= windowStart)
         .sort()
         .map((date) => ({ date, value: toNumber(row[date]) }))
         .filter((point) => Number.isFinite(point.value));
-      return { key: branch.key, name: branch.label, isCore: isWaveCoreBranchName(branch.key) || isWaveCoreBranchName(branch.label), points, peak: Math.max(0, ...points.map((p) => p.value)) };
-    }).sort((a, b) => b.peak - a.peak);
+      const isResidentialService = isResidentialRealEstateServiceName(branch.key) || isResidentialRealEstateServiceName(branch.label);
+      const coreOrder = isResidentialService ? -1 : Math.max(waveCoreOrderOfIndustry(branch.key), waveCoreOrderOfIndustry(branch.label));
+      const isCore = coreOrder >= 0;
+      return {
+        key: branch.key,
+        name: branch.key === "BĐS Dân cư" ? "BĐS Dân cư" : branch.label,
+        color: WAVE_PALETTE[index % WAVE_PALETTE.length],
+        isCore,
+        isResidentialService,
+        coreOrder: isCore ? coreOrder : 999,
+        points,
+        peak: Math.max(0, ...points.map((p) => p.value)),
+      };
+    }).sort((a, b) => {
+      if (a.coreOrder !== b.coreOrder) return a.coreOrder - b.coreOrder;
+      if (a.isResidentialService !== b.isResidentialService) return a.isResidentialService ? 1 : -1;
+      return b.peak - a.peak || a.name.localeCompare(b.name, "vi");
+    });
   }, [branchCross.branches, branchCross.matrix, waveWindowDates]);
 
   const marketWaveItems = useMemo(() => {
@@ -1603,11 +1523,14 @@ export function ModDashboard() {
 
   const smdtBranchCore = branchSmdtRows.filter((row) => row.isCore).slice(0, 10);
   const smdtBranchOther = branchSmdtRows.filter((row) => !row.isCore).slice(0, 10);
-  const tickerRows = rankedTopTickers.map((row) => ({ key: row.ticker, name: row.ticker, value: row.smdt, isCore: isCoreBranchName(row.industry) }));
+  const tickerRows = rankedTopTickers.map((row) => ({ key: row.ticker, name: row.ticker, value: row.smdt, price: row.price, isCore: isCoreBranchName(row.industry) }));
   const sortTickerPreview = (rows) => [...rows].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore)).slice(0, 10);
   const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore)).slice(0, 10);
   const signalLatestDate = latestStockSignalDate || stockSignalRows.find((row) => row.date)?.date || activeCashTickerDate;
+  const waveCircleLoading = stockWave.status === "loading" && !waveLatest;
+  const branchCashLoading = cashBranch.status === "loading" && !branchCashRows.length;
+  const tickerCashLoading = cashTicker.status === "loading" && !cashTickerRows.length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1616,16 +1539,24 @@ export function ModDashboard() {
           data={marketWaveItems}
           maCount={waveTotal}
           reliability={waveLatest?.reliability ?? 0}
+          dateLabel={waveLatest?.date ? fmtFull(waveLatest.date) : ""}
           onDetail={() => nav("do-song")}
+          loading={waveCircleLoading}
         />
 
         <DashboardCard onClick={() => nav("dong-tien-nganh")}>
-          <DashHeader title="Dòng tiền ngành" meta={`${fmtNum(branchCashRows.length)} ngành${cashBranchDate ? ` · ${fmtFull(cashBranchDate)}` : ""}`} action="Chi tiết ›" onClick={() => nav("dong-tien-nganh")} />
+          <DashHeader
+            title="Dòng tiền ngành"
+            meta={`${fmtNum(branchCashRows.length)} ngành${cashBranchDate ? ` · ${fmtFull(cashBranchDate)}` : ""}`}
+            action="Chi tiết ›"
+            onClick={() => nav("dong-tien-nganh")}
+          />
           <SplitDonuts
             leftTitle="Chủ lực"
             rightTitle="Ngành phụ"
             leftItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.core[sig], color: DONUT_COLORS[sig] }))}
             rightItems={SIG_ORDER.map((sig) => ({ value: branchCashCounts.other[sig], color: DONUT_COLORS[sig] }))}
+            loading={branchCashLoading}
           />
           <DotLegend square items={[
             { label: "Nhen nhóm", color: DONUT_COLORS.sn },
@@ -1642,6 +1573,7 @@ export function ModDashboard() {
             rightTitle="Phụ"
             leftItems={SIG_ORDER.map((sig) => ({ value: cashTickerCounts.core[sig], color: DONUT_COLORS[sig] }))}
             rightItems={SIG_ORDER.map((sig) => ({ value: cashTickerCounts.other[sig], color: DONUT_COLORS[sig] }))}
+            loading={tickerCashLoading}
           />
           <DotLegend square items={[
             { label: "Nhen nhóm", color: DONUT_COLORS.sn },
@@ -1656,22 +1588,20 @@ export function ModDashboard() {
         <SmdtPreview
           title="SMDT ngành"
           meta={`${fmtNum(branchSmdtRows.length)} ngành${smdtBranchDate ? ` · ${fmtFull(smdtBranchDate)}` : ""}`}
-          leftTitle="Chủ lực · top"
-          rightTitle="Ngành phụ · top"
           leftRows={smdtBranchCore}
           rightRows={smdtBranchOther}
           defaultTab="other"
           navId="smdt-nganh"
+          rowNameColor="var(--t2)"
         />
         <SmdtPreview
           title="SMDT cổ phiếu"
-          meta={`${fmtNum(smdtTickerPool.length)} mã${smdtTickerDate ? ` · ${fmtFull(smdtTickerDate)}` : ""}`}
-          leftTitle="Chủ lực · top"
-          rightTitle="Ngành phụ · top"
+          meta={`${fmtNum(smdtTickerUniverse.length)} mã${smdtTickerDate ? ` · ${fmtFull(smdtTickerDate)}` : ""}`}
           leftRows={tickerCoreRows}
           rightRows={tickerOtherRows}
           defaultTab="core"
           navId="smdt-ma"
+          showPrice
         />
       </div>
 
