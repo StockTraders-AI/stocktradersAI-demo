@@ -29,6 +29,8 @@ const SOCIAL_PROVIDERS = [
   { id: "2", key: "google", icon: "ti-brand-google", label: "Google" },
 ];
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
+let turnstileScriptPromise = null;
 
 async function fetchGoogleUserInfo(accessToken) {
   const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
@@ -145,11 +147,11 @@ function AuthSidebar() {
   );
 }
 
-function TextField({ label, placeholder, onFocus, onBlur, ...props }) {
+function TextField({ label, placeholder, onFocus, onBlur, groupStyle, ...props }) {
   const [focused, setFocused] = useState(false);
 
   return (
-    <label style={styles.fieldGroup}>
+    <label style={{ ...styles.fieldGroup, ...groupStyle }}>
       <span style={styles.fieldLabel}>{label}</span>
       <input
         autoComplete="off"
@@ -191,9 +193,77 @@ function SocialButtons({ onSelect, disabled, prefix = "Tiếp tục với" }) {
   );
 }
 
+function loadTurnstileScript() {
+  if (typeof window === "undefined") return Promise.reject(new Error("Turnstile chỉ chạy trên browser."));
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (turnstileScriptPromise) return turnstileScriptPromise;
+
+  turnstileScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector("script[data-turnstile-script]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.turnstile), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.dataset.turnstileScript = "true";
+    script.onload = () => resolve(window.turnstile);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return turnstileScriptPromise;
+}
+
+function TurnstileWidget({ siteKey, resetKey, disabled, onToken }) {
+  const containerRef = useRef(null);
+  const widgetRef = useRef(null);
+
+  useEffect(() => {
+    if (!siteKey || disabled) return undefined;
+    let cancelled = false;
+
+    loadTurnstileScript()
+      .then((turnstile) => {
+        if (cancelled || !containerRef.current || widgetRef.current) return;
+        widgetRef.current = turnstile.render(containerRef.current, {
+          sitekey: siteKey,
+          callback: (token) => onToken?.(token),
+          "expired-callback": () => onToken?.(""),
+          "error-callback": () => onToken?.(""),
+        });
+      })
+      .catch(() => onToken?.(""));
+
+    return () => {
+      cancelled = true;
+      if (window.turnstile && widgetRef.current) {
+        window.turnstile.remove(widgetRef.current);
+        widgetRef.current = null;
+      }
+    };
+  }, [siteKey, disabled, onToken]);
+
+  useEffect(() => {
+    onToken?.("");
+    if (window.turnstile && widgetRef.current) {
+      window.turnstile.reset(widgetRef.current);
+    }
+  }, [resetKey, onToken]);
+
+  if (!siteKey) return null;
+  return <div ref={containerRef} style={styles.turnstileBox} />;
+}
+
 function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
   const [otp, setOtp] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -205,17 +275,24 @@ function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
     setError("");
     setMessage("");
     setVerified(false);
+    setTurnstileToken("");
+    setTurnstileResetKey((key) => key + 1);
     onVerified?.("");
   }, [phoneNumber, purpose, onVerified]);
 
   const handleSendOtp = async () => {
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Vui lòng xác minh CAPTCHA trước khi gửi OTP.");
+      return;
+    }
+
     setBusy(true);
     setError("");
     setMessage("");
     setVerified(false);
     onVerified?.("");
     try {
-      const result = await requestOtp({ phoneNumber, purpose });
+      const result = await requestOtp({ phoneNumber, purpose, turnstileToken });
       setChallengeToken(result.challengeToken);
       setOtp("");
       setMessage(result.debugOtp ? `Đã gửi OTP. Mã test: ${result.debugOtp}` : "Đã gửi OTP đến số điện thoại của bạn.");
@@ -223,6 +300,8 @@ function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
       setError(err?.message || "Không thể gửi OTP.");
     } finally {
       setBusy(false);
+      setTurnstileToken("");
+      setTurnstileResetKey((key) => key + 1);
     }
   };
 
@@ -246,9 +325,16 @@ function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
 
   const isDisabled = disabled || busy;
   const canVerify = Boolean(challengeToken && otp.trim().length === 6);
+  const canSend = Boolean(phoneNumber && (!TURNSTILE_SITE_KEY || turnstileToken));
 
   return (
     <div style={styles.otpBox}>
+      <TurnstileWidget
+        siteKey={TURNSTILE_SITE_KEY}
+        resetKey={`${phoneNumber}-${purpose}-${turnstileResetKey}`}
+        disabled={isDisabled}
+        onToken={setTurnstileToken}
+      />
       <div style={styles.otpGrid}>
         <label style={styles.otpField}>
           <span style={styles.fieldLabel}>Mã OTP</span>
@@ -264,7 +350,7 @@ function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
             style={styles.fieldInput}
           />
         </label>
-        <button type="button" onClick={handleSendOtp} disabled={isDisabled || !phoneNumber} style={{ ...styles.otpBtn, ...(isDisabled || !phoneNumber ? styles.disabledBtn : null) }}>
+        <button type="button" onClick={handleSendOtp} disabled={isDisabled || !canSend} style={{ ...styles.otpBtn, ...(isDisabled || !canSend ? styles.disabledBtn : null) }}>
           {busy ? "..." : "Gửi OTP"}
         </button>
         <button type="button" onClick={handleVerifyOtp} disabled={isDisabled || !canVerify || verified} style={{ ...styles.otpBtn, ...(isDisabled || !canVerify || verified ? styles.disabledBtn : null) }}>
@@ -378,12 +464,14 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message })
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} prefix="Đăng ký với" />
       <div style={styles.divider}><span>hoặc</span></div>
 
-      <TextField label="Họ và tên" type="text" autoComplete="new-password" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Tài khoản" type="text" autoComplete="new-password" placeholder="admindemo" value={userName} onChange={(e) => setUserName(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Email" type="email" autoComplete="new-password" placeholder="admin@yahoo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Số điện thoại" type="tel" autoComplete="new-password" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} />
+      <div style={styles.registerGrid}>
+        <TextField label="Họ và tên" type="text" autoComplete="new-password" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
+        <TextField label="Tài khoản" type="text" autoComplete="new-password" placeholder="admindemo" value={userName} onChange={(e) => setUserName(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
+        <TextField label="Email" type="email" autoComplete="new-password" placeholder="admin@yahoo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
+        <TextField label="Số điện thoại" type="tel" autoComplete="new-password" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
+      </div>
       <OtpControls phoneNumber={phoneNumber} purpose="register" disabled={isSubmitting} onVerified={setOtpVerificationToken} />
-      <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} groupStyle={styles.registerPasswordField} />
 
       <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
@@ -542,7 +630,7 @@ function AuthCard({ onLogin }) {
   };
 
   return (
-    <section style={styles.card}>
+    <section className={isRegister ? "auth-register-card" : undefined} style={{ ...styles.card, ...(isRegister ? styles.registerCard : null) }}>
       {GOOGLE_CLIENT_ID && (
         <GoogleLoginBridge
           requestKey={googleLoginRequest}
@@ -628,16 +716,23 @@ export function AuthPage({ onLogin }) {
 
   return (
     <div style={styles.shell}>
+      <style>{authScrollbarCss}</style>
       <AuthTopbar isMobile={isMobile} />
       <div style={styles.content}>
         {!isMobile && <AuthSidebar />}
-        <main style={{ ...styles.main, padding: isMobile ? "24px 14px" : "40px 24px" }}>
+        <main style={{ ...styles.main, padding: isMobile ? "20px 14px 28px" : "32px 24px 40px" }}>
           <AuthCard onLogin={onLogin} />
         </main>
       </div>
     </div>
   );
 }
+
+const authScrollbarCss = `
+  .auth-register-card::-webkit-scrollbar {
+    display: none;
+  }
+`;
 
 const styles = {
   shell: {
@@ -757,8 +852,9 @@ const styles = {
     minWidth: 0,
     overflow: "auto",
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
+    boxSizing: "border-box",
   },
   card: {
     width: "100%",
@@ -768,6 +864,15 @@ const styles = {
     borderRadius: 12,
     padding: "28px 28px 30px",
     boxShadow: "0 18px 60px rgba(0,0,0,.14)",
+    boxSizing: "border-box",
+  },
+  registerCard: {
+    maxWidth: 390,
+    maxHeight: "calc(100vh - 124px)",
+    overflowY: "auto",
+    padding: "22px 24px 24px",
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
   },
   tabs: {
     display: "grid",
@@ -831,7 +936,15 @@ const styles = {
     color: "var(--t4)",
     fontSize: 11,
   },
+  registerGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    rowGap: 11,
+    marginBottom: 11,
+  },
   fieldGroup: { display: "block", marginBottom: 14 },
+  compactField: { marginBottom: 0 },
+  registerPasswordField: { marginBottom: 0 },
   fieldLabel: { display: "block", marginBottom: 6, color: "var(--t2)", fontSize: 12, fontWeight: 600 },
   fieldInput: {
     width: "100%",
@@ -846,6 +959,14 @@ const styles = {
   },
   otpBox: {
     margin: "-2px 0 14px",
+  },
+  turnstileBox: {
+    minHeight: 65,
+    marginBottom: 10,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   otpGrid: {
     display: "grid",

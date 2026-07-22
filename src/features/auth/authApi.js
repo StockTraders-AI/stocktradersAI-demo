@@ -407,7 +407,7 @@ export async function registerUser({ fullName, userName, email, phoneNumber, pas
   };
 }
 
-export async function requestOtp({ phoneNumber, purpose }) {
+export async function requestOtp({ phoneNumber, purpose, turnstileToken }) {
   const normalizedPhone = normalizeText(phoneNumber);
   const normalizedPurpose = normalizeText(purpose);
 
@@ -421,6 +421,7 @@ export async function requestOtp({ phoneNumber, purpose }) {
     body: JSON.stringify({
       phoneNumber: normalizedPhone,
       purpose: normalizedPurpose,
+      turnstileToken,
     }),
   });
 

@@ -1,9 +1,11 @@
 import {
   assertSmsConfig,
+  assertOtpRateLimit,
   createOtpCode,
   createRequestId,
   getEnvConfig,
   getOtpPurpose,
+  getRequestIp,
   methodNotAllowed,
   normalizePhone,
   readJsonBody,
@@ -12,6 +14,7 @@ import {
   sendFptOtpMessage,
   setCors,
   signOtpChallenge,
+  verifyTurnstileToken,
 } from "../_otp.js";
 
 export default async function handler(req, res) {
@@ -23,7 +26,10 @@ export default async function handler(req, res) {
     const phone = normalizePhone(body.phoneNumber || body.phone);
     const purpose = getOtpPurpose(body.purpose);
     const config = getEnvConfig();
+    const ip = getRequestIp(req);
     assertSmsConfig(config);
+    await verifyTurnstileToken({ config, token: body.turnstileToken, remoteIp: ip });
+    assertOtpRateLimit({ config, phone, purpose, ip });
 
     const otp = createOtpCode();
     const requestId = createRequestId(purpose, phone);

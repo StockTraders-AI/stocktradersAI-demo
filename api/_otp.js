@@ -4,8 +4,15 @@ const DEFAULT_FPT_BASE_URL = "http://sandbox.sms.fpt.net";
 const DEFAULT_SCOPE = "send_brandname_otp";
 const DEFAULT_OTP_TTL_SECONDS = 5 * 60;
 const DEFAULT_VERIFIED_TTL_SECONDS = 10 * 60;
+const DEFAULT_OTP_PHONE_COOLDOWN_SECONDS = 60;
+const DEFAULT_OTP_PHONE_HOURLY_LIMIT = 5;
+const DEFAULT_OTP_PHONE_DAILY_LIMIT = 2;
+const DEFAULT_OTP_IP_HOURLY_LIMIT = 20;
+const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const STOCKTRADERS_REGISTER_URL = "https://stocktraders.vn/service/data/getUserRegister";
 const STOCKTRADERS_CHANGE_PASSWORD_URL = "https://stocktraders.vn/service/api/getUserChangePassword";
+const otpRateStore = globalThis.__stocktradersOtpRateStore || new Map();
+globalThis.__stocktradersOtpRateStore = otpRateStore;
 
 const FPT_RETRYABLE_TOKEN_CODES = new Set(["1011", "1013"]);
 const FPT_ERROR_MESSAGES = {
@@ -88,11 +95,91 @@ export function getEnvConfig() {
     otpTemplate,
     otpTtlSeconds: readPositiveInt(process.env.FPT_SMS_OTP_TTL_SECONDS, DEFAULT_OTP_TTL_SECONDS),
     verifiedTtlSeconds: readPositiveInt(process.env.FPT_SMS_VERIFIED_TTL_SECONDS, DEFAULT_VERIFIED_TTL_SECONDS),
+    phoneCooldownSeconds: readPositiveInt(process.env.FPT_SMS_OTP_PHONE_COOLDOWN_SECONDS, DEFAULT_OTP_PHONE_COOLDOWN_SECONDS),
+    phoneHourlyLimit: readPositiveInt(process.env.FPT_SMS_OTP_PHONE_HOURLY_LIMIT, DEFAULT_OTP_PHONE_HOURLY_LIMIT),
+    phoneDailyLimit: readPositiveInt(process.env.FPT_SMS_OTP_PHONE_DAILY_LIMIT, DEFAULT_OTP_PHONE_DAILY_LIMIT),
+    ipHourlyLimit: readPositiveInt(process.env.FPT_SMS_OTP_IP_HOURLY_LIMIT, DEFAULT_OTP_IP_HOURLY_LIMIT),
+    turnstileSecretKey: normalizeText(process.env.TURNSTILE_SECRET_KEY),
     exposeDebugOtp: process.env.FPT_SMS_EXPOSE_TEST_OTP === "1" && process.env.NODE_ENV !== "production",
     debugLog:
       process.env.FPT_SMS_DEBUG_LOG === "1" ||
       (process.env.NODE_ENV !== "production" && baseUrl.includes("sandbox.sms.fpt.net")),
   };
+}
+
+export function getRequestIp(req) {
+  const forwarded = normalizeText(req.headers["x-forwarded-for"]);
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return normalizeText(req.headers["x-real-ip"] || req.socket?.remoteAddress || "unknown");
+}
+
+export async function verifyTurnstileToken({ config, token, remoteIp }) {
+  if (!config.turnstileSecretKey) return;
+
+  const normalizedToken = normalizeText(token);
+  if (!normalizedToken) {
+    throw new Error("Vui lòng xác minh CAPTCHA trước khi gửi OTP.");
+  }
+
+  const params = new URLSearchParams();
+  params.set("secret", config.turnstileSecretKey);
+  params.set("response", normalizedToken);
+  if (remoteIp && remoteIp !== "unknown") params.set("remoteip", remoteIp);
+
+  const response = await fetch(TURNSTILE_VERIFY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+  const data = await readResponseJson(response);
+
+  if (!response.ok || data?.success !== true) {
+    console.warn("Turnstile verification failed:", data);
+    throw new Error("CAPTCHA không hợp lệ hoặc đã hết hạn. Vui lòng thử lại.");
+  }
+}
+
+export function assertOtpRateLimit({ config, phone, purpose, ip }) {
+  const now = Date.now();
+  pruneRateStore(now);
+
+  const phoneKey = `phone:${purpose}:${phone}`;
+  const ipKey = `ip:${purpose}:${ip || "unknown"}`;
+  const cooldownMs = config.phoneCooldownSeconds * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  const phoneRecord = getRateRecord(phoneKey);
+  const ipRecord = getRateRecord(ipKey);
+  const lastPhoneRequest = phoneRecord.timestamps[phoneRecord.timestamps.length - 1] || 0;
+
+  if (lastPhoneRequest && now - lastPhoneRequest < cooldownMs) {
+    const waitSeconds = Math.ceil((cooldownMs - (now - lastPhoneRequest)) / 1000);
+    throw new Error(`Vui lòng chờ ${waitSeconds} giây trước khi gửi lại OTP.`);
+  }
+
+  phoneRecord.timestamps = phoneRecord.timestamps.filter((time) => now - time < dayMs);
+  ipRecord.timestamps = ipRecord.timestamps.filter((time) => now - time < hourMs);
+  const phoneHourlyCount = phoneRecord.timestamps.filter((time) => now - time < hourMs).length;
+
+  if (phoneHourlyCount >= config.phoneHourlyLimit) {
+    throw new Error("Số điện thoại này đã yêu cầu OTP quá nhiều lần. Vui lòng thử lại sau.");
+  }
+
+  if (phoneRecord.timestamps.length >= config.phoneDailyLimit) {
+    throw new Error(`Số điện thoại này đã dùng hết ${config.phoneDailyLimit} lượt OTP trong 24 giờ. Vui lòng thử lại sau.`);
+  }
+
+  if (ipRecord.timestamps.length >= config.ipHourlyLimit) {
+    throw new Error("Thiết bị/mạng hiện tại đã gửi quá nhiều OTP. Vui lòng thử lại sau.");
+  }
+
+  phoneRecord.timestamps.push(now);
+  ipRecord.timestamps.push(now);
+  phoneRecord.updatedAt = now;
+  ipRecord.updatedAt = now;
+  otpRateStore.set(phoneKey, phoneRecord);
+  otpRateStore.set(ipKey, ipRecord);
 }
 
 export function assertSmsConfig(config) {
@@ -297,6 +384,19 @@ function readPositiveInt(value, fallback) {
 function logFptDebug(config, label, payload) {
   if (!config.debugLog) return;
   console.log(`[FPT SMS DEBUG] ${label}:`, JSON.stringify(payload, null, 2));
+}
+
+function getRateRecord(key) {
+  return otpRateStore.get(key) || { timestamps: [], updatedAt: Date.now() };
+}
+
+function pruneRateStore(now) {
+  const maxAgeMs = 2 * 60 * 60 * 1000;
+  for (const [key, record] of otpRateStore.entries()) {
+    if (!record?.updatedAt || now - record.updatedAt > maxAgeMs) {
+      otpRateStore.delete(key);
+    }
+  }
 }
 
 function hashOtp({ phone, purpose, otp, nonce, signingSecret }) {

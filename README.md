@@ -49,9 +49,16 @@ FPT_SMS_SCOPE=send_brandname_otp
 FPT_SMS_OTP_TEMPLATE=Ma OTP StockTraders AI cua ban la {OTP}. Ma co hieu luc trong {MINUTES} phut.
 FPT_SMS_OTP_SIGNING_SECRET=long-random-secret
 FPT_SMS_DLR_AUTHORIZATION_KEY=secret-key-shared-with-fpt
+FPT_SMS_OTP_PHONE_COOLDOWN_SECONDS=60
+FPT_SMS_OTP_PHONE_HOURLY_LIMIT=5
+FPT_SMS_OTP_PHONE_DAILY_LIMIT=2
+FPT_SMS_OTP_IP_HOURLY_LIMIT=20
+VITE_TURNSTILE_SITE_KEY=your-cloudflare-turnstile-site-key
+TURNSTILE_SECRET_KEY=your-cloudflare-turnstile-secret-key
 ```
 
 Production FPT base URL can be `https://api01.sms.fpt.net`. Configure FPT's DLR callback URL as `/api/sms/dlr`.
+Set both Turnstile keys in production to require CAPTCHA before the backend calls FPT SMS.
 
 ## Project structure
 
