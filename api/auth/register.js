@@ -3,7 +3,9 @@ import {
   getEnvConfig,
   getRegisterUrl,
   methodNotAllowed,
+  normalizeEmail,
   normalizePhone,
+  normalizeText,
   postStocktradersJson,
   readJsonBody,
   setCors,
@@ -17,13 +19,18 @@ export default async function handler(req, res) {
   try {
     const body = await readJsonBody(req);
     const request = body.UserRegisterRequest || {};
-    const phone = normalizePhone(request.phone_number || body.phoneNumber || body.phone);
+    const otpChannel = normalizeText(body.otpChannel || body.contactType || body.channel).toLowerCase();
+    const rawEmail = normalizeText(request.email || body.email || body.identifier);
+    const rawPhone = normalizeText(request.phone_number || body.phoneNumber || body.phone || body.identifier);
+    const shouldUseEmail = otpChannel === "email" || (otpChannel !== "phone" && rawEmail.includes("@"));
+    const email = shouldUseEmail ? normalizeEmail(rawEmail) : normalizeText(request.email || body.email);
+    const phone = shouldUseEmail ? normalizeText(request.phone_number || body.phoneNumber || body.phone) : normalizePhone(rawPhone);
     const config = getEnvConfig();
     assertOtpSigningConfig(config);
 
     verifyOtpProof({
       verificationToken: body.otpVerificationToken,
-      phone,
+      ...(shouldUseEmail ? { email } : { phone }),
       purpose: "register",
       signingSecret: config.signingSecret,
     });
@@ -33,6 +40,7 @@ export default async function handler(req, res) {
       {
         UserRegisterRequest: {
           ...request,
+          email,
           phone_number: phone,
         },
       },

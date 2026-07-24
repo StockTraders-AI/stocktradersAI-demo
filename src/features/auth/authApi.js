@@ -1,10 +1,10 @@
 const LOGIN_API_URL = import.meta.env.VITE_LOGIN_API_URL || "/service/data/getUserLogin";
 const SOCIAL_API_URL = import.meta.env.VITE_SOCIAL_LOGIN_API_URL || "/service/data/getStockSocial";
-const REGISTER_API_URL = import.meta.env.VITE_REGISTER_API_URL || "/api/auth/register";
 const ACCESS_RIGHTS_API_URL = import.meta.env.VITE_ACCESS_RIGHTS_API_URL || "/service/data/getAccessRights";
-const CHANGE_PASSWORD_API_URL = import.meta.env.VITE_CHANGE_PASSWORD_API_URL || "/api/auth/change-password";
-const REQUEST_OTP_API_URL = import.meta.env.VITE_REQUEST_OTP_API_URL || "/api/auth/request-otp";
-const VERIFY_OTP_API_URL = import.meta.env.VITE_VERIFY_OTP_API_URL || "/api/auth/verify-otp";
+const REGISTER_API_URL = "/api/auth/register";
+const CHANGE_PASSWORD_API_URL = "/api/auth/change-password";
+const REQUEST_OTP_API_URL = "/api/auth/request-otp";
+const VERIFY_OTP_API_URL = "/api/auth/verify-otp";
 const SUCCESS_CODE = "S0000";
 const DEVICE_ID_KEY = "st-auth-device-id";
 
@@ -109,6 +109,12 @@ function normalizeProvider(provider) {
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function getContactType(value, explicitType = "") {
+  const requestedType = normalizeText(explicitType).toLowerCase();
+  if (requestedType === "email" || requestedType === "phone") return requestedType;
+  return normalizeText(value).includes("@") ? "email" : "phone";
 }
 
 function parseMaybeJson(value) {
@@ -374,19 +380,31 @@ export async function loginWithSocial({
   };
 }
 
-export async function registerUser({ fullName, userName, email, phoneNumber, password, otpVerificationToken }) {
+export async function registerUser({
+  fullName,
+  userName,
+  contact,
+  contactType,
+  email,
+  phoneNumber,
+  password,
+  otpVerificationToken,
+}) {
   const normalizedUserName = normalizeText(userName);
-  const normalizedEmail = normalizeText(email);
-  const normalizedPhone = normalizeText(phoneNumber);
+  const normalizedContact = normalizeText(contact || email || phoneNumber);
+  const resolvedContactType = getContactType(normalizedContact, contactType);
+  const normalizedEmail = resolvedContactType === "email" ? normalizedContact : normalizeText(email);
+  const normalizedPhone = resolvedContactType === "phone" ? normalizedContact : normalizeText(phoneNumber);
 
-  if (!normalizedUserName || !password || !fullName || !normalizedEmail || !normalizedPhone) {
-    throw new Error("Vui lòng nhập đầy đủ họ tên, tài khoản, email, số điện thoại và mật khẩu.");
+  if (!normalizedUserName || !password || !fullName || !normalizedContact) {
+    throw new Error("Vui lòng nhập đầy đủ họ tên, tài khoản, email/số điện thoại và mật khẩu.");
   }
 
   const { data, reply } = await postJson(
     REGISTER_API_URL,
     {
       otpVerificationToken,
+      otpChannel: resolvedContactType,
       UserRegisterRequest: {
         user_name: normalizedUserName,
         password,
@@ -401,26 +419,33 @@ export async function registerUser({ fullName, userName, email, phoneNumber, pas
 
   return {
     account: normalizedUserName,
+    contact: normalizedContact,
+    contactType: resolvedContactType,
     phoneNumber: normalizedPhone,
+    email: normalizedEmail,
     reply,
     raw: data,
   };
 }
 
-export async function requestOtp({ phoneNumber, purpose }) {
-  const normalizedPhone = normalizeText(phoneNumber);
+export async function requestOtp({ identifier, contact, contactType, email, phoneNumber, purpose, turnstileToken }) {
+  const normalizedContact = normalizeText(identifier || contact || email || phoneNumber);
   const normalizedPurpose = normalizeText(purpose);
+  const resolvedContactType = getContactType(normalizedContact, contactType);
 
-  if (!normalizedPhone) {
-    throw new Error("Vui lòng nhập số điện thoại để nhận OTP.");
+  if (!normalizedContact) {
+    throw new Error("Vui lòng nhập email hoặc số điện thoại để nhận OTP.");
   }
 
   const response = await fetch(REQUEST_OTP_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      phoneNumber: normalizedPhone,
+      identifier: normalizedContact,
+      contactType: resolvedContactType,
+      ...(resolvedContactType === "email" ? { email: normalizedContact } : { phoneNumber: normalizedContact }),
       purpose: normalizedPurpose,
+      turnstileToken,
     }),
   });
 
@@ -432,11 +457,12 @@ export async function requestOtp({ phoneNumber, purpose }) {
   return data;
 }
 
-export async function verifyOtp({ phoneNumber, purpose, otp, challengeToken }) {
-  const normalizedPhone = normalizeText(phoneNumber);
+export async function verifyOtp({ identifier, contact, contactType, email, phoneNumber, purpose, otp, challengeToken }) {
+  const normalizedContact = normalizeText(identifier || contact || email || phoneNumber);
+  const resolvedContactType = getContactType(normalizedContact, contactType);
   const normalizedOtp = normalizeText(otp);
 
-  if (!normalizedPhone || !normalizedOtp || !challengeToken) {
+  if (!normalizedContact || !normalizedOtp || (resolvedContactType === "phone" && !challengeToken)) {
     throw new Error("Vui lòng gửi OTP và nhập mã xác thực.");
   }
 
@@ -444,7 +470,9 @@ export async function verifyOtp({ phoneNumber, purpose, otp, challengeToken }) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      phoneNumber: normalizedPhone,
+      identifier: normalizedContact,
+      contactType: resolvedContactType,
+      ...(resolvedContactType === "email" ? { email: normalizedContact } : { phoneNumber: normalizedContact }),
       purpose: normalizeText(purpose),
       otp: normalizedOtp,
       challengeToken,

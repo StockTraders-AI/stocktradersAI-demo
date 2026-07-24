@@ -1,17 +1,26 @@
 import {
+  assertContactOtpRateLimit,
   assertSmsConfig,
+  assertOtpRateLimit,
+  assertStocktradersSuccess,
   createOtpCode,
   createRequestId,
   getEnvConfig,
   getOtpPurpose,
+  getRequestIp,
+  getSendEmailOtpUrl,
   methodNotAllowed,
+  normalizeEmail,
   normalizePhone,
+  normalizeText,
+  postStocktradersJson,
   readJsonBody,
   renderOtpMessage,
   requestFptAccessToken,
   sendFptOtpMessage,
   setCors,
   signOtpChallenge,
+  verifyTurnstileToken,
 } from "../_otp.js";
 
 export default async function handler(req, res) {
@@ -20,10 +29,41 @@ export default async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
-    const phone = normalizePhone(body.phoneNumber || body.phone);
     const purpose = getOtpPurpose(body.purpose);
     const config = getEnvConfig();
+    const ip = getRequestIp(req);
+    const contactType = normalizeText(body.contactType || body.channel).toLowerCase();
+    const emailInput = body.email || body.identifier;
+    const shouldUseEmail = contactType === "email" || (contactType !== "phone" && normalizeText(emailInput).includes("@"));
+
+    if (shouldUseEmail) {
+      if (purpose !== "register") throw new Error("Xác thực email hiện chỉ dùng cho đăng ký tài khoản.");
+      const email = normalizeEmail(emailInput);
+      await verifyTurnstileToken({ config, token: body.turnstileToken, remoteIp: ip });
+      assertContactOtpRateLimit({ config, contact: email, contactKind: "email", purpose, ip });
+
+      const data = await postStocktradersJson(
+        getSendEmailOtpUrl(),
+        {
+          UserSendOtpRequest: {
+            email,
+          },
+        },
+        "Không thể gửi OTP qua email.",
+      );
+      assertStocktradersSuccess(data, ["UserSendOtpReply", "UserSendOtpRequest"], "Không thể gửi OTP qua email.");
+
+      return res.status(200).json({
+        channel: "email",
+        email,
+        expiresIn: config.otpTtlSeconds,
+      });
+    }
+
+    const phone = normalizePhone(body.phoneNumber || body.phone || body.identifier);
     assertSmsConfig(config);
+    await verifyTurnstileToken({ config, token: body.turnstileToken, remoteIp: ip });
+    assertOtpRateLimit({ config, phone, purpose, ip });
 
     const otp = createOtpCode();
     const requestId = createRequestId(purpose, phone);

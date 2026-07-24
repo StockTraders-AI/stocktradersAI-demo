@@ -50,10 +50,12 @@ const CSS = `
 }
 .ds-card:hover{background:var(--elev,#171D2E)}
 .ds-hdr{width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.ds-hdr-main{min-width:0}
+.ds-hdr-main{min-width:0;flex:1}
 .ds-title{font-size:12px;font-weight:750;color:var(--t1,#F0F4FF);white-space:nowrap}
-.ds-date{font-size:10px;color:var(--t3,#5C7090);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ds-rel{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
+.ds-meta-row{display:flex;align-items:center;gap:8px;margin-top:4px;min-width:0;flex-wrap:wrap}
+.ds-date{font-size:10px;color:var(--t3,#5C7090);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ds-meta-sep{font-size:10px;color:var(--t3,#5C7090)}
+.ds-rel{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
 .ds-rel-lbl{font-size:10px;color:var(--t3,#5C7090)}
 .ds-rel-pct{font-size:11px;font-weight:750}
 .ds-badge{
@@ -121,15 +123,18 @@ export default function CardDoSong({
       <div className="ds-hdr">
         <div className="ds-hdr-main">
           <div className="ds-title">Vòng tròn dò sóng</div>
-          {dateLabel && <div className="ds-date">{dateLabel}</div>}
-          <div className="ds-rel">
-            <span className="ds-rel-lbl">Tin cậy</span>
-            {loading ? (
-              <span className="wtds-sk wtds-sk-pill wtds-dashboard-confidence-sk" />
-            ) : (
-              <span className="ds-rel-pct" style={{ color: relColor }}>{safeReliability}%</span>
-            )}
-            {!loading && bigWave && <span className="ds-badge"><span>★</span> SÓNG LỚN</span>}
+          <div className="ds-meta-row">
+            <div className="ds-rel">
+              <span className="ds-rel-lbl">Tin cậy</span>
+              {loading ? (
+                <span className="wtds-sk wtds-sk-pill wtds-dashboard-confidence-sk" />
+              ) : (
+                <span className="ds-rel-pct" style={{ color: relColor }}>{safeReliability}%</span>
+              )}
+              {!loading && bigWave && <span className="ds-badge"><span>★</span> SÓNG LỚN</span>}
+            </div>
+            {dateLabel && <span className="ds-meta-sep">·</span>}
+            {dateLabel && <div className="ds-date">{dateLabel}</div>}
           </div>
         </div>
         <span
