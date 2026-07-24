@@ -11,6 +11,8 @@ const DEFAULT_OTP_IP_HOURLY_LIMIT = 20;
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const STOCKTRADERS_REGISTER_URL = "https://stocktraders.vn/service/data/getUserRegister";
 const STOCKTRADERS_CHANGE_PASSWORD_URL = "https://stocktraders.vn/service/api/getUserChangePassword";
+const STOCKTRADERS_SEND_EMAIL_OTP_URL = "https://stocktraders.vn/service/data/getUserSendOtp";
+const STOCKTRADERS_VERIFY_EMAIL_OTP_URL = "https://stocktraders.vn/service/data/getVerifyEmailOtp";
 const otpRateStore = globalThis.__stocktradersOtpRateStore || new Map();
 globalThis.__stocktradersOtpRateStore = otpRateStore;
 
@@ -67,6 +69,12 @@ export function normalizePhone(value) {
   if (/^0\d{9,10}$/.test(raw)) return raw;
   if (/^84\d{9,10}$/.test(raw)) return raw;
   throw new Error("Số điện thoại không hợp lệ. Vui lòng dùng định dạng 0xx hoặc 84xx.");
+}
+
+export function normalizeEmail(value) {
+  const email = normalizeText(value).toLowerCase();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email;
+  throw new Error("Email không hợp lệ. Vui lòng kiểm tra lại.");
 }
 
 export function getOtpPurpose(value) {
@@ -146,45 +154,51 @@ export async function verifyTurnstileToken({ config, token, remoteIp }) {
 }
 
 export function assertOtpRateLimit({ config, phone, purpose, ip }) {
+  return assertContactOtpRateLimit({ config, contact: phone, contactKind: "phone", purpose, ip });
+}
+
+export function assertContactOtpRateLimit({ config, contact, contactKind = "phone", purpose, ip }) {
   const now = Date.now();
   pruneRateStore(now);
 
-  const phoneKey = `phone:${purpose}:${phone}`;
+  const normalizedKind = contactKind === "email" ? "email" : "phone";
+  const contactLabel = normalizedKind === "email" ? "Email này" : "Số điện thoại này";
+  const contactKey = `${normalizedKind}:${purpose}:${contact}`;
   const ipKey = `ip:${purpose}:${ip || "unknown"}`;
   const cooldownMs = config.phoneCooldownSeconds * 1000;
   const hourMs = 60 * 60 * 1000;
   const dayMs = 24 * 60 * 60 * 1000;
 
-  const phoneRecord = getRateRecord(phoneKey);
+  const contactRecord = getRateRecord(contactKey);
   const ipRecord = getRateRecord(ipKey);
-  const lastPhoneRequest = phoneRecord.timestamps[phoneRecord.timestamps.length - 1] || 0;
+  const lastContactRequest = contactRecord.timestamps[contactRecord.timestamps.length - 1] || 0;
 
-  if (lastPhoneRequest && now - lastPhoneRequest < cooldownMs) {
-    const waitSeconds = Math.ceil((cooldownMs - (now - lastPhoneRequest)) / 1000);
+  if (lastContactRequest && now - lastContactRequest < cooldownMs) {
+    const waitSeconds = Math.ceil((cooldownMs - (now - lastContactRequest)) / 1000);
     throw new Error(`Vui lòng chờ ${waitSeconds} giây trước khi gửi lại OTP.`);
   }
 
-  phoneRecord.timestamps = phoneRecord.timestamps.filter((time) => now - time < dayMs);
+  contactRecord.timestamps = contactRecord.timestamps.filter((time) => now - time < dayMs);
   ipRecord.timestamps = ipRecord.timestamps.filter((time) => now - time < hourMs);
-  const phoneHourlyCount = phoneRecord.timestamps.filter((time) => now - time < hourMs).length;
+  const contactHourlyCount = contactRecord.timestamps.filter((time) => now - time < hourMs).length;
 
-  if (phoneHourlyCount >= config.phoneHourlyLimit) {
-    throw new Error("Số điện thoại này đã yêu cầu OTP quá nhiều lần. Vui lòng thử lại sau.");
+  if (contactHourlyCount >= config.phoneHourlyLimit) {
+    throw new Error(`${contactLabel} đã yêu cầu OTP quá nhiều lần. Vui lòng thử lại sau.`);
   }
 
-  if (phoneRecord.timestamps.length >= config.phoneDailyLimit) {
-    throw new Error(`Số điện thoại này đã dùng hết ${config.phoneDailyLimit} lượt OTP trong 24 giờ. Vui lòng thử lại sau.`);
+  if (contactRecord.timestamps.length >= config.phoneDailyLimit) {
+    throw new Error(`${contactLabel} đã dùng hết ${config.phoneDailyLimit} lượt OTP trong 24 giờ. Vui lòng thử lại sau.`);
   }
 
   if (ipRecord.timestamps.length >= config.ipHourlyLimit) {
     throw new Error("Thiết bị/mạng hiện tại đã gửi quá nhiều OTP. Vui lòng thử lại sau.");
   }
 
-  phoneRecord.timestamps.push(now);
+  contactRecord.timestamps.push(now);
   ipRecord.timestamps.push(now);
-  phoneRecord.updatedAt = now;
+  contactRecord.updatedAt = now;
   ipRecord.updatedAt = now;
-  otpRateStore.set(phoneKey, phoneRecord);
+  otpRateStore.set(contactKey, contactRecord);
   otpRateStore.set(ipKey, ipRecord);
 }
 
@@ -266,10 +280,18 @@ export function verifyOtpChallenge({ challengeToken, phone, purpose, otp, signin
     throw new Error("Mã OTP không chính xác.");
   }
 
+  return signOtpProof({ phone, purpose, signingSecret, verifiedTtlSeconds });
+}
+
+export function signOtpProof({ phone, email, purpose, signingSecret, verifiedTtlSeconds }) {
+  const normalizedEmail = normalizeText(email);
+  const normalizedPhone = normalizeText(phone);
+  const channel = normalizedEmail ? "email" : "phone";
   return signPayload(
     {
       type: "otp_verified",
-      phone,
+      channel,
+      ...(normalizedEmail ? { email: normalizedEmail } : { phone: normalizedPhone }),
       purpose,
       verifiedAt: Date.now(),
       expiresAt: Date.now() + verifiedTtlSeconds * 1000,
@@ -279,10 +301,19 @@ export function verifyOtpChallenge({ challengeToken, phone, purpose, otp, signin
   );
 }
 
-export function verifyOtpProof({ verificationToken, phone, purpose, signingSecret }) {
+export function verifyOtpProof({ verificationToken, phone, email, purpose, signingSecret }) {
   const payload = verifySignedPayload(verificationToken, signingSecret);
   if (payload.type !== "otp_verified") throw new Error("Vui lòng xác thực OTP trước khi tiếp tục.");
-  if (payload.phone !== phone || payload.purpose !== purpose) throw new Error("OTP đã xác thực không khớp số điện thoại.");
+  const normalizedEmail = normalizeText(email);
+  const normalizedPhone = normalizeText(phone);
+  if (payload.purpose !== purpose) throw new Error("OTP đã xác thực không khớp yêu cầu hiện tại.");
+  if (normalizedEmail) {
+    if (payload.email !== normalizedEmail) throw new Error("OTP đã xác thực không khớp email.");
+  } else if (normalizedPhone) {
+    if (payload.phone !== normalizedPhone) throw new Error("OTP đã xác thực không khớp số điện thoại.");
+  } else {
+    throw new Error("Thiếu email hoặc số điện thoại để kiểm tra OTP.");
+  }
   if (Date.now() > Number(payload.expiresAt || 0)) throw new Error("Phiên xác thực OTP đã hết hạn. Vui lòng xác thực lại.");
   return payload;
 }
@@ -382,6 +413,26 @@ export function getChangePasswordUrl() {
   return normalizeText(process.env.STOCKTRADERS_CHANGE_PASSWORD_API_URL || STOCKTRADERS_CHANGE_PASSWORD_URL);
 }
 
+export function getSendEmailOtpUrl() {
+  return normalizeText(process.env.STOCKTRADERS_SEND_EMAIL_OTP_API_URL || STOCKTRADERS_SEND_EMAIL_OTP_URL);
+}
+
+export function getVerifyEmailOtpUrl() {
+  return normalizeText(process.env.STOCKTRADERS_VERIFY_EMAIL_OTP_API_URL || STOCKTRADERS_VERIFY_EMAIL_OTP_URL);
+}
+
+export function assertStocktradersSuccess(data, replyKeys, fallbackMessage) {
+  const reply = readStocktradersReply(data, replyKeys);
+  const code = findLooseValue(reply, ["codeid", "code", "statuscode"]);
+  if (code && String(code).trim() !== "S0000") {
+    throw new Error(
+      findLooseValue(reply, ["message", "messsage", "codename", "description", "error"]) ||
+        fallbackMessage,
+    );
+  }
+  return reply;
+}
+
 function readPositiveInt(value, fallback) {
   const number = parseInt(value, 10);
   return Number.isFinite(number) && number > 0 ? number : fallback;
@@ -451,6 +502,13 @@ async function readResponseJson(response) {
   } catch {
     return { raw: text };
   }
+}
+
+function readStocktradersReply(data, keys = []) {
+  for (const key of keys) {
+    if (data?.[key]) return data[key];
+  }
+  return data || {};
 }
 
 function readFptCode(data) {

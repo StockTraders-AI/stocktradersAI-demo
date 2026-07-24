@@ -32,6 +32,16 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 let turnstileScriptPromise = null;
 
+function normalizeFormText(value) {
+  return String(value || "").trim();
+}
+
+function resolveContactType(value, explicitType = "") {
+  const requestedType = normalizeFormText(explicitType).toLowerCase();
+  if (requestedType === "email" || requestedType === "phone") return requestedType;
+  return normalizeFormText(value).includes("@") ? "email" : "phone";
+}
+
 async function fetchGoogleUserInfo(accessToken) {
   const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
     headers: {
@@ -260,26 +270,31 @@ function TurnstileWidget({ siteKey, resetKey, disabled, onToken }) {
   return <div ref={containerRef} style={styles.turnstileBox} />;
 }
 
-function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
+function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, onVerified }) {
   const [otp, setOtp] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
+  const [otpRequested, setOtpRequested] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [verified, setVerified] = useState(false);
+  const recipient = normalizeFormText(identifier || phoneNumber);
+  const resolvedContactType = resolveContactType(recipient, contactType);
+  const targetLabel = resolvedContactType === "email" ? "email" : "số điện thoại";
 
   useEffect(() => {
     setOtp("");
     setChallengeToken("");
+    setOtpRequested(false);
     setError("");
     setMessage("");
     setVerified(false);
     setTurnstileToken("");
     setTurnstileResetKey((key) => key + 1);
     onVerified?.("");
-  }, [phoneNumber, purpose, onVerified]);
+  }, [recipient, resolvedContactType, purpose, onVerified]);
 
   const handleSendOtp = async () => {
     if (TURNSTILE_SITE_KEY && !turnstileToken) {
@@ -293,10 +308,16 @@ function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
     setVerified(false);
     onVerified?.("");
     try {
-      const result = await requestOtp({ phoneNumber, purpose, turnstileToken });
-      setChallengeToken(result.challengeToken);
+      const result = await requestOtp({
+        identifier: recipient,
+        contactType: resolvedContactType,
+        purpose,
+        turnstileToken,
+      });
+      setChallengeToken(result.challengeToken || "");
+      setOtpRequested(true);
       setOtp("");
-      setMessage(result.debugOtp ? `Đã gửi OTP. Mã test: ${result.debugOtp}` : "Đã gửi OTP đến số điện thoại của bạn.");
+      setMessage(result.debugOtp ? `Đã gửi OTP. Mã test: ${result.debugOtp}` : `Đã gửi OTP đến ${targetLabel} của bạn.`);
     } catch (err) {
       setError(err?.message || "Không thể gửi OTP.");
     } finally {
@@ -311,7 +332,13 @@ function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
     setError("");
     setMessage("");
     try {
-      const result = await verifyOtp({ phoneNumber, purpose, otp, challengeToken });
+      const result = await verifyOtp({
+        identifier: recipient,
+        contactType: resolvedContactType,
+        purpose,
+        otp,
+        challengeToken,
+      });
       setVerified(true);
       setMessage("Xác thực OTP thành công.");
       onVerified?.(result.verificationToken);
@@ -325,14 +352,14 @@ function OtpControls({ phoneNumber, purpose, disabled, onVerified }) {
   };
 
   const isDisabled = disabled || busy;
-  const canVerify = Boolean(challengeToken && otp.trim().length === 6);
-  const canSend = Boolean(phoneNumber && (!TURNSTILE_SITE_KEY || turnstileToken));
+  const canVerify = Boolean(otpRequested && (resolvedContactType === "email" || challengeToken) && otp.trim().length === 6);
+  const canSend = Boolean(recipient && (!TURNSTILE_SITE_KEY || turnstileToken));
 
   return (
     <div style={styles.otpBox}>
       <TurnstileWidget
         siteKey={TURNSTILE_SITE_KEY}
-        resetKey={`${phoneNumber}-${purpose}-${turnstileResetKey}`}
+        resetKey={`${recipient}-${resolvedContactType}-${purpose}-${turnstileResetKey}`}
         disabled={isDisabled}
         onToken={setTurnstileToken}
       />
@@ -452,15 +479,15 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
 function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message }) {
   const [fullName, setFullName] = useState("");
   const [userName, setUserName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
   const [otpVerificationToken, setOtpVerificationToken] = useState("");
+  const contactType = resolveContactType(contact);
 
   return (
     <form onSubmit={(e) => {
       e.preventDefault();
-      onSubmit?.({ fullName, userName, email, phoneNumber, password, otpVerificationToken });
+      onSubmit?.({ fullName, userName, contact, contactType, password, otpVerificationToken });
     }}>
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} prefix="Đăng ký với" />
       <div style={styles.divider}><span>hoặc</span></div>
@@ -468,10 +495,9 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message })
       <div style={styles.registerGrid}>
         <TextField label="Họ và tên" type="text" autoComplete="new-password" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
         <TextField label="Tài khoản" type="text" autoComplete="new-password" placeholder="admindemo" value={userName} onChange={(e) => setUserName(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
-        <TextField label="Email" type="email" autoComplete="new-password" placeholder="admin@yahoo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
-        <TextField label="Số điện thoại" type="tel" autoComplete="new-password" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
+        <TextField label="Email hoặc số điện thoại" type="text" autoComplete="new-password" placeholder="admin@yahoo.com hoặc 0989000005" value={contact} onChange={(e) => setContact(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
       </div>
-      <OtpControls phoneNumber={phoneNumber} purpose="register" disabled={isSubmitting} onVerified={setOtpVerificationToken} />
+      <OtpControls identifier={contact} contactType={contactType} purpose="register" disabled={isSubmitting} onVerified={setOtpVerificationToken} />
       <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} groupStyle={styles.registerPasswordField} />
 
       <StatusMessage type="error">{error}</StatusMessage>
