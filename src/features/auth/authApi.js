@@ -114,7 +114,9 @@ function normalizeText(value) {
 function getContactType(value, explicitType = "") {
   const requestedType = normalizeText(explicitType).toLowerCase();
   if (requestedType === "email" || requestedType === "phone") return requestedType;
-  return normalizeText(value).includes("@") ? "email" : "phone";
+  const normalizedValue = normalizeText(value);
+  const looksLikePhone = /^[+\d().\-\s]+$/.test(normalizedValue) && /\d/.test(normalizedValue);
+  return looksLikePhone ? "phone" : "email";
 }
 
 function parseMaybeJson(value) {
@@ -390,14 +392,14 @@ export async function registerUser({
   password,
   otpVerificationToken,
 }) {
-  const normalizedUserName = normalizeText(userName);
   const normalizedContact = normalizeText(contact || email || phoneNumber);
+  const normalizedUserName = normalizeText(userName) || normalizedContact;
   const resolvedContactType = getContactType(normalizedContact, contactType);
   const normalizedEmail = resolvedContactType === "email" ? normalizedContact : normalizeText(email);
   const normalizedPhone = resolvedContactType === "phone" ? normalizedContact : normalizeText(phoneNumber);
 
-  if (!normalizedUserName || !password || !fullName || !normalizedContact) {
-    throw new Error("Vui lòng nhập đầy đủ họ tên, tài khoản, email/số điện thoại và mật khẩu.");
+  if (!password || !fullName || !normalizedContact) {
+    throw new Error("Vui lòng nhập đầy đủ họ tên, email/số điện thoại và mật khẩu.");
   }
 
   const { data, reply } = await postJson(
@@ -541,7 +543,7 @@ export async function changePassword({ phoneNumber, password, otpVerificationTok
       },
     },
     REPLY_KEYS.changePassword,
-    "Không thể đổi mật khẩu.",
+    "Số điện thoại chưa đăng ký hoặc không thể đổi mật khẩu.",
   );
 
   return {

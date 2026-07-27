@@ -39,7 +39,13 @@ function normalizeFormText(value) {
 function resolveContactType(value, explicitType = "") {
   const requestedType = normalizeFormText(explicitType).toLowerCase();
   if (requestedType === "email" || requestedType === "phone") return requestedType;
-  return normalizeFormText(value).includes("@") ? "email" : "phone";
+  const normalizedValue = normalizeFormText(value);
+  const looksLikePhone = /^[+\d().\-\s]+$/.test(normalizedValue) && /\d/.test(normalizedValue);
+  return looksLikePhone ? "phone" : "email";
+}
+
+function isValidEmailFormat(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(normalizeFormText(value));
 }
 
 async function fetchGoogleUserInfo(accessToken) {
@@ -203,6 +209,16 @@ function SocialButtons({ onSelect, disabled, prefix = "Tiếp tục với" }) {
   );
 }
 
+function DividerText({ children = "hoặc" }) {
+  return (
+    <div style={styles.divider}>
+      <span style={styles.dividerLine} />
+      <span style={styles.dividerText}>{children}</span>
+      <span style={styles.dividerLine} />
+    </div>
+  );
+}
+
 function loadTurnstileScript() {
   if (typeof window === "undefined") return Promise.reject(new Error("Turnstile chỉ chạy trên browser."));
   if (window.turnstile) return Promise.resolve(window.turnstile);
@@ -283,6 +299,9 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
   const recipient = normalizeFormText(identifier || phoneNumber);
   const resolvedContactType = resolveContactType(recipient, contactType);
   const targetLabel = resolvedContactType === "email" ? "email" : "số điện thoại";
+  const otpGuideMessage = recipient && !error && !message
+    ? `Bước OTP: nhấn Gửi OTP để nhận mã qua ${targetLabel}.`
+    : "";
 
   useEffect(() => {
     setOtp("");
@@ -317,7 +336,10 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
       setChallengeToken(result.challengeToken || "");
       setOtpRequested(true);
       setOtp("");
-      setMessage(result.debugOtp ? `Đã gửi OTP. Mã test: ${result.debugOtp}` : `Đã gửi OTP đến ${targetLabel} của bạn.`);
+      const sentMessage = resolvedContactType === "email"
+        ? `OTP đã gửi vào email ${recipient}.`
+        : `OTP đã gửi về số điện thoại ${recipient}.`;
+      setMessage(result.debugOtp ? `${sentMessage} Mã test: ${result.debugOtp}` : sentMessage);
     } catch (err) {
       setError(err?.message || "Không thể gửi OTP.");
     } finally {
@@ -385,6 +407,7 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
           {verified ? "Đã xác thực" : "Xác thực"}
         </button>
       </div>
+      <StatusMessage>{otpGuideMessage}</StatusMessage>
       <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
     </div>
@@ -438,18 +461,26 @@ function AccessLockedNotice({ notice }) {
   );
 }
 
-function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, error, accessNotice }) {
+function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, error, message, socialMessage, socialError, accessNotice }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
+  const normalizedIdentifier = normalizeFormText(identifier);
+  const identifierType = resolveContactType(normalizedIdentifier);
+  const identifierFormatError = normalizedIdentifier && identifierType === "email" && !isValidEmailFormat(normalizedIdentifier)
+    ? "Email không đúng định dạng."
+    : "";
 
   return (
     <form onSubmit={(e) => {
       e.preventDefault();
+      if (identifierFormatError) return;
       onSubmit?.({ identifier, password, remember });
     }}>
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} />
-      <div style={styles.divider}><span>hoặc</span></div>
+      <StatusMessage type="error">{socialError}</StatusMessage>
+      <StatusMessage>{socialMessage}</StatusMessage>
+      <DividerText />
 
       <TextField label="Email hoặc số điện thoại" type="text" autoComplete="new-password" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
       <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
@@ -462,10 +493,12 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
         <button type="button" onClick={onForgotPassword} disabled={isSubmitting} style={styles.linkBtn}>Quên mật khẩu?</button>
       </div>
 
+      <StatusMessage type="error">{identifierFormatError}</StatusMessage>
       <StatusMessage type="error">{error}</StatusMessage>
+      <StatusMessage>{message}</StatusMessage>
       <AccessLockedNotice notice={accessNotice} />
 
-      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
+      <button type="submit" disabled={isSubmitting || Boolean(identifierFormatError)} style={{ ...styles.submitBtn, ...(isSubmitting || identifierFormatError ? styles.disabledBtn : null) }}>
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
       </button>
       <div style={styles.note}>
@@ -476,35 +509,172 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
   );
 }
 
-function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message }) {
+function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, socialMessage, socialError, accessNotice }) {
   const [fullName, setFullName] = useState("");
-  const [userName, setUserName] = useState("");
   const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
-  const [otpVerificationToken, setOtpVerificationToken] = useState("");
+  const [otp, setOtp] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  const [otpMessage, setOtpMessage] = useState("");
   const contactType = resolveContactType(contact);
+  const normalizedFullName = normalizeFormText(fullName);
+  const normalizedContact = normalizeFormText(contact);
+  const targetLabel = contactType === "email" ? "email" : "số điện thoại";
+  const contactFormatError = normalizedContact && contactType === "email" && !isValidEmailFormat(normalizedContact)
+    ? "Email không đúng định dạng."
+    : "";
+  const isBusy = isSubmitting || otpBusy;
+  const hasRequiredFields = Boolean(normalizedFullName && normalizedContact && password);
+  const canSubmit = hasRequiredFields && !contactFormatError && (!TURNSTILE_SITE_KEY || otpRequested || turnstileToken) && (!otpRequested || otp.trim().length === 6);
+
+  useEffect(() => {
+    setOtp("");
+    setChallengeToken("");
+    setOtpRequested(false);
+    setTurnstileToken("");
+    setTurnstileResetKey((key) => key + 1);
+    setOtpError("");
+    setOtpMessage("");
+  }, [normalizedContact, contactType]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (isBusy) return;
+
+    if (!hasRequiredFields) {
+      setOtpError("Vui lòng nhập đầy đủ họ tên, email/số điện thoại và mật khẩu.");
+      return;
+    }
+
+    if (contactFormatError) {
+      setOtpError(contactFormatError);
+      return;
+    }
+
+    if (!otpRequested) {
+      if (TURNSTILE_SITE_KEY && !turnstileToken) {
+        setOtpError("Vui lòng xác minh CAPTCHA trước khi tạo tài khoản.");
+        return;
+      }
+
+      setOtpBusy(true);
+      setOtpError("");
+      setOtpMessage("");
+      try {
+        const result = await requestOtp({
+          identifier: normalizedContact,
+          contactType,
+          purpose: "register",
+          turnstileToken,
+        });
+        setChallengeToken(result.challengeToken || "");
+        setOtpRequested(true);
+        setOtp("");
+        const sentMessage = contactType === "email"
+          ? `OTP đã gửi vào email ${normalizedContact}. Vui lòng nhập mã để xác thực.`
+          : `OTP đã gửi về số điện thoại ${normalizedContact}. Vui lòng nhập mã để xác thực.`;
+        setOtpMessage(result.debugOtp ? `${sentMessage} Mã test: ${result.debugOtp}` : sentMessage);
+      } catch (err) {
+        setOtpError(err?.message || "Không thể gửi OTP.");
+      } finally {
+        setOtpBusy(false);
+        setTurnstileToken("");
+        setTurnstileResetKey((key) => key + 1);
+      }
+      return;
+    }
+
+    setOtpBusy(true);
+    setOtpError("");
+    setOtpMessage("");
+    try {
+      const result = await verifyOtp({
+        identifier: normalizedContact,
+        contactType,
+        purpose: "register",
+        otp,
+        challengeToken,
+      });
+      const registered = await onSubmit?.({
+        fullName,
+        contact,
+        contactType,
+        password,
+        otpVerificationToken: result.verificationToken,
+      });
+      if (registered !== false) {
+        setFullName("");
+        setContact("");
+        setPassword("");
+        setOtp("");
+        setChallengeToken("");
+        setOtpRequested(false);
+      }
+    } catch (err) {
+      setOtpError(err?.message || "Không thể xác thực OTP.");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const submitLabel = (() => {
+    if (isSubmitting) return "Đang tạo tài khoản...";
+    if (otpBusy && !otpRequested) return "Đang gửi OTP...";
+    if (otpBusy) return "Đang xác thực OTP...";
+    if (otpRequested) return "Xác thực OTP và tạo tài khoản";
+    return "Tạo tài khoản";
+  })();
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      onSubmit?.({ fullName, userName, contact, contactType, password, otpVerificationToken });
-    }}>
+    <form onSubmit={handleSubmit}>
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} prefix="Đăng ký với" />
-      <div style={styles.divider}><span>hoặc</span></div>
+      <StatusMessage type="error">{socialError}</StatusMessage>
+      <StatusMessage>{socialMessage}</StatusMessage>
+      <AccessLockedNotice notice={accessNotice} />
+      <DividerText />
 
       <div style={styles.registerGrid}>
-        <TextField label="Họ và tên" type="text" autoComplete="new-password" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
-        <TextField label="Tài khoản" type="text" autoComplete="new-password" placeholder="admindemo" value={userName} onChange={(e) => setUserName(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
-        <TextField label="Email hoặc số điện thoại" type="text" autoComplete="new-password" placeholder="admin@yahoo.com hoặc 0989000005" value={contact} onChange={(e) => setContact(e.target.value)} disabled={isSubmitting} groupStyle={styles.compactField} />
+        <TextField label="Họ và tên" type="text" autoComplete="new-password" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isBusy} groupStyle={styles.compactField} />
+        <TextField label="Email hoặc số điện thoại" type="text" autoComplete="new-password" placeholder="admin@yahoo.com hoặc 0123456789" value={contact} onChange={(e) => setContact(e.target.value)} disabled={isBusy} groupStyle={styles.compactField} />
+        <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tối thiểu 8 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isBusy} groupStyle={styles.compactField} />
       </div>
-      <OtpControls identifier={contact} contactType={contactType} purpose="register" disabled={isSubmitting} onVerified={setOtpVerificationToken} />
-      <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} groupStyle={styles.registerPasswordField} />
 
+      {!otpRequested && (
+        <TurnstileWidget
+          siteKey={TURNSTILE_SITE_KEY}
+          resetKey={`register-${normalizedContact}-${contactType}-${turnstileResetKey}`}
+          disabled={isBusy}
+          onToken={setTurnstileToken}
+        />
+      )}
+      {otpRequested && (
+        <TextField
+          label="Mã OTP"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={6}
+          placeholder={targetLabel === "email" ? "Mã trong email" : "Mã trong tin nhắn"}
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          disabled={isBusy}
+          groupStyle={styles.registerPasswordField}
+        />
+      )}
+
+      <StatusMessage type="error">{contactFormatError}</StatusMessage>
+      <StatusMessage type="error">{otpError}</StatusMessage>
       <StatusMessage type="error">{error}</StatusMessage>
+      <StatusMessage>{otpMessage}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
 
-      <button type="submit" disabled={isSubmitting || !otpVerificationToken} style={{ ...styles.submitBtn, ...(isSubmitting || !otpVerificationToken ? styles.disabledBtn : null) }}>
-        {isSubmitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+      <button type="submit" disabled={isBusy || !canSubmit} style={{ ...styles.submitBtn, ...(isBusy || !canSubmit ? styles.disabledBtn : null) }}>
+        {submitLabel}
       </button>
       <div style={styles.note}>
         <i className="ti ti-info-circle" style={{ fontSize: 14 }} />
@@ -517,15 +687,111 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message })
 function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
-  const [otpVerificationToken, setOtpVerificationToken] = useState("");
+  const [otp, setOtp] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  const [otpMessage, setOtpMessage] = useState("");
+  const normalizedPhone = normalizeFormText(phoneNumber);
+  const isBusy = isSubmitting || otpBusy;
+  const hasRequiredFields = Boolean(normalizedPhone && password);
+  const canSubmit = hasRequiredFields && (!TURNSTILE_SITE_KEY || otpRequested || turnstileToken) && (!otpRequested || otp.trim().length === 6);
+
+  useEffect(() => {
+    setOtp("");
+    setChallengeToken("");
+    setOtpRequested(false);
+    setTurnstileToken("");
+    setTurnstileResetKey((key) => key + 1);
+    setOtpError("");
+    setOtpMessage("");
+  }, [normalizedPhone]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (isBusy) return;
+
+    if (!hasRequiredFields) {
+      setOtpError("Vui lòng nhập số điện thoại và mật khẩu mới.");
+      return;
+    }
+
+    if (!otpRequested) {
+      if (TURNSTILE_SITE_KEY && !turnstileToken) {
+        setOtpError("Vui lòng xác minh CAPTCHA trước khi đổi mật khẩu.");
+        return;
+      }
+
+      setOtpBusy(true);
+      setOtpError("");
+      setOtpMessage("");
+      try {
+        const result = await requestOtp({
+          phoneNumber: normalizedPhone,
+          contactType: "phone",
+          purpose: "change-password",
+          turnstileToken,
+        });
+        setChallengeToken(result.challengeToken || "");
+        setOtpRequested(true);
+        setOtp("");
+        const sentMessage = `OTP đã gửi về số điện thoại ${normalizedPhone}. Vui lòng nhập mã để xác thực.`;
+        setOtpMessage(result.debugOtp ? `${sentMessage} Mã test: ${result.debugOtp}` : sentMessage);
+      } catch (err) {
+        setOtpError(err?.message || "Không thể gửi OTP.");
+      } finally {
+        setOtpBusy(false);
+        setTurnstileToken("");
+        setTurnstileResetKey((key) => key + 1);
+      }
+      return;
+    }
+
+    setOtpBusy(true);
+    setOtpError("");
+    setOtpMessage("");
+    try {
+      const result = await verifyOtp({
+        phoneNumber: normalizedPhone,
+        contactType: "phone",
+        purpose: "change-password",
+        otp,
+        challengeToken,
+      });
+      const changed = await onSubmit?.({
+        phoneNumber,
+        password,
+        otpVerificationToken: result.verificationToken,
+      });
+      if (changed !== false) {
+        setPhoneNumber("");
+        setPassword("");
+        setOtp("");
+        setChallengeToken("");
+        setOtpRequested(false);
+      }
+    } catch (err) {
+      setOtpError(err?.message || "Không thể xác thực OTP.");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const submitLabel = (() => {
+    if (isSubmitting) return "Đang cập nhật...";
+    if (otpBusy && !otpRequested) return "Đang gửi OTP...";
+    if (otpBusy) return "Đang xác thực OTP...";
+    if (otpRequested) return "Xác thực OTP và đổi mật khẩu";
+    return "Đổi mật khẩu";
+  })();
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      onSubmit?.({ phoneNumber, password, otpVerificationToken });
-    }}>
+    <form onSubmit={handleSubmit}>
       <div style={styles.formHead}>
-        <button type="button" onClick={onBack} disabled={isSubmitting} style={styles.backBtn} title="Quay lại">
+        <button type="button" onClick={onBack} disabled={isBusy} style={styles.backBtn} title="Quay lại">
           <i className="ti ti-arrow-left" />
         </button>
         <div>
@@ -533,16 +799,39 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
           <div style={styles.formSub}>Cập nhật mật khẩu theo số điện thoại.</div>
         </div>
       </div>
-
-      <TextField label="Số điện thoại" type="tel" placeholder="0989000005" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isSubmitting} />
-      <OtpControls phoneNumber={phoneNumber} purpose="change-password" disabled={isSubmitting} onVerified={setOtpVerificationToken} />
-      <TextField label="Mật khẩu mới" type="password" placeholder="123456" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
-
-      <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
 
-      <button type="submit" disabled={isSubmitting || !otpVerificationToken} style={{ ...styles.submitBtn, ...(isSubmitting || !otpVerificationToken ? styles.disabledBtn : null) }}>
-        {isSubmitting ? "Đang cập nhật..." : "Đổi mật khẩu"}
+      <TextField label="Số điện thoại" type="tel" placeholder="0123456789" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={isBusy} />
+      <TextField label="Mật khẩu mới" type="password" placeholder="123456" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isBusy} />
+
+      {!otpRequested && (
+        <TurnstileWidget
+          siteKey={TURNSTILE_SITE_KEY}
+          resetKey={`change-password-${normalizedPhone}-${turnstileResetKey}`}
+          disabled={isBusy}
+          onToken={setTurnstileToken}
+        />
+      )}
+      {otpRequested && (
+        <TextField
+          label="Mã OTP"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={6}
+          placeholder="Mã trong tin nhắn"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          disabled={isBusy}
+        />
+      )}
+
+      <StatusMessage type="error">{otpError}</StatusMessage>
+      <StatusMessage type="error">{error}</StatusMessage>
+      <StatusMessage>{otpMessage}</StatusMessage>
+
+      <button type="submit" disabled={isBusy || !canSubmit} style={{ ...styles.submitBtn, ...(isBusy || !canSubmit ? styles.disabledBtn : null) }}>
+        {submitLabel}
       </button>
     </form>
   );
@@ -551,12 +840,12 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
 function AuthCard({ onLogin }) {
   const { t } = useTheme();
   const [tab, setTab] = useState("login");
-  const [state, setState] = useState({ loading: false, error: "", message: "", accessNotice: null });
+  const [state, setState] = useState({ loading: false, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
   const [googleLoginRequest, setGoogleLoginRequest] = useState(0);
   const isLogin = tab === "login";
   const isRegister = tab === "register";
 
-  const resetState = () => setState({ loading: false, error: "", message: "", accessNotice: null });
+  const resetState = () => setState({ loading: false, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
 
   const openTab = (nextTab) => {
     resetState();
@@ -574,6 +863,8 @@ function AuthCard({ onLogin }) {
       loading: false,
       error: "",
       message: "",
+      socialMessage: "",
+      socialError: "",
       accessNotice: {
         account: error?.account || account,
         detail: error?.message,
@@ -599,12 +890,12 @@ function AuthCard({ onLogin }) {
         showAccessNotice(error, error?.account);
         return;
       }
-      setState({ loading: false, error: error?.message || "Không thể đăng nhập Google.", message: "", accessNotice: null });
+      setState({ loading: false, error: "", message: "", socialMessage: "", socialError: error?.message || "Không thể đăng nhập Google.", accessNotice: null });
     }
   };
 
   const handleLogin = async (credentials) => {
-    setState({ loading: true, error: "", message: "", accessNotice: null });
+    setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
     try {
       const session = await loginUser(credentials);
       await completeLogin(session, credentials.remember);
@@ -613,17 +904,20 @@ function AuthCard({ onLogin }) {
         showAccessNotice(error, credentials.identifier);
         return;
       }
-      setState({ loading: false, error: error?.message || "Không thể đăng nhập. Vui lòng thử lại.", message: "", accessNotice: null });
+      setState({ loading: false, error: error?.message || "Không thể đăng nhập. Vui lòng thử lại.", message: "", socialMessage: "", socialError: "", accessNotice: null });
     }
   };
 
   const handleSocialLogin = async () => {
-    setState({ loading: true, error: "", message: "", accessNotice: null });
+    const socialMessage = tab === "register" ? "Đang đăng ký bằng Google..." : "Đang kết nối Google...";
+    setState({ loading: true, error: "", message: "", socialMessage, socialError: "", accessNotice: null });
     if (!GOOGLE_CLIENT_ID) {
       setState({
         loading: false,
-        error: "Thiếu VITE_GOOGLE_CLIENT_ID để đăng nhập Google.",
+        error: "",
         message: "",
+        socialMessage: "",
+        socialError: "Thiếu VITE_GOOGLE_CLIENT_ID để đăng nhập Google.",
         accessNotice: null,
       });
       return;
@@ -632,27 +926,33 @@ function AuthCard({ onLogin }) {
   };
 
   const handleRegister = async (payload) => {
-    setState({ loading: true, error: "", message: "", accessNotice: null });
+    setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
     try {
       await registerUser(payload);
       setState({
         loading: false,
         error: "",
         message: "Tạo tài khoản thành công. Vui lòng đăng nhập để kiểm tra quyền truy cập.",
+        socialMessage: "",
+        socialError: "",
         accessNotice: null,
       });
+      return true;
     } catch (error) {
-      setState({ loading: false, error: error?.message || "Không thể tạo tài khoản.", message: "", accessNotice: null });
+      setState({ loading: false, error: error?.message || "Không thể tạo tài khoản.", message: "", socialMessage: "", socialError: "", accessNotice: null });
+      return false;
     }
   };
 
   const handleChangePassword = async (payload) => {
-    setState({ loading: true, error: "", message: "", accessNotice: null });
+    setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
     try {
       await changePassword(payload);
-      setState({ loading: false, error: "", message: "Đổi mật khẩu thành công. Bạn có thể quay lại đăng nhập.", accessNotice: null });
+      setState({ loading: false, error: "", message: "Đổi mật khẩu thành công. Bạn có thể quay lại đăng nhập.", socialMessage: "", socialError: "", accessNotice: null });
+      return true;
     } catch (error) {
-      setState({ loading: false, error: error?.message || "Không thể đổi mật khẩu.", message: "", accessNotice: null });
+      setState({ loading: false, error: error?.message || "Số điện thoại chưa đăng ký hoặc không thể đổi mật khẩu.", message: "", socialMessage: "", socialError: "", accessNotice: null });
+      return false;
     }
   };
 
@@ -665,16 +965,20 @@ function AuthCard({ onLogin }) {
           onError={(error) => {
             setState({
               loading: false,
-              error: error?.error_description || error?.error || "Không thể đăng nhập Google.",
+              error: "",
               message: "",
+              socialMessage: "",
+              socialError: error?.error_description || error?.error || "Không thể đăng nhập Google.",
               accessNotice: null,
             });
           }}
           onNonOAuthError={() => {
             setState({
               loading: false,
-              error: "Cửa sổ đăng nhập Google đã bị đóng hoặc bị trình duyệt chặn.",
+              error: "",
               message: "",
+              socialMessage: "",
+              socialError: "Cửa sổ đăng nhập Google đã bị đóng hoặc bị trình duyệt chặn.",
               accessNotice: null,
             });
           }}
@@ -706,6 +1010,9 @@ function AuthCard({ onLogin }) {
           onSocialLogin={handleSocialLogin}
           isSubmitting={state.loading}
           error={state.error}
+          message={state.message}
+          socialMessage={state.socialMessage}
+          socialError={state.socialError}
           accessNotice={state.accessNotice}
         />
       )}
@@ -716,6 +1023,9 @@ function AuthCard({ onLogin }) {
           isSubmitting={state.loading}
           error={state.error}
           message={state.message}
+          socialMessage={state.socialMessage}
+          socialError={state.socialError}
+          accessNotice={state.accessNotice}
         />
       )}
       {tab === "forgot" && (
@@ -958,8 +1268,17 @@ const styles = {
   divider: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 10,
     margin: "16px 0",
+  },
+  dividerLine: {
+    height: 1,
+    flex: 1,
+    background: "var(--bdr)",
+    opacity: 0.7,
+  },
+  dividerText: {
     color: "var(--t4)",
     fontSize: 11,
   },
