@@ -7,6 +7,8 @@ const REQUEST_OTP_API_URL = "/api/auth/request-otp";
 const VERIFY_OTP_API_URL = "/api/auth/verify-otp";
 const SUCCESS_CODE = "S0000";
 const DEVICE_ID_KEY = "st-auth-device-id";
+const LOGIN_FAILED_MESSAGE = "Tài khoản chưa đăng ký hoặc mật khẩu không đúng.";
+const SOCIAL_LOGIN_FAILED_MESSAGE = "Tài khoản chưa đăng ký hoặc chưa liên kết Google.";
 
 const REPLY_KEYS = {
   login: ["UserLoginReply", "UserLoginRequest"],
@@ -255,6 +257,11 @@ function isLoginAccessBlocked(reply) {
   return status === 2 && !token;
 }
 
+function isBackendLoginFailed(reply) {
+  const message = normalizeText(readMessage(reply)).toLowerCase();
+  return message === "login false" || message.includes("login false");
+}
+
 export async function loginUser({ identifier, password }) {
   const userName = normalizeText(identifier);
 
@@ -277,6 +284,9 @@ export async function loginUser({ identifier, password }) {
 
   const code = readCode(reply);
   if (code && code !== SUCCESS_CODE) {
+    if (isBackendLoginFailed(reply)) {
+      throw new Error(LOGIN_FAILED_MESSAGE);
+    }
     if (isLoginAccessBlocked(reply)) {
       throw new AccessDeniedError(
         "Tài khoản đã đăng ký nhưng chưa có quyền truy cập gói Premium.",
@@ -356,6 +366,9 @@ export async function loginWithSocial({
   );
   const code = readCode(reply);
   if (code && code !== SUCCESS_CODE) {
+    if (isBackendLoginFailed(reply)) {
+      throw new Error(SOCIAL_LOGIN_FAILED_MESSAGE);
+    }
     if (isLoginAccessBlocked(reply)) {
       throw new AccessDeniedError(
         "Tài khoản đã đăng ký nhưng chưa có quyền truy cập gói Premium.",
