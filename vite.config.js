@@ -24,6 +24,7 @@ let devCache = null;
 let devLastFetched = 0;
 let stockWaveDevCache = null;
 let stockWaveDevLastFetched = 0;
+let stockWaveDevRefreshPromise = null;
 let cashFlowDevCache = null;
 let cashFlowDevLastFetched = 0;
 let cashFlowTickerDevCache = null;
@@ -103,6 +104,25 @@ async function fetchStockWaveFromSource() {
   if (!Array.isArray(waveDatas))
     throw new Error("API response missing waveDatas");
   return data;
+}
+
+function refreshStockWaveDevCache() {
+  if (stockWaveDevRefreshPromise) return stockWaveDevRefreshPromise;
+  stockWaveDevRefreshPromise = fetchStockWaveFromSource()
+    .then((data) => {
+      stockWaveDevCache = data;
+      stockWaveDevLastFetched = Date.now();
+      return data;
+    })
+    .catch((err) => {
+      console.error("Local dev stock wave proxy fetch error:", err);
+      if (!stockWaveDevCache) throw err;
+      return stockWaveDevCache;
+    })
+    .finally(() => {
+      stockWaveDevRefreshPromise = null;
+    });
+  return stockWaveDevRefreshPromise;
 }
 
 function getStockWaveReply(data) {
@@ -524,22 +544,20 @@ function smdtDevPlugin() {
           const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
 
           const now = Date.now();
-          if (
+          const isStale =
             !stockWaveDevCache ||
-            now - stockWaveDevLastFetched > CACHE_DURATION
-          ) {
+            now - stockWaveDevLastFetched > CACHE_DURATION;
+          if (!stockWaveDevCache) {
             try {
-              stockWaveDevCache = await fetchStockWaveFromSource();
-              stockWaveDevLastFetched = now;
+              await refreshStockWaveDevCache();
             } catch (err) {
-              console.error("Local dev stock wave proxy fetch error:", err);
-              if (!stockWaveDevCache) {
-                res.statusCode = 502;
-                res.setHeader("Content-Type", "application/json");
-                res.end(JSON.stringify({ error: err.message }));
-                return;
-              }
+              res.statusCode = 502;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: err.message }));
+              return;
             }
+          } else if (isStale) {
+            refreshStockWaveDevCache();
           }
 
           try {

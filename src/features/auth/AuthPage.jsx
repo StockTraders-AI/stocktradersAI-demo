@@ -465,16 +465,10 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
-  const normalizedIdentifier = normalizeFormText(identifier);
-  const identifierType = resolveContactType(normalizedIdentifier);
-  const identifierFormatError = normalizedIdentifier && identifierType === "email" && !isValidEmailFormat(normalizedIdentifier)
-    ? "Email không đúng định dạng."
-    : "";
 
   return (
     <form onSubmit={(e) => {
       e.preventDefault();
-      if (identifierFormatError) return;
       onSubmit?.({ identifier, password, remember });
     }}>
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} />
@@ -493,12 +487,11 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
         <button type="button" onClick={onForgotPassword} disabled={isSubmitting} style={styles.linkBtn}>Quên mật khẩu?</button>
       </div>
 
-      <StatusMessage type="error">{identifierFormatError}</StatusMessage>
       <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
       <AccessLockedNotice notice={accessNotice} />
 
-      <button type="submit" disabled={isSubmitting || Boolean(identifierFormatError)} style={{ ...styles.submitBtn, ...(isSubmitting || identifierFormatError ? styles.disabledBtn : null) }}>
+      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
       </button>
       <div style={styles.note}>

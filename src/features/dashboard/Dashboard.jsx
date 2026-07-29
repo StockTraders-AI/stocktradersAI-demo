@@ -1125,98 +1125,196 @@ function SignalPortfolio({ rows, date, live }) {
   );
 }
 
-const LOG_TONES = {
-  mua: { color: "#0ca30c", bg: "rgba(12,163,12,.12)", icon: "ti-trending-up" },
-  ban: { color: "#e34948", bg: "rgba(227,73,72,.12)", icon: "ti-trending-down" },
-  smdt: { color: "#9b7cf7", bg: "rgba(124,58,237,.12)", icon: "ti-bolt" },
-  dv: { color: "#0ca30c", bg: "rgba(12,163,12,.12)", icon: "ti-trending-up" },
-  nn: { color: "#1baf7a", bg: "rgba(27,175,122,.12)", icon: "ti-trending-up" },
-  dt: { color: "#eda100", bg: "rgba(237,161,0,.12)", icon: "ti-trending-down" },
-  tr: { color: "#e34948", bg: "rgba(227,73,72,.12)", icon: "ti-trending-down" },
-  song: { color: "#06B6D4", bg: "rgba(6,182,212,.12)", icon: "ti-wave-sine" },
+const SIGNAL_LOG_TABS = [
+  ["all", "Tất cả"],
+  ["thi_truong", "Thị trường"],
+  ["nganh", "Ngành"],
+  ["ma", "Mã"],
+];
+const SIGNAL_LOG_TONES = {
+  wave: { color: "#A78BFA", bg: "rgba(124,58,237,.16)", border: "#5B21B6", icon: "ti-wave-sine", tag: "#A78BFA" },
+  up: { color: "#3DD68C", bg: "rgba(61,214,140,.10)", border: "rgba(61,214,140,.40)", icon: "ti-trending-up", tag: "#22D3EE" },
+  down: { color: "#FF2D55", bg: "rgba(255,45,85,.10)", border: "rgba(255,45,85,.36)", icon: "ti-trending-down", tag: "#22D3EE" },
+  smdt: { color: "#FF9F0A", bg: "rgba(255,159,10,.12)", border: "rgba(255,159,10,.40)", icon: "ti-alert-circle", tag: "#22D3EE" },
 };
+const SIGNAL_LOG_TAG_COLORS = {
+  "Cổ phiếu": "#22D3EE",
+  "Ngành": "#3DD68C",
+  "Thị trường": "#A78BFA",
+};
+const SIGNAL_LOG_SMDT_THRESHOLD = 70;
 
-function logToneForSig(sig) {
-  return { si: "dv", sn: "nn", so: "dt", st: "tr" }[sig] || "tr";
+function signalLogKeyForSig(sig) {
+  return sig === "si" || sig === "sn" ? "up" : "down";
 }
 
-function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
-  const [filter, setFilter] = useState("all");
-  const [page, setPage] = useState(1);
+function signalLogPercent(value, total) {
+  const number = Number(value);
+  const base = Number(total);
+  if (!Number.isFinite(number) || !Number.isFinite(base) || base <= 0) return "0%";
+  return `${((number / base) * 100).toFixed(1)}%`.replace(".", ",");
+}
+
+function signalLogSmdt(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${Math.round(number)}%` : "—";
+}
+
+function signalLogPrice(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : "";
+}
+
+function signalLogProfit(price, ave) {
+  const p = Number(price);
+  const a = Number(ave);
+  if (!Number.isFinite(p) || !Number.isFinite(a) || a === 0) return "0%";
+  const pct = ((p - a) / a) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
+
+function SignalLogDot({ toneKey }) {
+  const tone = SIGNAL_LOG_TONES[toneKey] || SIGNAL_LOG_TONES.smdt;
+  return (
+    <span style={{ width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", background: tone.bg, border: `1px solid ${tone.border}`, color: tone.color }}>
+      <i className={`ti ${tone.icon}`} style={{ fontSize: 13 }} />
+    </span>
+  );
+}
+
+function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows }) {
+  const [tab, setTab] = useState("all");
   const logs = useMemo(() => {
     const items = [];
-    for (const row of stockSignalRows.filter((item) => item.signal === "MUA" || item.signal === "BAN").slice(0, 14)) {
-      items.push({ kind: "ma", type: row.signal === "MUA" ? "mua" : "ban", time: row.date ? fmtFull(row.date) : "Live", title: row.ticker, tag: row.signal === "MUA" ? "MUA" : "BÁN", sub: `${row.signal === "MUA" ? "Tín hiệu mua" : "Tín hiệu bán"}${row.percent != null ? ` ${row.percent}%` : ""}${Number.isFinite(row.price) ? ` · Giá ${fmtNum(row.price)}` : ""}` });
-    }
-    for (const row of topRows.slice(0, 8)) {
-      items.push({ kind: "ma", type: "smdt", time: "SMDT", title: row.ticker, tag: "SMDT", industry: row.industry, sub: `SMDT đạt ${row.smdt.toFixed(1)}% · ${sigLabel(row.sig)}` });
-    }
-    for (const row of branchRows.slice(0, 8)) {
-      items.push({ kind: "ng", type: logToneForSig(row.sig), time: "Ngành", title: row.label, tag: sigLabel(row.sig), sub: `Dòng tiền ngành đang ở trạng thái ${sigLabel(row.sig).toLowerCase()}` });
-    }
-    for (const row of [...waveRows].slice(-2).reverse()) {
+    for (const row of [...waveRows].slice(-1).reverse()) {
+      const total = row.total ?? (row.waitbuy || 0) + (row.buy || 0) + (row.waitsell || 0) + (row.sell || 0);
       items.push({
-        kind: "tt",
-        type: "song",
-        time: row.date ? fmtFull(row.date) : "—",
-        title: "Thị trường",
-        tag: "Dò sóng",
-        sub: `${fmtNum(row.total ?? (row.waitbuy || 0) + (row.buy || 0) + (row.waitsell || 0) + (row.sell || 0))} mã · Chờ mua ${fmtNum(row.waitbuy || 0)} · Mua ${fmtNum(row.buy || 0)} · Chờ bán ${fmtNum(row.waitsell || 0)} · Bán ${fmtNum(row.sell || 0)}${Number.isFinite(row.reliability) ? ` · Tin cậy ${fmtNum(row.reliability)}%` : ""}`,
+        cap: "thi_truong",
+        capTag: "Thị trường",
+        k: "wave",
+        t: row.date ? fmtFull(row.date) : "—",
+        sortDate: toDateInputValue(row.date),
+        tieuDe: "Tín hiệu thị trường",
+        x: `Chờ mua ${fmtNum(row.waitbuy || 0)} mã (${signalLogPercent(row.waitbuy || 0, total)}), Mua ${fmtNum(row.buy || 0)}, Chờ bán ${fmtNum(row.waitsell || 0)}, Bán ${fmtNum(row.sell || 0)}.${Number.isFinite(row.reliability) ? ` Độ tin cậy ${fmtNum(row.reliability)}%.` : ""}`,
       });
     }
-    return items.filter((item) => filter === "all" || item.kind === filter);
-  }, [branchRows, filter, stockSignalRows, topRows, waveRows]);
 
-  const totalPages = Math.max(1, Math.ceil(logs.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const visible = logs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+    for (const row of branchRows.filter((item) => item.sig).slice(0, 12)) {
+      items.push({
+        cap: "nganh",
+        capTag: "Ngành",
+        k: signalLogKeyForSig(row.sig),
+        t: "Ngành",
+        sortDate: "",
+        tieuDe: "Cảnh báo dòng tiền",
+        x: `Dòng tiền ${sigLabel(row.sig).toLowerCase()} ở cổ phiếu ngành ${row.label}.`,
+      });
+    }
 
-  const switchFilter = (value) => {
-    setFilter(value);
-    setPage(1);
-  };
+    for (const row of smdtBranchRows.filter((item) => Number.isFinite(item.value) && item.value >= SIGNAL_LOG_SMDT_THRESHOLD).slice(0, 12)) {
+      items.push({
+        cap: "nganh",
+        capTag: "Ngành",
+        k: "smdt",
+        t: "SMDT",
+        sortDate: "",
+        tieuDe: "Cảnh báo SMDT",
+        x: `Ngành ${row.label || row.name} có SMDT đạt ${signalLogSmdt(row.value)}.`,
+      });
+    }
+
+    for (const row of stockSignalRows.filter((item) => item.signal === "MUA" || item.signal === "BAN").slice(0, 14)) {
+      const isBuy = row.signal === "MUA";
+      const hold = Number(row.hold ?? row.weight);
+      const price = signalLogPrice(row.price);
+      items.push({
+        cap: "ma",
+        capTag: "Cổ phiếu",
+        k: isBuy ? "up" : "down",
+        t: row.date ? fmtFull(row.date) : "Live",
+        sortDate: toDateInputValue(row.date),
+        tieuDe: isBuy ? "Khuyến nghị mua" : "Khuyến nghị bán",
+        x: isBuy
+          ? `${row.ticker} mua ${Number.isFinite(hold) ? Math.round(hold) : 0}%${price ? ` giá ${price}` : ""} trong phiên hôm nay, SMDT đạt ${signalLogSmdt(row.smdt)}.`
+          : `${row.ticker} bán ${Number.isFinite(hold) ? Math.round(hold) : 0}%${price ? ` giá ${price}` : ""} trong phiên hôm nay, lợi nhuận ${signalLogProfit(row.price, row.ave)}.`,
+      });
+    }
+
+    for (const row of topRows.filter((item) => Number.isFinite(item.smdt) && item.smdt >= SIGNAL_LOG_SMDT_THRESHOLD).slice(0, 12)) {
+      items.push({
+        cap: "ma",
+        capTag: "Cổ phiếu",
+        k: "smdt",
+        t: "SMDT",
+        sortDate: "",
+        tieuDe: "Cảnh báo SMDT",
+        x: `Cổ phiếu ${row.ticker} có SMDT đạt ${signalLogSmdt(row.smdt)}.${row.industry ? ` Ngành ${row.industry}.` : ""}`,
+      });
+    }
+
+    for (const row of cashTickerRows.filter((item) => item.content).slice(0, 12)) {
+      const sig = tickerContentToSig(row.content);
+      items.push({
+        cap: "ma",
+        capTag: "Cổ phiếu",
+        k: signalLogKeyForSig(sig),
+        t: row.date ? fmtFull(row.date) : "Mã",
+        sortDate: toDateInputValue(row.date),
+        tieuDe: "Cảnh báo dòng tiền",
+        x: `Cổ phiếu ${row.ticker} có dòng tiền ${String(row.content).toLowerCase()}.`,
+      });
+    }
+    return items;
+  }, [branchRows, cashTickerRows, smdtBranchRows, stockSignalRows, topRows, waveRows]);
+
+  const visible = useMemo(() => logs.filter((item) => tab === "all" || item.cap === tab), [logs, tab]);
+  const dateLabel = useMemo(() => {
+    const date = logs.map((item) => item.sortDate).filter(Boolean).sort((a, b) => b.localeCompare(a))[0];
+    return date ? fmtFull(date) : "";
+  }, [logs]);
+  const countFor = (id) => id === "all" ? logs.length : logs.filter((item) => item.cap === id).length;
 
   return (
-    <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
-        <div>
-          <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Nhật ký tín hiệu</span>
-          <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>Sóng thị trường · Ngành · Mã</span>
+    <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column", padding: "16px 17px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <i className="ti ti-notebook" style={{ color: "var(--B)", fontSize: 14, flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)", whiteSpace: "nowrap" }}>Nhật ký tín hiệu</span>
+          {dateLabel && <span style={{ fontSize: 10, color: "var(--t4)", fontWeight: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>({dateLabel})</span>}
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
-          <ChipButton active={filter === "all"} onClick={() => switchFilter("all")}>Tất cả</ChipButton>
-          <ChipButton active={filter === "ma"} onClick={() => switchFilter("ma")}>Mã</ChipButton>
-          <ChipButton active={filter === "ng"} onClick={() => switchFilter("ng")}>Ngành</ChipButton>
-          <ChipButton active={filter === "tt"} onClick={() => switchFilter("tt")}>Thị trường</ChipButton>
-        </div>
+        <Clink onClick={() => nav("top-ma-manh")}>Xem tất cả ›</Clink>
       </div>
-      <div>
-        {visible.map((item, index) => {
-          const tone = LOG_TONES[item.type] || LOG_TONES.tr;
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
+        {SIGNAL_LOG_TABS.map(([id, label]) => {
+          const active = id === tab;
           return (
-            <div key={`${item.title}-${item.tag}-${index}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 14px", borderBottom: "0.5px solid var(--bdrs)" }}>
-              <div style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, background: tone.bg, color: tone.color }}>
-                <i className={`ti ${item.kind === "ng" ? "ti-building-community" : tone.icon}`} />
-              </div>
+            <button key={id} onClick={() => setTab(id)} style={{ textAlign: "center", minWidth: 0, padding: "6px 4px", borderRadius: 8, cursor: "pointer", background: active ? "rgba(124,58,237,.14)" : "var(--elev)", border: `0.5px solid ${active ? "var(--B)" : "var(--bdr)"}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: active ? "var(--B)" : "var(--t2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+              <div style={{ fontSize: 9, color: active ? "var(--B)" : "var(--t4)", ...mono }}>({countFor(id)})</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ maxHeight: 420, overflowY: "auto", marginRight: -4, paddingRight: 4 }}>
+        {visible.map((item, index) => {
+          const tagColor = SIGNAL_LOG_TAG_COLORS[item.capTag] || "var(--B)";
+          return (
+            <div key={`${item.cap}-${item.tieuDe}-${item.t}-${index}`} style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: index < visible.length - 1 ? "0.5px solid var(--bdrs)" : "none" }}>
+              <SignalLogDot toneKey={item.k} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 650, color: item.kind === "ng" ? "var(--t2)" : "var(--t1)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  {item.title}
-                  <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 3, whiteSpace: "nowrap", color: tone.color, background: tone.bg, border: `0.5px solid ${tone.color}33` }}>{item.tag}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.tieuDe}</span>
+                  <span style={{ fontSize: 9, fontWeight: 750, color: tagColor, background: `${tagColor}1A`, borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap", flexShrink: 0 }}>{item.capTag}</span>
+                  {item.t && <span style={{ fontSize: 10, color: "var(--t4)", marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.t}</span>}
                 </div>
-                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, lineHeight: 1.5 }}>
-                  {item.industry && <><span style={{ color: "var(--t2)" }}>{item.industry}</span> · </>}
-                  {item.sub}
-                </div>
+                <div style={{ fontSize: 10.5, lineHeight: 1.45, color: "var(--t2)" }}>{item.x}</div>
               </div>
-              <div style={{ fontSize: 10, color: "var(--t4)", whiteSpace: "nowrap" }}>{item.time}</div>
             </div>
           );
         })}
-        {!visible.length && <EmptyHint />}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>{logs.length ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, logs.length)} / ${logs.length} tín hiệu` : "0 tín hiệu"}</span>
-        <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
+        {!visible.length && <EmptyHint>Chưa có tín hiệu ở cấp này trong phiên.</EmptyHint>}
       </div>
     </Card>
   );
@@ -1615,7 +1713,14 @@ export function ModDashboard() {
         <SignalPortfolio rows={stockSignalRows} date={signalLatestDate} live={live} />
       </div>
 
-      <SignalLog topRows={rankedTopTickers} branchRows={branchCashRows} stockSignalRows={stockSignalRows} waveRows={stockWave.rows} />
+      <SignalLog
+        topRows={rankedTopTickers}
+        branchRows={branchCashRows}
+        smdtBranchRows={branchSmdtRows}
+        cashTickerRows={cashTickerRows.map((row) => ({ ...row, date: activeCashTickerDate }))}
+        stockSignalRows={stockSignalRows}
+        waveRows={stockWave.rows}
+      />
 
       <LiveFooter live={live} updatedAt={updatedAt} extra="Dashboard tổng hợp" />
     </div>
