@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { REALTIME_RECONNECT_EVENT } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, shouldRunClientRefresh } from "./realtimeUrl";
 
 const API_URL = "/api/total-trade-real";
 const CACHE_KEY = "market_indices_real_cache_v1";
@@ -169,7 +169,9 @@ export function useMarketIndices() {
   useEffect(() => {
     fetchSnapshot({ background: Boolean(cached) });
     const refresh = () => {
-      if (document.visibilityState === "visible") fetchSnapshot({ background: true });
+      if (document.visibilityState === "visible" && shouldRunClientRefresh("market-indices")) {
+        fetchSnapshot({ background: true });
+      }
     };
 
     // Không poll định kỳ: chỉ fetch lại snapshot khi tab hiện lại / được focus

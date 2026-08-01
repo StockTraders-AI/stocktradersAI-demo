@@ -5,7 +5,7 @@ import { useNarrow } from "../../app/useNarrow";
 import { fmtFull, fmtNum, pct } from "../../app/formatters";
 import { useSMDTTicker } from "../../data/useSMDTTicker";
 import { useCashFlowTicker, tickerContentToSig } from "../../data/useCashFlowTicker";
-import { useSMDT } from "../../data/useSMDT";
+import { CORE_BRANCHES, useSMDT } from "../../data/useSMDT";
 import { useCashFlowBranch, contentToSig } from "../../data/useCashFlowBranch";
 import { useBranchPath } from "../../data/useBranchPath";
 import { useTotalTrade } from "../../data/useTotalTrade";
@@ -86,6 +86,14 @@ function findIndustryBranch(branches, industry) {
     const branchAliases = [branch.key, branch.label, ...aliasesOf(branch.key), ...aliasesOf(branch.label)].map(normalizeName);
     return targetAliases.some((target) => branchAliases.includes(target));
   }) || null;
+}
+
+function isCoreSectorName(name) {
+  const names = aliasesOf(name).map(normalizeName);
+  return CORE_BRANCHES.some((branch) => {
+    const branchNames = [branch.key, branch.label, ...aliasesOf(branch.key), ...aliasesOf(branch.label)].map(normalizeName);
+    return names.some((item) => branchNames.includes(item));
+  });
 }
 
 function findTradePoint(tradeRow, dateValue) {
@@ -230,6 +238,13 @@ function smdtBadgeStyle(value) {
 
 function formatPickerSmdt(value) {
   return Number.isFinite(value) ? `${Math.round(value)}%` : "--";
+}
+
+function pickerSectorTag(sector) {
+  if (!Number.isFinite(sector?.smdt)) return null;
+  if (sector.isCore && sector.smdt >= PICKER_LEAD_THRESHOLD) return "DẪN SÓNG";
+  if (!sector.isCore && sector.smdt > PICKER_LEAD_THRESHOLD) return "NGÀNH MẠNH";
+  return null;
 }
 
 function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, dateLabel, mobile, sectors = [] }) {
@@ -405,7 +420,7 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                           <span style={{ color: "var(--t1)", fontSize: 13, fontWeight: 650, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sector.name}</span>
-                          {Number.isFinite(sector.smdt) && sector.smdt >= PICKER_LEAD_THRESHOLD && <span style={{ color: "var(--G)", background: "var(--Gs)", border: "0.5px solid var(--Gb)", borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 850, flexShrink: 0 }}>DẪN SÓNG</span>}
+                          {pickerSectorTag(sector) && <span style={{ color: "var(--G)", background: "var(--Gs)", border: "0.5px solid var(--Gb)", borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 850, flexShrink: 0 }}>{pickerSectorTag(sector)}</span>}
                         </span>
                         <span style={{ display: "block", color: "var(--t4)", fontSize: 11, marginTop: 1 }}>{sector.stocks.length} mã{selectedCount ? ` · đã chọn ${selectedCount}` : ""}</span>
                       </span>
@@ -679,6 +694,7 @@ export function ModPhanTichDanhMuc() {
         byIndustry.set(key, {
           name: industry,
           smdt: lookupIndustry(branchSmdtLookup, industry),
+          isCore: isCoreSectorName(industry),
           stocks: [],
         });
       }

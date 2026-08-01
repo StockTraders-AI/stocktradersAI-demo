@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
  * useSMDTTicker — nguồn dữ liệu "Sức mạnh dòng tiền cổ phiếu"
@@ -290,10 +290,12 @@ export function useSMDTTicker() {
   useEffect(() => {
     let cancelled = false;
     fetchSnapshot({ background: Boolean(cached), limit: cached ? FULL_LIMIT : INITIAL_LIMIT }).then(() => {
-      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true, limit: FULL_LIMIT });
+      if (!cancelled && !cached) fetchSnapshot({ background: true, limit: FULL_LIMIT });
     });
     const refresh = () => {
-      if (document.visibilityState === "visible") fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
+      if (document.visibilityState === "visible" && shouldRunClientRefresh("smdt-ticker")) {
+        fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
+      }
     };
     // Không poll định kỳ: dữ liệu mới đến qua Socket.IO; chỉ fetch lại snapshot
     // khi tab hiện lại / được focus hoặc khi socket realtime reconnect (bù dữ liệu hụt).
