@@ -39,9 +39,9 @@ export const BOTTOM_TABS = [
   { id: "smdt-nganh", icon: "ti-table", label: "SMDT" },
 ];
 
-export function ModuleView({ id }) {
+export function ModuleView({ id, tradingDate }) {
   switch (id) {
-    case "dashboard":       return <ModDashboard />;
+    case "dashboard":       return <ModDashboard tradingDate={tradingDate} />;
     case "do-song":         return <ModDoSong />;
     case "smdt-nganh":      return <ModSMDTNganh />;
     case "lo-trinh-dan-song": return <ModLoTrinhDanSong />;

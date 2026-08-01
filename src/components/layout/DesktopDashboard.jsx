@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MODULES, ModuleView } from "../../app/modules";
+import { useTradingDateControl } from "../../app/useTradingDateControl";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -7,6 +8,7 @@ import { Topbar } from "./Topbar";
 export function DesktopDashboard({ session, onLogout }) {
   const [curMod, setCurMod] = useState("dashboard");
   const mainRef = useRef(null);
+  const tradingDateControl = useTradingDateControl();
 
   const sw = useCallback((id) => {
     if (!MODULES[id]) return;
@@ -26,10 +28,10 @@ export function DesktopDashboard({ session, onLogout }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "224px 1fr", gridTemplateRows: "52px 1fr", height: "100vh", background: "var(--bg)", color: "var(--t1)" }}>
       <Sidebar curMod={curMod} onNav={sw} />
-      <Topbar mod={mod} session={session} onLogout={onLogout} />
+      <Topbar mod={mod} session={session} onLogout={onLogout} tradingDateControl={tradingDateControl} />
       <main ref={mainRef} style={{ gridColumn: 2, overflowY: "auto", overflowX: "hidden", background: "var(--bg)", scrollbarWidth: "thin" }}>
         <div style={{ padding: "18px 22px 32px" }}>
-          <ModuleView id={curMod} />
+          <ModuleView id={curMod} tradingDate={tradingDateControl.date} />
         </div>
       </main>
     </div>

@@ -254,10 +254,14 @@ function waveCoreOrderOfIndustry(name) {
   return WAVE_CORE_BRANCH_NAMES.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeIndustryName(alias))));
 }
 
-function getLatestTrade(totalTrade, ticker) {
+function getLatestTrade(totalTrade, ticker, date) {
   const row = totalTrade.matrix[ticker] || {};
-  const date = Object.keys(row).sort().at(-1);
-  return date ? row[date] : null;
+  const dates = Object.keys(row).sort();
+  const dateValue = toDateInputValue(date);
+  const targetDate = dateValue
+    ? dates.findLast((item) => toDateInputValue(item) <= dateValue)
+    : dates.at(-1);
+  return targetDate ? row[targetDate] : null;
 }
 
 function EmptyHint({ children }) {
@@ -472,8 +476,7 @@ function SmdtPreview({ title, meta, leftRows, rightRows, defaultTab = "core", na
           {showTabs && (
             <>
               <ChipButton active={tab === "core"} onClick={(event) => switchTab("core", event)}>
-                <i className="ti ti-star-filled" style={{ color: "var(--A)", fontSize: 10 }} />
-                {leftLabel}
+                ⭐ {leftLabel}
               </ChipButton>
               <ChipButton active={tab === "other"} onClick={(event) => switchTab("other", event)}>
                 {rightLabel}
@@ -502,12 +505,10 @@ function SmdtPreview({ title, meta, leftRows, rightRows, defaultTab = "core", na
         )}
       </div>
 
-      {rows.length > SMDT_PREVIEW_PAGE_SIZE && (
-        <div onClick={(event) => event.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 2 }}>
-          <span style={{ fontSize: 10, color: "var(--t3)" }}>{(safePage - 1) * SMDT_PREVIEW_PAGE_SIZE + 1}-{Math.min(safePage * SMDT_PREVIEW_PAGE_SIZE, rows.length)} / {rows.length}</span>
-          <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
-        </div>
-      )}
+      <div onClick={(event) => event.stopPropagation()} style={{ minHeight: 22, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 2, visibility: rows.length > SMDT_PREVIEW_PAGE_SIZE ? "visible" : "hidden" }}>
+        <span style={{ fontSize: 10, color: "var(--t3)" }}>{(safePage - 1) * SMDT_PREVIEW_PAGE_SIZE + 1}-{Math.min(safePage * SMDT_PREVIEW_PAGE_SIZE, rows.length)} / {rows.length}</span>
+        <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
+      </div>
 
       <SmdtPreviewLegend />
     </Card>
@@ -1177,16 +1178,31 @@ const SIGNAL_LOG_TABS = [
   ["nganh", "Ngành"],
   ["ma", "Mã"],
 ];
-const SIGNAL_LOG_TONES = {
-  wave: { color: "#A78BFA", bg: "rgba(124,58,237,.16)", border: "#5B21B6", icon: "ti-wave-sine", tag: "#A78BFA" },
-  up: { color: "#3DD68C", bg: "rgba(61,214,140,.10)", border: "rgba(61,214,140,.40)", icon: "ti-trending-up", tag: "#22D3EE" },
-  down: { color: "#FF2D55", bg: "rgba(255,45,85,.10)", border: "rgba(255,45,85,.36)", icon: "ti-trending-down", tag: "#22D3EE" },
-  smdt: { color: "#FF9F0A", bg: "rgba(255,159,10,.12)", border: "rgba(255,159,10,.40)", icon: "ti-alert-circle", tag: "#22D3EE" },
-};
 const SIGNAL_LOG_TAG_COLORS = {
   "Cổ phiếu": "#22D3EE",
   "Ngành": "#3DD68C",
   "Thị trường": "#A78BFA",
+};
+const NHAT_KY_DARK_COLORS = {
+  t1: "#F0F4FF",
+  t2: "#A8B8D0",
+  t4: "#5C7090",
+  surf: "#111520",
+  elev: "#171D2E",
+  cbdr: "#1E2A3E",
+  bdrs: "#1A2232",
+  B: "#A78BFA",
+  cmb: "#0A2318",
+  cmd: "#0F3D22",
+  cmc: "#3DD68C",
+  cbb: "#2B1800",
+  cbd: "#4A2E00",
+  cbc: "#FF9F0A",
+  bab: "#200A0E",
+  bad: "#3D1018",
+  bac: "#FF2D55",
+  pb: "rgba(124,58,237,.16)",
+  pd: "#5B21B6",
 };
 const SIGNAL_LOG_SMDT_THRESHOLD = 70;
 
@@ -1219,17 +1235,55 @@ function signalLogProfit(price, ave) {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
 }
 
-function SignalLogDot({ toneKey }) {
-  const tone = SIGNAL_LOG_TONES[toneKey] || SIGNAL_LOG_TONES.smdt;
+function signalLogSmdtBand(value) {
+  const number = Number(value);
+  if (Number.isFinite(number) && number >= 100) return { bg: "#0A2A1C", bd: "#124A30", sk: "#3DE8A8" };
+  if (Number.isFinite(number) && number >= 70) return { bg: "#0A2318", bd: "#0F3D22", sk: "#3DD68C" };
+  if (Number.isFinite(number) && number >= 20) return { bg: "#2B1B08", bd: "#4A3010", sk: "#E89A3C" };
+  return { bg: "#2A0E12", bd: "#4A1820", sk: "#F0555B" };
+}
+
+function SignalLogIcon({ toneKey, smdtValue }) {
+  const C = NHAT_KY_DARK_COLORS;
+  const iconKey = toneKey === "smdt" ? "smdt" : toneKey;
+  const smdtBand = iconKey === "smdt" ? signalLogSmdtBand(smdtValue) : null;
+  const sk = smdtBand?.sk || (iconKey === "down" ? C.bac : iconKey === "warn" ? C.cbc : iconKey === "wave" ? C.B : C.cmc);
+  const bg = smdtBand?.bg || (iconKey === "down" ? C.bab : iconKey === "warn" ? C.cbb : iconKey === "wave" ? C.pb : C.cmb);
+  const bd = smdtBand?.bd || (iconKey === "down" ? C.bad : iconKey === "warn" ? C.cbd : iconKey === "wave" ? C.pd : C.cmd);
+  const paths = {
+    up: (
+      <>
+        <polyline points="3,17 9,11 13,15 21,7" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="15,7 21,7 21,13" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+    down: (
+      <>
+        <polyline points="3,7 9,13 13,9 21,17" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="15,17 21,17 21,11" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+    warn: (
+      <>
+        <circle cx="12" cy="12" r="9" stroke={sk} strokeWidth="2.2" />
+        <line x1="12" y1="7.5" x2="12" y2="13" stroke={sk} strokeWidth="2.4" strokeLinecap="round" />
+        <circle cx="12" cy="16.6" r="1.3" fill={sk} />
+      </>
+    ),
+    wave: <path d="M3 12h3l2.5-6 4 12 2.5-6h6" stroke={sk} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />,
+    smdt: <path d="M12 3c3.2 3 4.5 5.4 4.5 8.2a4.5 4.5 0 0 1-9 0c0-1.3.6-2.4 1.7-3.3.1 1.2.6 1.9 1.2 2.4-.2-2.4-1-4.6 1.6-7.3Z" stroke={sk} strokeWidth="1.9" strokeLinejoin="round" fill={`${sk}22`} />,
+  };
+
   return (
-    <span style={{ width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", background: tone.bg, border: `1px solid ${tone.border}`, color: tone.color }}>
-      <i className={`ti ${tone.icon}`} style={{ fontSize: 13 }} />
+    <span style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", background: bg, border: `1px solid ${bd}` }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">{paths[iconKey] || paths.up}</svg>
     </span>
   );
 }
 
 function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows }) {
   const [tab, setTab] = useState("all");
+  const [expanded, setExpanded] = useState(false);
   const logs = useMemo(() => {
     const items = [];
     for (const row of [...waveRows].slice(-1).reverse()) {
@@ -1240,7 +1294,7 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         k: "wave",
         t: row.date ? fmtFull(row.date) : "—",
         sortDate: toDateInputValue(row.date),
-        tieuDe: "Tín hiệu thị trường",
+        title: "Tín hiệu thị trường",
         x: `Chờ mua ${fmtNum(row.waitbuy || 0)} mã (${signalLogPercent(row.waitbuy || 0, total)}), Mua ${fmtNum(row.buy || 0)}, Chờ bán ${fmtNum(row.waitsell || 0)}, Bán ${fmtNum(row.sell || 0)}.${Number.isFinite(row.reliability) ? ` Độ tin cậy ${fmtNum(row.reliability)}%.` : ""}`,
       });
     }
@@ -1252,7 +1306,7 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         k: signalLogKeyForSig(row.sig),
         t: "Ngành",
         sortDate: "",
-        tieuDe: "Cảnh báo dòng tiền",
+        title: "Cảnh báo dòng tiền",
         x: `Dòng tiền ${sigLabel(row.sig).toLowerCase()} ở cổ phiếu ngành ${row.label}.`,
       });
     }
@@ -1262,9 +1316,10 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         cap: "nganh",
         capTag: "Ngành",
         k: "smdt",
+        smdtValue: row.value,
         t: "SMDT",
         sortDate: "",
-        tieuDe: "Cảnh báo SMDT",
+        title: "Cảnh báo SMDT",
         x: `Ngành ${row.label || row.name} có SMDT đạt ${signalLogSmdt(row.value)}.`,
       });
     }
@@ -1279,7 +1334,7 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         k: isBuy ? "up" : "down",
         t: row.date ? fmtFull(row.date) : "Live",
         sortDate: toDateInputValue(row.date),
-        tieuDe: isBuy ? "Khuyến nghị mua" : "Khuyến nghị bán",
+        title: isBuy ? "Khuyến nghị mua" : "Khuyến nghị bán",
         x: isBuy
           ? `${row.ticker} mua ${Number.isFinite(hold) ? Math.round(hold) : 0}%${price ? ` giá ${price}` : ""} trong phiên hôm nay, SMDT đạt ${signalLogSmdt(row.smdt)}.`
           : `${row.ticker} bán ${Number.isFinite(hold) ? Math.round(hold) : 0}%${price ? ` giá ${price}` : ""} trong phiên hôm nay, lợi nhuận ${signalLogProfit(row.price, row.ave)}.`,
@@ -1291,9 +1346,10 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         cap: "ma",
         capTag: "Cổ phiếu",
         k: "smdt",
+        smdtValue: row.smdt,
         t: "SMDT",
         sortDate: "",
-        tieuDe: "Cảnh báo SMDT",
+        title: "Cảnh báo SMDT",
         x: `Cổ phiếu ${row.ticker} có SMDT đạt ${signalLogSmdt(row.smdt)}.${row.industry ? ` Ngành ${row.industry}.` : ""}`,
       });
     }
@@ -1306,7 +1362,7 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         k: signalLogKeyForSig(sig),
         t: row.date ? fmtFull(row.date) : "Mã",
         sortDate: toDateInputValue(row.date),
-        tieuDe: "Cảnh báo dòng tiền",
+        title: "Cảnh báo dòng tiền",
         x: `Cổ phiếu ${row.ticker} có dòng tiền ${String(row.content).toLowerCase()}.`,
       });
     }
@@ -1314,59 +1370,62 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
   }, [branchRows, cashTickerRows, smdtBranchRows, stockSignalRows, topRows, waveRows]);
 
   const visible = useMemo(() => logs.filter((item) => tab === "all" || item.cap === tab), [logs, tab]);
+  const collapsedLimit = 6;
+  const displayList = expanded ? visible : visible.slice(0, collapsedLimit);
+  const hasMore = visible.length > collapsedLimit;
   const dateLabel = useMemo(() => {
     const date = logs.map((item) => item.sortDate).filter(Boolean).sort((a, b) => b.localeCompare(a))[0];
     return date ? fmtFull(date) : "";
   }, [logs]);
   const countFor = (id) => id === "all" ? logs.length : logs.filter((item) => item.cap === id).length;
 
+  useEffect(() => {
+    setExpanded(false);
+  }, [tab]);
+
   return (
-    <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column", padding: "16px 17px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <i className="ti ti-notebook" style={{ color: "var(--B)", fontSize: 14, flexShrink: 0 }} />
-          <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)", whiteSpace: "nowrap" }}>Nhật ký tín hiệu</span>
-          {dateLabel && <span style={{ fontSize: 10, color: "var(--t4)", fontWeight: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>({dateLabel})</span>}
+    <Card id="signal-log-card" noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Nhật ký tín hiệu</span>
+          {dateLabel && <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>{dateLabel}</span>}
         </div>
-        <Clink onClick={() => nav("top-ma-manh")}>Xem tất cả ›</Clink>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
+          {SIGNAL_LOG_TABS.map(([id, label]) => {
+            const active = id === tab;
+            return (
+              <ChipButton key={id} active={active} onClick={() => setTab(id)}>{label}</ChipButton>
+            );
+          })}
+          {hasMore && <Clink onClick={() => setExpanded((value) => !value)}>{expanded ? "Thu gọn ↑" : "Xem tất cả ›"}</Clink>}
+        </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
-        {SIGNAL_LOG_TABS.map(([id, label]) => {
-          const active = id === tab;
-          return (
-            <button key={id} onClick={() => setTab(id)} style={{ textAlign: "center", minWidth: 0, padding: "6px 4px", borderRadius: 8, cursor: "pointer", background: active ? "rgba(124,58,237,.14)" : "var(--elev)", border: `0.5px solid ${active ? "var(--B)" : "var(--bdr)"}` }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: active ? "var(--B)" : "var(--t2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
-              <div style={{ fontSize: 9, color: active ? "var(--B)" : "var(--t4)", ...mono }}>({countFor(id)})</div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ maxHeight: 420, overflowY: "auto", marginRight: -4, paddingRight: 4 }}>
-        {visible.map((item, index) => {
+      <div style={{ padding: "2px 18px 14px" }}>
+        {displayList.map((item, index) => {
           const tagColor = SIGNAL_LOG_TAG_COLORS[item.capTag] || "var(--B)";
           return (
-            <div key={`${item.cap}-${item.tieuDe}-${item.t}-${index}`} style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: index < visible.length - 1 ? "0.5px solid var(--bdrs)" : "none" }}>
-              <SignalLogDot toneKey={item.k} />
+            <div key={`${item.cap}-${item.title}-${item.t}-${index}`} style={{ display: "flex", gap: 10, padding: "11px 0", borderBottom: index < displayList.length - 1 ? `0.5px solid ${NHAT_KY_DARK_COLORS.bdrs}` : "none" }}>
+              <SignalLogIcon toneKey={item.k} smdtValue={item.smdtValue} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, minWidth: 0 }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.tieuDe}</span>
-                  <span style={{ fontSize: 9, fontWeight: 750, color: tagColor, background: `${tagColor}1A`, borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap", flexShrink: 0 }}>{item.capTag}</span>
-                  {item.t && <span style={{ fontSize: 10, color: "var(--t4)", marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.t}</span>}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: NHAT_KY_DARK_COLORS.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: tagColor, background: `${tagColor}1A`, borderRadius: 6, padding: "1px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{item.capTag}</span>
+                  {item.t && <span style={{ fontSize: 10, color: NHAT_KY_DARK_COLORS.t4, marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.t}</span>}
                 </div>
-                <div style={{ fontSize: 10.5, lineHeight: 1.45, color: "var(--t2)" }}>{item.x}</div>
+                <div style={{ fontSize: 11, lineHeight: 1.45, color: NHAT_KY_DARK_COLORS.t2 }}>{item.x}</div>
               </div>
             </div>
           );
         })}
-        {!visible.length && <EmptyHint>Chưa có tín hiệu ở cấp này trong phiên.</EmptyHint>}
+        {!visible.length && <div style={{ padding: "28px 0", textAlign: "center", color: NHAT_KY_DARK_COLORS.t4, fontSize: 12 }}>Chưa có tín hiệu ở cấp này trong phiên.</div>}
+        {expanded && hasMore && <div style={{ padding: "14px 0", textAlign: "center", fontSize: 11, color: NHAT_KY_DARK_COLORS.t4 }}>— đã hiển thị tất cả {visible.length} dòng —</div>}
       </div>
     </Card>
   );
 }
 
-export function ModDashboard() {
+export function ModDashboard({ tradingDate }) {
   const narrow = useNarrow();
   const smdt = useSMDT();
   const cashBranch = useCashFlowBranch();
@@ -1386,13 +1445,15 @@ export function ModDashboard() {
   const liveStockWave = useRealtimeStockWaveFeed(stockWave.applyTick);
   const liveBranchCross = useRealtimeSMDTBranchCrossFeed(branchCross.applyTick);
 
-  const smdtBranchDate = topDate(smdt.datesAsc);
-  const cashBranchDate = topDate(cashBranch.datesAsc);
+  const tradingDateValue = toDateInputValue(tradingDate);
   const smdtBranchDatesDesc = useMemo(() => sortDatesDesc(smdt.datesAsc), [smdt.datesAsc]);
+  const smdtBranchDate = smdtBranchDatesDesc[findDateIndex(smdtBranchDatesDesc, tradingDateValue)] || topDate(smdt.datesAsc);
   const smdtBranchDateIndex = useMemo(() => findDateIndex(smdtBranchDatesDesc, toDateInputValue(smdtBranchDate)), [smdtBranchDate, smdtBranchDatesDesc]);
   const prevSmdtBranchDate = smdtBranchDateIndex >= 0 ? smdtBranchDatesDesc[smdtBranchDateIndex + 1] || "" : "";
   const cashBranchDatesDesc = useMemo(() => sortDatesDesc(cashBranch.datesAsc), [cashBranch.datesAsc]);
-  const smdtTickerDate = topDate(smdtTicker.datesAsc);
+  const cashBranchDate = cashBranchDatesDesc[findDateIndex(cashBranchDatesDesc, tradingDateValue)] || topDate(cashBranch.datesAsc);
+  const smdtTickerDatesDesc = useMemo(() => sortDatesDesc(smdtTicker.datesAsc), [smdtTicker.datesAsc]);
+  const smdtTickerDate = smdtTickerDatesDesc[findDateIndex(smdtTickerDatesDesc, tradingDateValue)] || topDate(smdtTicker.datesAsc);
   const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt, stockSignal.updatedAt, stockWave.updatedAt, branchCross.updatedAt, totalTrade.updatedAt);
   const live =
     liveSmdtBranch.connected ||
@@ -1402,7 +1463,11 @@ export function ModDashboard() {
     liveStockSignal.connected ||
     liveStockWave.connected ||
     liveBranchCross.connected;
-  const waveLatest = stockWave.rows[stockWave.rows.length - 1] || null;
+  const waveLatest = useMemo(() => {
+    if (!stockWave.rows.length) return null;
+    if (!tradingDateValue) return stockWave.rows[stockWave.rows.length - 1] || null;
+    return [...stockWave.rows].reverse().find((row) => toDateInputValue(row.date) <= tradingDateValue) || stockWave.rows[0] || null;
+  }, [stockWave.rows, tradingDateValue]);
 
   const branchSmdtRows = useMemo(() => {
     return smdt.branches
@@ -1532,7 +1597,6 @@ export function ModDashboard() {
   }, [branchCashRows]);
 
   const stockSignalByTicker = useMemo(() => new Map(stockSignal.rows.map((row) => [row.ticker, row])), [stockSignal.rows]);
-  const smdtTickerDatesDesc = useMemo(() => sortDatesDesc(smdtTicker.datesAsc), [smdtTicker.datesAsc]);
   const smdtTickerDateIndex = useMemo(() => findDateIndex(smdtTickerDatesDesc, toDateInputValue(smdtTickerDate)), [smdtTickerDate, smdtTickerDatesDesc]);
   const prevSmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 1] || "" : "";
   const prev2SmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 2] || "" : "";
@@ -1549,7 +1613,7 @@ export function ModDashboard() {
       const tickerSig = tickerContentToSig(cash?.content || "");
       const branchSig = lookupIndustryValue(branchCashByLabel, industry);
       const signal = stockSignalByTicker.get(tk.key);
-      const trade = getLatestTrade(totalTrade, tk.key);
+      const trade = getLatestTrade(totalTrade, tk.key, smdtTickerDate);
       const prevSmdt = smdtTicker.matrix[tk.key]?.[prevSmdtTickerDate];
       const prev2Smdt = smdtTicker.matrix[tk.key]?.[prev2SmdtTickerDate];
       const branch = findIndustryBranch(smdt.branches, industry);
@@ -1602,8 +1666,9 @@ export function ModDashboard() {
       const points = Array.isArray(row.points) ? row.points : [];
       return points.length ? points.map((point) => point.date).filter(Boolean) : [row.date].filter(Boolean);
     });
-    return sortDatesDesc(dates)[0] || "";
-  }, [stockSignal.rows]);
+    const datesDesc = sortDatesDesc(dates);
+    return datesDesc[findDateIndex(datesDesc, tradingDateValue)] || datesDesc[0] || "";
+  }, [stockSignal.rows, tradingDateValue]);
 
   const stockSignalRows = useMemo(() => {
     return stockSignal.rows.map((row) => {
@@ -1619,11 +1684,12 @@ export function ModDashboard() {
   }, [cashByTicker, latestStockSignalDate, smdtTicker.matrix, smdtTickerDate, stockSignal.rows]);
 
   const waveWindowDates = useMemo(() => {
-    const lastDate = branchCross.datesAsc.at(-1);
+    const branchCrossDatesDesc = sortDatesDesc(branchCross.datesAsc);
+    const lastDate = branchCrossDatesDesc[findDateIndex(branchCrossDatesDesc, tradingDateValue)] || branchCross.datesAsc.at(-1);
     if (!lastDate) return [];
     const yearStart = `${lastDate.slice(0, 4)}-01-01`;
-    return branchCross.datesAsc.filter((date) => date >= yearStart);
-  }, [branchCross.datesAsc]);
+    return branchCross.datesAsc.filter((date) => date >= yearStart && toDateInputValue(date) <= toDateInputValue(lastDate));
+  }, [branchCross.datesAsc, tradingDateValue]);
 
   const waveEvents = useMemo(() => {
     const windowStart = waveWindowDates[0] || "";
@@ -1669,8 +1735,8 @@ export function ModDashboard() {
   const smdtBranchOther = branchSmdtRows.filter((row) => !row.isCore);
   const tickerRows = rankedTopTickers.map((row) => ({ key: row.ticker, name: row.ticker, value: row.smdt, price: row.price, isCore: isCoreBranchName(row.industry) }));
   const sortTickerPreview = (rows) => [...rows].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
-  const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore)).slice(0, 10);
-  const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore)).slice(0, 10);
+  const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore));
+  const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore));
   const signalLatestDate = latestStockSignalDate || stockSignalRows.find((row) => row.date)?.date || activeCashTickerDate;
   const waveCircleLoading = stockWave.status === "loading" && !waveLatest;
   const branchCashLoading = cashBranch.status === "loading" && !branchCashRows.length;
@@ -1766,7 +1832,7 @@ export function ModDashboard() {
         smdtBranchRows={branchSmdtRows}
         cashTickerRows={cashTickerRows.map((row) => ({ ...row, date: activeCashTickerDate }))}
         stockSignalRows={stockSignalRows}
-        waveRows={stockWave.rows}
+        waveRows={waveLatest ? [waveLatest] : []}
       />
 
       <LiveFooter live={live} updatedAt={updatedAt} extra="Dashboard tổng hợp" />
