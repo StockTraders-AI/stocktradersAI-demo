@@ -5,7 +5,7 @@ import { useNarrow } from "../../app/useNarrow";
 import { fmtFull, fmtNum, pct } from "../../app/formatters";
 import { useSMDTTicker } from "../../data/useSMDTTicker";
 import { useCashFlowTicker, tickerContentToSig } from "../../data/useCashFlowTicker";
-import { useSMDT } from "../../data/useSMDT";
+import { CORE_BRANCHES, useSMDT } from "../../data/useSMDT";
 import { useCashFlowBranch, contentToSig } from "../../data/useCashFlowBranch";
 import { useBranchPath } from "../../data/useBranchPath";
 import { useTotalTrade } from "../../data/useTotalTrade";
@@ -86,6 +86,14 @@ function findIndustryBranch(branches, industry) {
     const branchAliases = [branch.key, branch.label, ...aliasesOf(branch.key), ...aliasesOf(branch.label)].map(normalizeName);
     return targetAliases.some((target) => branchAliases.includes(target));
   }) || null;
+}
+
+function isCoreSectorName(name) {
+  const names = aliasesOf(name).map(normalizeName);
+  return CORE_BRANCHES.some((branch) => {
+    const branchNames = [branch.key, branch.label, ...aliasesOf(branch.key), ...aliasesOf(branch.label)].map(normalizeName);
+    return names.some((item) => branchNames.includes(item));
+  });
 }
 
 function findTradePoint(tradeRow, dateValue) {
@@ -217,65 +225,250 @@ function ScoreDonut({ dn, sn, ns, ss, total, mobile }) {
   );
 }
 
-function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, dateLabel, mobile }) {
+const PICKER_LEAD_THRESHOLD = 70;
+
+function smdtBadgeStyle(value) {
+  const strong = Number.isFinite(value) && value >= PICKER_LEAD_THRESHOLD;
+  return {
+    color: strong ? "var(--G)" : "var(--A)",
+    background: strong ? "var(--Gs)" : "var(--As)",
+    border: `0.5px solid ${strong ? "var(--Gb)" : "var(--Ab)"}`,
+  };
+}
+
+function formatPickerSmdt(value) {
+  return Number.isFinite(value) ? `${Math.round(value)}%` : "--";
+}
+
+function pickerSectorTag(sector) {
+  if (!Number.isFinite(sector?.smdt)) return null;
+  if (sector.isCore && sector.smdt >= PICKER_LEAD_THRESHOLD) return "DẪN SÓNG";
+  if (!sector.isCore && sector.smdt > PICKER_LEAD_THRESHOLD) return "NGÀNH MẠNH";
+  return null;
+}
+
+function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, dateLabel, mobile, sectors = [] }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [leadOnly, setLeadOnly] = useState(false);
+  const [activeSectorName, setActiveSectorName] = useState("");
   const shellStyle = mobile
-    ? { padding: compact ? "10px 12px" : "20px 16px 18px", borderRadius: compact ? 10 : 14 }
-    : { padding: compact ? "15px 16px" : "32px 28px 26px", maxWidth: compact ? undefined : 520 };
+    ? { padding: compact ? "12px 13px 14px" : "18px 16px", borderRadius: compact ? 12 : 14 }
+    : { padding: compact ? "15px 16px" : "22px 24px", maxWidth: compact ? undefined : 600, borderRadius: 12 };
+  const cleanSearch = normalizeName(search);
+  const selected = new Set(codes);
+  const visibleSectors = useMemo(() => {
+    return sectors
+      .filter((sector) => {
+        if (leadOnly && (!Number.isFinite(sector.smdt) || sector.smdt < PICKER_LEAD_THRESHOLD)) return false;
+        if (!cleanSearch) return true;
+        return normalizeName(sector.name).includes(cleanSearch)
+          || sector.stocks.some((stock) => normalizeName(`${stock.code} ${stock.name}`).includes(cleanSearch));
+      })
+      .sort((a, b) => (Number.isFinite(b.smdt) ? b.smdt : -1) - (Number.isFinite(a.smdt) ? a.smdt : -1) || a.name.localeCompare(b.name, "vi"));
+  }, [cleanSearch, leadOnly, sectors]);
+  const activeSector = visibleSectors.find((sector) => sector.name === activeSectorName) || visibleSectors[0] || null;
+  const visibleStocks = useMemo(() => {
+    if (!activeSector) return [];
+    const sectorMatchesSearch = cleanSearch && normalizeName(activeSector.name).includes(cleanSearch);
+    return [...activeSector.stocks]
+      .filter((stock) => !cleanSearch || sectorMatchesSearch || normalizeName(`${stock.code} ${stock.name}`).includes(cleanSearch))
+      .sort((a, b) => (Number.isFinite(b.smdt) ? b.smdt : -1) - (Number.isFinite(a.smdt) ? a.smdt : -1) || a.code.localeCompare(b.code));
+  }, [activeSector, cleanSearch]);
+  const strongToAdd = activeSector?.stocks.filter((stock) => Number.isFinite(stock.smdt) && stock.smdt >= PICKER_LEAD_THRESHOLD && !selected.has(stock.code)) || [];
+  const isFull = codes.length >= PORTFOLIO_MAX_CODES;
+
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") setPickerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pickerOpen]);
+
+  const setCodes = (nextCodes) => {
+    const uniqueCodes = [...new Set(nextCodes.map((code) => String(code || "").trim().toUpperCase()).filter(Boolean))];
+    setInput(sortPortfolioCodes(uniqueCodes).slice(0, PORTFOLIO_MAX_CODES).join(", "));
+  };
+  const removeCode = (code) => setCodes(codes.filter((item) => item !== code));
+  const toggleCode = (code) => {
+    if (selected.has(code)) {
+      removeCode(code);
+      return;
+    }
+    if (isFull) return;
+    setCodes([...codes, code]);
+  };
+  const addStrong = () => {
+    if (!strongToAdd.length || isFull) return;
+    setCodes([...codes, ...strongToAdd.map((stock) => stock.code)]);
+  };
+
   return (
-    <Card style={{ width: "100%", ...shellStyle }}>
-      <div style={{ display: compact && mobile ? "none" : "flex", alignItems: "center", gap: 8, marginBottom: 5, color: "var(--t1)", fontSize: compact ? 13 : 15, fontWeight: 800 }}>
-        <i className="ti ti-clipboard-list" style={{ color: "var(--B)", fontSize: compact ? 15 : 18 }} />
-        Nhập danh mục của bạn
-      </div>
-      <div style={{ display: compact && mobile ? "none" : "block", color: "var(--t3)", fontSize: compact ? 11 : 12, lineHeight: 1.7, marginBottom: compact ? 12 : 22 }}>
-        Nhập tối đa {PORTFOLIO_MAX_CODES} mã cổ phiếu, cách nhau bởi dấu phẩy.
-        {!compact && <><br />Hệ thống kiểm tra SMDT ngành và mã, dòng tiền, tín hiệu từ StockTraders API.</>}
-      </div>
-      <div style={{ display: compact && mobile ? "flex" : "block", alignItems: "center", gap: 8 }}>
-        <div style={{ minHeight: compact ? 36 : 46, display: "flex", alignItems: "center", gap: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: compact && mobile ? 8 : 9, padding: "0 13px", marginBottom: compact && mobile ? 0 : 8, flex: 1, minWidth: 0 }}>
-          <i className="ti ti-writing" style={{ color: "var(--t3)", fontSize: 14, flexShrink: 0 }} />
+    <>
+      <Card style={{ width: "100%", ...shellStyle }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+          <span style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", background: "var(--Bs)", color: "var(--B)", flexShrink: 0 }}>
+            <i className="ti ti-clipboard-check" style={{ fontSize: 14 }} />
+          </span>
+          <div style={{ color: "var(--t1)", fontSize: 13, fontWeight: 800, lineHeight: 1.25 }}>
+            Nhập danh mục của bạn
+          </div>
+        </div>
+        <div style={{ color: "var(--t3)", fontSize: 11.5, margin: "0 0 14px 32px", lineHeight: 1.55 }}>
+          Nhập tối đa {PORTFOLIO_MAX_CODES} mã cổ phiếu, hoặc chọn nhanh theo ngành.
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 9, padding: "0 12px", minHeight: compact ? 40 : 44, transition: "border-color .15s" }}>
+          <i className="ti ti-chart-line" style={{ color: "var(--t3)", fontSize: 15, flexShrink: 0 }} />
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onAnalyze()}
-            placeholder={compact ? "Thêm hoặc đổi mã..." : "VD: NVL, LPB, PC1, CII, PLX"}
+            placeholder="VD: VRE, NVL, HPG..."
             autoCorrect="off"
             autoCapitalize="characters"
             spellCheck={false}
-            style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t1)", fontSize: compact ? 13 : 13.5, padding: compact && mobile ? "8px 0" : "10px 0" }}
+            style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t1)", fontSize: mobile ? 16 : 13.5, letterSpacing: 0, padding: "9px 0", fontFamily: "inherit" }}
           />
-          {input && <button type="button" onClick={() => setInput("")} style={{ border: "none", background: "transparent", color: "var(--t4)", cursor: "pointer", fontSize: 18 }}>×</button>}
+          {input && (
+            <button type="button" onClick={() => setInput("")} title="Xóa hết" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "transparent", color: "var(--t3)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <i className="ti ti-x" style={{ fontSize: 15 }} />
+            </button>
+          )}
         </div>
-        {compact && mobile && (
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 2px 0", flexWrap: "wrap" }}>
+          <span style={{ color: "var(--t3)", fontSize: 11 }}>
+            <b style={{ color: "var(--B)", fontWeight: 800 }}>{codes.length}</b> / {PORTFOLIO_MAX_CODES} mã đã nhập
+          </span>
           <button
             type="button"
-            onClick={onAnalyze}
-            disabled={loading || !codes.length}
-            style={{ minHeight: 36, border: "none", borderRadius: 8, background: "var(--B)", color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: loading || !codes.length ? "not-allowed" : "pointer", opacity: loading || !codes.length ? 0.5 : 1, padding: "0 14px", flexShrink: 0 }}
+            onClick={() => setPickerOpen(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--Bs)", border: "0.5px solid var(--Bb)", color: "var(--B)", fontSize: 11, fontWeight: 750, padding: "6px 10px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}
           >
-            {loading ? "..." : "Phân tích"}
+            <i className="ti ti-plus" style={{ fontSize: 13 }} />
+            Chọn theo ngành
           </button>
+        </div>
+
+        {!!codes.length && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+            {codes.map((code) => (
+              <span key={code} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 7, padding: "5px 7px 5px 9px", color: "var(--t1)", fontSize: 12 }}>
+                <span style={{ fontWeight: 800, letterSpacing: 0, ...mono }}>{code}</span>
+                <button type="button" onClick={() => removeCode(code)} title={`Xóa ${code}`} style={{ width: 18, height: 18, borderRadius: 5, border: "none", background: "rgba(255,255,255,.05)", color: "var(--t3)", cursor: "pointer", display: "grid", placeItems: "center" }}>
+                  <i className="ti ti-x" style={{ fontSize: 11 }} />
+                </button>
+              </span>
+            ))}
+          </div>
         )}
-      </div>
-      <div style={{ color: "var(--t3)", fontSize: 11, marginBottom: compact ? 10 : 22, display: compact && mobile ? "none" : "block" }}>
-        {codes.length ? `${codes.length} mã đã nhập` : "Ví dụ: NVL, LPB, PC1, CII, PLX"}
-      </div>
-      {(!compact || !mobile) && (
+
         <button
           type="button"
           onClick={onAnalyze}
           disabled={loading || !codes.length}
-          style={{ width: "100%", minHeight: compact ? 40 : 46, border: "none", borderRadius: 10, background: "var(--B)", color: "#fff", fontSize: compact ? 12.5 : 14, fontWeight: 800, cursor: loading || !codes.length ? "not-allowed" : "pointer", opacity: loading || !codes.length ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}
+          style={{ width: "100%", minHeight: compact ? 40 : 46, marginTop: 14, border: "none", borderRadius: 10, background: "linear-gradient(135deg,#8B3FF0,#7C3AED)", color: "#fff", fontSize: compact ? 12.5 : 13.5, fontWeight: 800, cursor: loading || !codes.length ? "not-allowed" : "pointer", opacity: loading || !codes.length ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, boxShadow: codes.length ? "0 8px 22px -10px rgba(124,58,237,.55)" : "none", fontFamily: "inherit" }}
         >
           <i className="ti ti-sparkles" />
           {loading ? "Đang phân tích..." : "Phân tích danh mục"}
         </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 10, color: "var(--t4)", fontSize: 10.5 }}>
+          <i className="ti ti-clock" style={{ fontSize: 12 }} />
+          Dữ liệu: StockTraders API · {dateLabel}
+        </div>
+      </Card>
+
+      {pickerOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(4,6,10,.72)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: mobile ? 12 : 20, zIndex: 900 }} onClick={() => setPickerOpen(false)}>
+          <div role="dialog" aria-label="Chọn mã theo ngành" onClick={(event) => event.stopPropagation()} style={{ width: "100%", maxWidth: 860, maxHeight: mobile ? "92dvh" : "88vh", background: "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 18, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(0,0,0,.8)" }}>
+            <div style={{ padding: mobile ? "15px 15px 13px" : "18px 20px 14px", borderBottom: "0.5px solid var(--bdr)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 14 }}>
+                <span style={{ width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center", background: "var(--Bs)", color: "var(--B)", flexShrink: 0 }}>
+                  <i className="ti ti-filter" style={{ fontSize: 16 }} />
+                </span>
+                <div style={{ flex: 1, minWidth: 0, color: "var(--t1)", fontSize: mobile ? 15 : 15.5, fontWeight: 800 }}>Chọn mã theo ngành</div>
+                <button type="button" onClick={() => setPickerOpen(false)} title="Đóng" style={{ width: 32, height: 32, borderRadius: 9, border: "none", background: "rgba(255,255,255,.05)", color: "var(--t3)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <i className="ti ti-x" style={{ fontSize: 16 }} />
+                </button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 11, padding: "0 12px", minHeight: 44 }}>
+                <i className="ti ti-search" style={{ color: "var(--t3)", fontSize: 16 }} />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} autoFocus={!mobile} placeholder="Tìm ngành hoặc mã cổ phiếu..." style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t1)", fontFamily: "inherit", fontSize: mobile ? 16 : 13, padding: "10px 0" }} />
+              </div>
+              <button type="button" onClick={() => setLeadOnly((value) => !value)} style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, border: "none", background: "transparent", color: leadOnly ? "var(--t1)" : "var(--t3)", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                <span style={{ width: 38, height: 22, borderRadius: 11, background: leadOnly ? "var(--G)" : "rgba(255,255,255,.1)", position: "relative", transition: ".18s", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 2, left: leadOnly ? 18 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: ".18s" }} />
+                </span>
+                <span style={{ fontSize: 12 }}>Chỉ hiện ngành dẫn sóng (SMDT ≥ 70%)</span>
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "300px 1fr", minHeight: 0, flex: 1 }}>
+              <div style={{ overflowY: "auto", minHeight: 0, borderRight: mobile ? "none" : "0.5px solid var(--bdr)", borderBottom: mobile ? "0.5px solid var(--bdr)" : "none", padding: 8, maxHeight: mobile ? "34vh" : undefined }}>
+                <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t4)", padding: "8px 10px 6px", fontWeight: 800 }}>Ngành · sắp theo SMDT</div>
+                {!visibleSectors.length ? (
+                  <div style={{ color: "var(--t4)", fontSize: 13, textAlign: "center", padding: "34px 16px" }}>Không có ngành phù hợp.</div>
+                ) : visibleSectors.map((sector) => {
+                  const selectedCount = sector.stocks.filter((stock) => selected.has(stock.code)).length;
+                  const active = activeSector?.name === sector.name;
+                  return (
+                    <button key={sector.name} type="button" onClick={() => setActiveSectorName(sector.name)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 11px", borderRadius: 10, border: "none", background: active ? "var(--Bs)" : "transparent", color: "inherit", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                          <span style={{ color: "var(--t1)", fontSize: 13, fontWeight: 650, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sector.name}</span>
+                          {pickerSectorTag(sector) && <span style={{ color: "var(--G)", background: "var(--Gs)", border: "0.5px solid var(--Gb)", borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 850, flexShrink: 0 }}>{pickerSectorTag(sector)}</span>}
+                        </span>
+                        <span style={{ display: "block", color: "var(--t4)", fontSize: 11, marginTop: 1 }}>{sector.stocks.length} mã{selectedCount ? ` · đã chọn ${selectedCount}` : ""}</span>
+                      </span>
+                      <span style={{ ...smdtBadgeStyle(sector.smdt), fontSize: 11.5, fontWeight: 800, padding: "3px 8px", borderRadius: 7, flexShrink: 0, ...mono }}>{formatPickerSmdt(sector.smdt)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ overflowY: "auto", minHeight: 0, padding: mobile ? 8 : "8px 8px 8px 4px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px 10px", gap: 10 }}>
+                  <div style={{ color: "var(--t1)", fontSize: 13, fontWeight: 750 }}>
+                    {activeSector ? activeSector.name : "Chọn một ngành"}
+                    {activeSector && <small style={{ color: "var(--t3)", fontWeight: 500, marginLeft: 6 }}>SMDT {formatPickerSmdt(activeSector.smdt)}</small>}
+                  </div>
+                  <button type="button" onClick={addStrong} disabled={!strongToAdd.length || isFull} style={{ background: "var(--Gs)", border: "0.5px solid var(--Gb)", color: "var(--G)", fontSize: 11, fontWeight: 750, padding: "6px 10px", borderRadius: 8, cursor: strongToAdd.length && !isFull ? "pointer" : "not-allowed", whiteSpace: "nowrap", opacity: strongToAdd.length && !isFull ? 1 : 0.35, fontFamily: "inherit" }}>
+                    Thêm {strongToAdd.length} mã mạnh
+                  </button>
+                </div>
+                {!activeSector ? (
+                  <div style={{ color: "var(--t4)", fontSize: 13, textAlign: "center", padding: "40px 20px" }}>Chọn một ngành ở cột bên trái để xem danh sách mã.</div>
+                ) : !visibleStocks.length ? (
+                  <div style={{ color: "var(--t4)", fontSize: 13, textAlign: "center", padding: "40px 20px" }}>Không có mã phù hợp.</div>
+                ) : visibleStocks.map((stock) => {
+                  const added = selected.has(stock.code);
+                  const disabled = !added && isFull;
+                  return (
+                    <div key={stock.code} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 11px", borderRadius: 10 }}>
+                      <span style={{ width: 52, flexShrink: 0, color: "var(--t1)", fontWeight: 800, fontSize: 13, letterSpacing: 0, ...mono }}>{stock.code}</span>
+                      <span style={{ flex: 1, minWidth: 0, color: "var(--t3)", fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stock.name}</span>
+                      <span style={{ ...smdtBadgeStyle(stock.smdt), fontSize: 11.5, fontWeight: 800, padding: "3px 8px", borderRadius: 7, flexShrink: 0, ...mono }}>{formatPickerSmdt(stock.smdt)}</span>
+                      <button type="button" onClick={() => toggleCode(stock.code)} disabled={disabled} title={added ? `Bỏ ${stock.code}` : `Thêm ${stock.code}`} style={{ width: 30, height: 30, borderRadius: 8, border: `0.5px solid ${added ? "var(--Gb)" : "var(--bdr)"}`, background: added ? "var(--G)" : "var(--elev)", color: added ? "#04240f" : "var(--B)", cursor: disabled ? "not-allowed" : "pointer", display: "grid", placeItems: "center", opacity: disabled ? 0.3 : 1, flexShrink: 0 }}>
+                        <i className={`ti ${added ? "ti-check" : "ti-plus"}`} style={{ fontSize: 15 }} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ padding: mobile ? "12px 15px" : "14px 20px", borderTop: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span style={{ color: isFull ? "var(--A)" : "var(--t3)", fontSize: 12 }}>Đã chọn <b style={{ color: isFull ? "var(--A)" : "var(--B)" }}>{codes.length}</b> / {PORTFOLIO_MAX_CODES} mã</span>
+              <button type="button" onClick={() => setPickerOpen(false)} style={{ background: "var(--B)", border: "none", color: "#fff", fontWeight: 800, fontSize: 12.5, padding: "9px 22px", borderRadius: 9, cursor: "pointer", fontFamily: "inherit" }}>Xong</button>
+            </div>
+          </div>
+        </div>
       )}
-      <div style={{ display: compact && mobile ? "none" : "flex", alignItems: "center", gap: 5, marginTop: 10, color: "var(--t4)", fontSize: 10.5 }}>
-        <i className="ti ti-clock" style={{ fontSize: 12 }} />
-        Dữ liệu: StockTraders API · {dateLabel}
-      </div>
-    </Card>
+    </>
   );
 }
 
@@ -489,6 +682,36 @@ export function ModPhanTichDanhMuc() {
   const branchSmdtLookup = useMemo(() => makeIndustryLookup(smdtBranch.branches, smdtBranch.matrix, branchSmdtDate, (v) => (Number.isFinite(v) ? v : null)), [branchSmdtDate, smdtBranch.branches, smdtBranch.matrix]);
   const branchSigLookup = useMemo(() => makeIndustryLookup(cashBranch.branches, cashBranch.matrix, branchCashDate, contentToSig), [branchCashDate, cashBranch.branches, cashBranch.matrix]);
   const tickerNameByKey = useMemo(() => new Map(smdtTicker.tickers.map((tk) => [tk.key, tk.name || tk.key])), [smdtTicker.tickers]);
+  const sectorPickerData = useMemo(() => {
+    const byIndustry = new Map();
+    for (const tk of smdtTicker.tickers) {
+      const code = tk.key;
+      const smdt = smdtTicker.matrix[code]?.[activeDate];
+      const industry = branchPath.tickerToBranch[code] || "";
+      if (!code || !industry || !Number.isFinite(smdt)) continue;
+      const key = normalizeName(industry);
+      if (!byIndustry.has(key)) {
+        byIndustry.set(key, {
+          name: industry,
+          smdt: lookupIndustry(branchSmdtLookup, industry),
+          isCore: isCoreSectorName(industry),
+          stocks: [],
+        });
+      }
+      byIndustry.get(key).stocks.push({
+        code,
+        name: tk.name || code,
+        smdt,
+      });
+    }
+
+    return [...byIndustry.values()]
+      .map((sector) => ({
+        ...sector,
+        stocks: sector.stocks.sort((a, b) => b.smdt - a.smdt || a.code.localeCompare(b.code)),
+      }))
+      .sort((a, b) => (Number.isFinite(b.smdt) ? b.smdt : -1) - (Number.isFinite(a.smdt) ? a.smdt : -1) || a.name.localeCompare(b.name, "vi"));
+  }, [activeDate, branchPath.tickerToBranch, branchSmdtLookup, smdtTicker.matrix, smdtTicker.tickers]);
 
   const rows = useMemo(() => {
     const validCodes = analyzedCodes.length ? sortPortfolioCodes(analyzedCodes) : [];
@@ -560,7 +783,7 @@ export function ModPhanTichDanhMuc() {
   if (!analyzedCodes.length) {
     return (
       <div style={{ minHeight: narrow ? "auto" : "calc(100vh - 150px)", display: "flex", alignItems: "center", justifyContent: "center", padding: narrow ? "18px 0" : 0 }}>
-        <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} dateLabel={dateLabel} mobile={narrow} />
+        <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} dateLabel={dateLabel} mobile={narrow} sectors={sectorPickerData} />
       </div>
     );
   }
@@ -573,11 +796,11 @@ export function ModPhanTichDanhMuc() {
       {narrow ? (
         <>
           <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ns={ns} ss={ss} score={score} scoreName={scoreName} mobile />
-          <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} mobile />
+          <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} mobile sectors={sectorPickerData} />
         </>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(360px,1fr)", gap: 12 }}>
-          <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} />
+          <PortfolioInput input={input} setInput={setInput} codes={codes} onAnalyze={analyze} loading={loading} compact dateLabel={dateLabel} sectors={sectorPickerData} />
           <OverviewPanel foundRows={foundRows} dn={dn} sn={sn} ns={ns} ss={ss} score={score} scoreName={scoreName} />
         </div>
       )}

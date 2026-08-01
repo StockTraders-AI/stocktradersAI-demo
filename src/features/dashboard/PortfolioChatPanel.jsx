@@ -56,6 +56,13 @@ function PortfolioTypingDots() {
 function PortfolioMsgBubble({ role, text, panel = false }) {
   const isAi = role === "ai" || role === "typing";
   const isTyping = role === "typing";
+  if (role === "notice") {
+    return (
+      <div style={{ width: "100%", borderRadius: 7, padding: panel ? "8px 10px" : "7px 9px", background: "var(--elev)", border: "0.5px solid var(--bdr)", color: "var(--t3)", fontSize: panel ? 11 : 10.5, lineHeight: 1.5, textAlign: "center", overflowWrap: "anywhere" }}>
+        <PortfolioMsgText text={text} />
+      </div>
+    );
+  }
   return (
     <div style={{ width: "100%", minWidth: 0, display: "flex", gap: 7, alignItems: "flex-start", justifyContent: isAi ? "flex-start" : "flex-end" }}>
       {isAi && (

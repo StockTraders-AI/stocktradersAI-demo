@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, removeDataCache, writeDataCache } from "./cacheStorage";
-import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
+import { pickTimeField } from "../app/dateUtils";
 
 const API_BASE_URL = "/api/cashflow-ticker";
 const INITIAL_LIMIT = 25;
@@ -9,7 +10,6 @@ const FULL_LIMIT = "full";
 // Giữ đủ dữ liệu trong RAM (để lịch lùi sâu hơn), nhưng chỉ lưu localStorage ít phiên
 // gần nhất — tránh QuotaExceededError. Lần mở lại sẽ refetch full ngay nên không mất gì.
 const CACHE_PERSIST_LIMIT = 30;
-const WARMUP_REFRESH_DELAYS = [1_000, 3_000, 6_000];
 const CACHE_KEY = "cashflow_ticker_data_cache_v5";
 const CACHE_SCHEMA_VERSION = 1;
 const LEGACY_CACHE_KEYS = ["cashflow_ticker_data_cache_v4", "cashflow_ticker_data_cache_v3"];
@@ -81,6 +81,7 @@ function normalizeTicker(item) {
     price: toNumber(item?.price),
     percent: normalizePercent(item?.percent),
     content: item?.content || "",
+    time: pickTimeField(item),
   };
 }
 
@@ -325,23 +326,17 @@ export function useCashFlowTicker() {
 
   useEffect(() => {
     let cancelled = false;
-    const warmupTimers = [];
     const firstLimit = cached ? FULL_LIMIT : INITIAL_LIMIT;
-    fetchSnapshot({ background: Boolean(cached), fresh: Boolean(cached), limit: firstLimit }).then(() => {
+    fetchSnapshot({ background: Boolean(cached), limit: firstLimit }).then(() => {
       if (cancelled) return;
       if (!cached) {
-        fetchSnapshot({ background: true, force: true, fresh: true, limit: FULL_LIMIT });
-      }
-
-      for (const delay of WARMUP_REFRESH_DELAYS) {
-        const timer = window.setTimeout(() => {
-          fetchSnapshot({ background: true, force: true, fresh: true, limit: INITIAL_LIMIT, merge: true });
-        }, delay);
-        warmupTimers.push(timer);
+        fetchSnapshot({ background: true, limit: FULL_LIMIT });
       }
     });
     const refresh = () => {
-      if (document.visibilityState === "visible") fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
+      if (document.visibilityState === "visible" && shouldRunClientRefresh("cashflow-ticker")) {
+        fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
+      }
     };
     // Không poll định kỳ: dữ liệu mới đến qua Socket.IO; chỉ fetch lại snapshot
     // khi tab hiện lại / được focus hoặc khi socket realtime reconnect (bù dữ liệu hụt).
@@ -350,7 +345,6 @@ export function useCashFlowTicker() {
     window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
     return () => {
       cancelled = true;
-      for (const timer of warmupTimers) window.clearTimeout(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);

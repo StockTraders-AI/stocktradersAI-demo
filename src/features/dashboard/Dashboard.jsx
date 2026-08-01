@@ -3,6 +3,7 @@ import { useTheme } from "../../theme";
 import { mono, sigStyle } from "../../styles/tokens";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtFull, fmtNum } from "../../app/formatters";
+import { formatTimeOfDay } from "../../app/dateUtils";
 import { CORE_BRANCHES, useSMDT, useRealtimeFeed as useRealtimeSMDTBranchFeed } from "../../data/useSMDT";
 import { useCashFlowBranch, useRealtimeCashFlowFeed, contentToSig } from "../../data/useCashFlowBranch";
 import { useSMDTTicker, useRealtimeSMDTTickerFeed } from "../../data/useSMDTTicker";
@@ -25,8 +26,9 @@ const CORE_KEYS = new Set(CORE_BRANCHES.map((b) => b.key));
 const CORE_LABELS = new Set(CORE_BRANCHES.flatMap((b) => [b.key, b.label]));
 const TOP_LIMIT = 40;
 const PAGE_SIZE = 8;
+const SMDT_PREVIEW_PAGE_SIZE = 10;
 const SIGNAL_PORTFOLIO_PAGE_SIZE = 5;
-const PORTFOLIO_CHAT_API_URL = import.meta.env.VITE_PORTFOLIO_CHAT_API_URL || "";
+const PORTFOLIO_CHAT_API_URL = import.meta.env.VITE_PORTFOLIO_CHAT_API_URL || (import.meta.env.DEV ? "http://112.213.91.235:8000/api/portfolio-chat" : "/api/portfolio-chat");
 const TOP_STATUS_META = {
   vm: { label: "Vừa mạnh", color: "var(--G)", icon: "ti-star-filled" },
   dt: { label: "Duy trì", color: "var(--B)", icon: "ti-circle-filled" },
@@ -51,6 +53,12 @@ const DONUT_COLORS = {
   buy: "#0ca30c",
   waitSell: "#eda100",
   sell: "#e34948",
+};
+const PORTFOLIO_CAT_LABELS = {
+  dd: "Đúng sóng đúng ngành",
+  ds: "Đúng sóng sai ngành",
+  sd: "Đúng ngành sai sóng",
+  ss: "Sai sóng sai ngành",
 };
 
 function nav(id) {
@@ -247,10 +255,14 @@ function waveCoreOrderOfIndustry(name) {
   return WAVE_CORE_BRANCH_NAMES.findIndex((key) => aliasesOfIndustry(key).some((alias) => names.includes(normalizeIndustryName(alias))));
 }
 
-function getLatestTrade(totalTrade, ticker) {
+function getLatestTrade(totalTrade, ticker, date) {
   const row = totalTrade.matrix[ticker] || {};
-  const date = Object.keys(row).sort().at(-1);
-  return date ? row[date] : null;
+  const dates = Object.keys(row).sort();
+  const dateValue = toDateInputValue(date);
+  const targetDate = dateValue
+    ? dates.findLast((item) => toDateInputValue(item) <= dateValue)
+    : dates.at(-1);
+  return targetDate ? row[targetDate] : null;
 }
 
 function EmptyHint({ children }) {
@@ -436,18 +448,44 @@ function SmdtPreviewLegend() {
   );
 }
 
-function SmdtPreview({ title, meta, leftRows, rightRows, defaultTab = "core", navId, showPrice = false, rowNameColor = "var(--t1)" }) {
-  const rows = defaultTab === "core" ? leftRows : rightRows;
-  const displayRows = rows.length ? [...rows, ...Array.from({ length: Math.max(0, 10 - rows.length) }, (_, index) => ({ key: `placeholder-${index}`, placeholder: true }))] : [];
+function SmdtPreview({ title, meta, leftRows, rightRows, defaultTab = "core", navId, showPrice = false, rowNameColor = "var(--t1)", leftLabel = "Chủ lực", rightLabel = "Ngành phụ", showTabs = true }) {
+  const [tab, setTab] = useState(defaultTab);
+  const [page, setPage] = useState(1);
+  const rows = tab === "core" ? leftRows : rightRows;
+  const totalPages = Math.max(1, Math.ceil(rows.length / SMDT_PREVIEW_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visibleRows = rows.slice((safePage - 1) * SMDT_PREVIEW_PAGE_SIZE, safePage * SMDT_PREVIEW_PAGE_SIZE);
+  const displayRows = visibleRows.length ? [...visibleRows, ...Array.from({ length: Math.max(0, SMDT_PREVIEW_PAGE_SIZE - visibleRows.length) }, (_, index) => ({ key: `placeholder-${index}`, placeholder: true }))] : [];
+  const switchTab = (nextTab, event) => {
+    event.stopPropagation();
+    setTab(nextTab);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <Card style={{ padding: "15px 16px", display: "flex", flexDirection: "column", gap: 7, cursor: "pointer", minWidth: 0, alignSelf: "start" }} onClick={() => nav(navId)}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
           <h3 style={{ margin: 0, fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>{title}</h3>
           {meta && <div style={{ marginTop: 2, fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta}</div>}
         </div>
-        <Clink onClick={() => nav(navId)}>Chi tiết ›</Clink>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap", marginLeft: "auto" }}>
+          {showTabs && (
+            <>
+              <ChipButton active={tab === "core"} onClick={(event) => switchTab("core", event)}>
+                ⭐ {leftLabel}
+              </ChipButton>
+              <ChipButton active={tab === "other"} onClick={(event) => switchTab("other", event)}>
+                {rightLabel}
+              </ChipButton>
+            </>
+          )}
+          <Clink onClick={() => nav(navId)}>Chi tiết ›</Clink>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", columnGap: 18, alignContent: "start" }}>
@@ -468,6 +506,11 @@ function SmdtPreview({ title, meta, leftRows, rightRows, defaultTab = "core", na
         )}
       </div>
 
+      <div onClick={(event) => event.stopPropagation()} style={{ minHeight: 22, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 2, visibility: rows.length > SMDT_PREVIEW_PAGE_SIZE ? "visible" : "hidden" }}>
+        <span style={{ fontSize: 10, color: "var(--t3)" }}>{(safePage - 1) * SMDT_PREVIEW_PAGE_SIZE + 1}-{Math.min(safePage * SMDT_PREVIEW_PAGE_SIZE, rows.length)} / {rows.length}</span>
+        <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
+      </div>
+
       <SmdtPreviewLegend />
     </Card>
   );
@@ -482,10 +525,11 @@ function LegendText({ color, label }) {
   );
 }
 
-function ChipButton({ children, active, tone = "B", onClick }) {
+function ChipButton({ children, active, tone = "B", onClick, style }) {
   const color = tone === "G" ? "#0ca30c" : tone === "R" ? "#e34948" : "var(--B)";
   return (
     <button
+      type="button"
       onClick={onClick}
       style={{
         fontSize: 10,
@@ -496,6 +540,10 @@ function ChipButton({ children, active, tone = "B", onClick }) {
         color: active ? color : "var(--t2)",
         cursor: "pointer",
         fontWeight: active ? 750 : 600,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        ...style,
       }}
     >
       {children}
@@ -591,7 +639,8 @@ function TopStrongTable({ rows, date, narrow }) {
   );
 }
 
-function portfolioAutoMessage({ score, counts, total, analyzed }) {
+function portfolioSummaryMessage({ score, counts, total, analyzed }) {
+  if (!analyzed.length) return "Chưa tìm thấy dữ liệu cho các mã đang phân tích. Kiểm tra lại mã hoặc chờ dữ liệu StockTraders API cập nhật.";
   const good = analyzed.filter((row) => row.cat === "dd").map((row) => row.ticker).slice(0, 3).join(", ");
   const weak = analyzed.filter((row) => row.cat === "ss").map((row) => row.ticker).slice(0, 2).join(", ");
   if (score >= 70) return `Danh mục mạnh: ${Math.round((counts.dd / total) * 100)}% đúng sóng đúng ngành${good ? ` (${good})` : ""}. Duy trì và theo dõi tín hiệu bán.`;
@@ -618,41 +667,54 @@ function calcPortfolioEval(row) {
   return fallbackEvalKey({ tickerOk, industryOk: branchOk });
 }
 
-function portfolioAiReply(question, ctx) {
-  if (!ctx.hasAnalysis) return "Bạn nhập danh sách mã rồi bấm Phân tích trước nhé. Sau đó mình sẽ đọc danh mục và gợi ý cụ thể hơn.";
+function toPortfolioChatPosition(row) {
+  return {
+    ticker: row.ticker,
+    industry: row.industry || "",
+    smdt: apiNumber(row.smdt),
+    smdtPrev: apiNumber(row.smdtPrev),
+    branchSmdt: apiNumber(row.branchSmdt),
+    branchSmdtPrev: apiNumber(row.branchSmdtPrev),
+    cat: row.cat,
+  };
+}
 
+function portfolioChatApiQuestion(question) {
   const q = normalizeIndustryName(question);
-  const byCat = (cat) => ctx.analyzed.filter((row) => row.cat === cat);
-  const fmtRow = (row) => `${row.ticker}: SMDT mã ${Number.isFinite(row.smdt) ? row.smdt.toFixed(1) : "--"} · ngành ${row.industry || "--"}${Number.isFinite(row.branchSmdt) ? ` ${row.branchSmdt.toFixed(1)}` : ""}`;
+  const asksRightWave = q.includes("đúng sóng") || q.includes("dung song");
+  const asksIndustry = q.includes("ngành") || q.includes("nganh");
+  if (asksRightWave && !asksIndustry) return "Mã nào đúng sóng, đúng ngành?";
+  return question;
+}
 
-  if (q.includes("đúng sóng") || q.includes("dung song")) {
-    const rows = byCat("dd");
-    if (!rows.length) return "Chưa có mã nào đúng cả sóng lẫn ngành. Ưu tiên cơ cấu sang mã có SMDT mã >=70 và ngành cũng đang dẫn.";
-    return `Mã đúng sóng đúng ngành:\n${rows.map((row) => `• ${fmtRow(row)}`).join("\n")}`;
-  }
+function isPortfolioTickerSelectionQuestion(question) {
+  const q = normalizeIndustryName(question);
+  return q.includes("đúng sóng") || q.includes("dung song") || q.includes("đúng ngành") || q.includes("dung nganh");
+}
 
-  if (q.includes("cắt") || q.includes("cat") || q.includes("giảm") || q.includes("giam")) {
-    const rows = byCat("ss");
-    if (!rows.length) return "Chưa có mã cần cắt ngay theo bộ lọc sai sóng sai ngành. Vẫn nên theo dõi nếu SMDT mã tụt dưới 30 hoặc dòng tiền chuyển thoát ra.";
-    return `Nhóm cần xem xét giảm/cắt:\n${rows.map((row) => `• ${fmtRow(row)}`).join("\n")}\n\nGợi ý: giảm trước nhóm SMDT thấp và không thuộc ngành dẫn.`;
-  }
+function answerTicker(answer, ticker) {
+  const normalizedTicker = String(ticker || "").trim().toUpperCase();
+  const normalizedAnswer = String(answer || "").trim().toUpperCase();
+  if (!normalizedTicker || !normalizedAnswer) return "";
+  const answerTickers = normalizedAnswer.split(/[^A-Z0-9]+/).filter(Boolean);
+  return answerTickers.length === 1 && answerTickers[0] === normalizedTicker ? normalizedTicker : "";
+}
 
-  if (q.includes("ngành") || q.includes("nganh")) {
-    const industries = [...new Map(ctx.analyzed.filter((row) => Number.isFinite(row.branchSmdt)).sort((a, b) => b.branchSmdt - a.branchSmdt).map((row) => [row.industry, row])).values()].slice(0, 5);
-    if (!industries.length) return "Chưa đủ dữ liệu SMDT ngành cho danh mục này.";
-    return `Ngành nổi bật trong danh mục:\n${industries.map((row) => `• ${row.industry}: SMDT ngành ${row.branchSmdt.toFixed(1)} · mã ${row.ticker}`).join("\n")}`;
-  }
-
-  if (q.includes("tỷ trọng") || q.includes("ty trong") || q.includes("phân bổ") || q.includes("phan bo")) {
-    return `Gợi ý phân bổ:\n• Nhóm đúng sóng đúng ngành: ${ctx.counts.dd} mã, có thể giữ/tăng tỷ trọng.\n• Nhóm đúng sóng sai ngành: ${ctx.counts.ds} mã, chỉ giữ tỷ trọng vừa phải.\n• Nhóm sai sóng sai ngành: ${ctx.counts.ss} mã, ưu tiên giảm.\n\nĐiểm danh mục hiện tại: ${ctx.score}/100.`;
-  }
-
-  if (q.includes("so sánh") || q.includes("so sanh")) {
-    const labels = { dd: "Đúng sóng đúng ngành", ds: "Đúng sóng sai ngành", sd: "Đúng ngành sai sóng", ss: "Sai sóng sai ngành" };
-    return `So sánh nhanh:\n${ctx.analyzed.map((row) => `• ${row.ticker}: ${labels[row.cat]} · SMDT ${Number.isFinite(row.smdt) ? row.smdt.toFixed(1) : "--"}`).join("\n")}`;
-  }
-
-  return portfolioAutoMessage(ctx);
+async function requestPortfolioChatPosition({ question, userId, conversationId, position }) {
+  const response = await fetch(PORTFOLIO_CHAT_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      question,
+      user_id: userId,
+      conversation_id: conversationId,
+      portfolio: { position },
+    }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  const answer = typeof data?.answer === "string" ? data.answer.trim() : "";
+  return { answer, position, conversationId: data?.conversation_id };
 }
 
 function PortfolioBox({ rows, asOfDate }) {
@@ -665,9 +727,7 @@ function PortfolioBox({ rows, asOfDate }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
   const [conversationId, setConversationId] = useState(() => `portfolio-dashboard-${Date.now()}`);
-  const [msgs, setMsgs] = useState([
-    { role: "ai", text: "Nhập mã và bấm Phân tích, sau đó hỏi tôi về mã đúng sóng, ngành dẫn dắt, mã nên cắt hoặc phân bổ tỷ trọng." },
-  ]);
+  const [msgs, setMsgs] = useState([]);
   const picks = useMemo(() => parsePortfolioCodes(input), [input]);
   const rowMap = useMemo(() => new Map(rows.map((row) => [row.ticker, row])), [rows]);
   const analyzed = analyzedCodes.map((ticker) => {
@@ -698,20 +758,8 @@ function PortfolioBox({ rows, asOfDate }) {
   const score = foundAnalyzed.length ? rawScore.score : 0;
   const level = portfolioScoreLabel(score);
   const portfolioCtx = useMemo(() => ({ hasAnalysis, analyzed: foundAnalyzed, counts, total, score }), [foundAnalyzed, counts, hasAnalysis, score, total]);
-  const portfolioPayload = useMemo(() => ({
-    asOfDate: toDateInputValue(asOfDate) || asOfDate || "",
-    positions: analyzed
-      .filter((row) => Number.isFinite(row.smdt) || Number.isFinite(row.branchSmdt))
-      .map((row) => ({
-        ticker: row.ticker,
-        industry: row.industry || "",
-        smdt: apiNumber(row.smdt),
-        smdtPrev: apiNumber(row.smdtPrev),
-        branchSmdt: apiNumber(row.branchSmdt),
-        branchSmdtPrev: apiNumber(row.branchSmdtPrev),
-      })),
-  }), [analyzed, asOfDate]);
-  const aiMessage = hasAnalysis ? portfolioAutoMessage(portfolioCtx) : "";
+  const portfolioPositions = useMemo(() => foundAnalyzed.map(toPortfolioChatPosition), [foundAnalyzed]);
+  const portfolioSummary = hasAnalysis ? portfolioSummaryMessage(portfolioCtx) : "";
   const cats = [
     { key: "dd", color: "#0ca30c", label: "Đúng sóng - đúng ngành" },
     { key: "ds", color: "#eda100", label: "Đúng sóng - sai ngành" },
@@ -727,19 +775,6 @@ function PortfolioBox({ rows, asOfDate }) {
     if (!picks.length) return;
     setAnalyzedCodes(picks);
     savePortfolioState(input, picks);
-    const nextAnalyzed = picks.map((ticker) => {
-      const row = rowMap.get(ticker);
-      const found = Boolean(row && Number.isFinite(row.smdt));
-      const evalKey = found ? calcPortfolioEval(row) : null;
-      const cat = found ? evalKeyToPortfolioCat(evalKey) : "ss";
-      return { ticker, found, cat, evalKey, industry: row?.industry || "", smdt: row?.smdt, smdtPrev: row?.prevSmdt, branchSmdt: row?.branchSmdt, branchSmdtPrev: row?.branchSmdtPrev, tickerSig: row?.tickerSig || row?.sig, branchSig: row?.branchSig };
-    });
-    const nextFoundAnalyzed = nextAnalyzed.filter((row) => row.found);
-    const nextRawScore = scorePortfolio4Key(nextFoundAnalyzed);
-    const nextCounts = { dd: nextRawScore.dn, ds: nextRawScore.sn, sd: nextRawScore.ns, ss: nextRawScore.ss };
-    const nextTotal = Math.max(1, nextFoundAnalyzed.length);
-    const nextScore = nextFoundAnalyzed.length ? nextRawScore.score : 0;
-    setMsgs((prev) => [...prev, { role: "ai", text: portfolioAutoMessage({ hasAnalysis: true, analyzed: nextFoundAnalyzed, counts: nextCounts, total: nextTotal, score: nextScore }) }]);
   };
   const openPortfolioDetail = () => {
     if (!hasAnalysis) return;
@@ -756,31 +791,44 @@ function PortfolioBox({ rows, asOfDate }) {
 
     try {
       if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu VITE_PORTFOLIO_CHAT_API_URL");
-      const response = await fetch(PORTFOLIO_CHAT_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question,
-          user_id: "u1",
-          conversation_id: conversationId,
-          portfolio: portfolioPayload,
-        }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (data?.conversation_id) setConversationId(data.conversation_id);
-      const answer = data?.answer || portfolioAiReply(question, portfolioCtx);
+      if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
+      const apiQuestion = portfolioChatApiQuestion(question);
+      const tickerSelectionQuestion = isPortfolioTickerSelectionQuestion(apiQuestion);
+      const replies = await Promise.allSettled(
+        portfolioPositions.map((position) =>
+          requestPortfolioChatPosition({
+            question: apiQuestion,
+            userId: "u1",
+            conversationId: `${conversationId}-${position.ticker}`,
+            position,
+          })
+        )
+      );
+      const fulfilledReplies = replies
+        .filter((reply) => reply.status === "fulfilled")
+        .map((reply) => reply.value);
+      const tickerAnswer = fulfilledReplies
+        .map((reply) => answerTicker(reply.answer, reply.position.ticker))
+        .filter(Boolean)
+        .filter((answer, index, answers) => answers.indexOf(answer) === index)
+        .join(", ");
+      const answer = tickerSelectionQuestion ? tickerAnswer : tickerAnswer || fulfilledReplies
+        .map((reply) => reply.answer)
+        .filter(Boolean)
+        .filter((answer, index, answers) => answers.indexOf(answer) === index)
+        .slice(0, 1)
+        .join("");
+      if (!answer) throw new Error(tickerSelectionQuestion ? "API chưa trả về mã phù hợp" : "API không trả về answer");
       setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: answer }]);
     } catch (error) {
-      const fallback = portfolioAiReply(question, portfolioCtx);
       setMsgs((prev) => [
         ...prev.filter((msg) => msg.role !== "typing"),
-        { role: "ai", text: `Chưa gọi được API Chat AI${error?.message ? ` (${error.message})` : ""}. Tạm dùng phân tích nội bộ:\n${fallback}` },
+        { role: "notice", text: `Chưa lấy được phản hồi từ API Chat AI${error?.message ? ` (${error.message})` : ""}.` },
       ]);
     } finally {
       setChatLoading(false);
     }
-  }, [chatLoading, conversationId, portfolioCtx, portfolioPayload]);
+  }, [chatLoading, conversationId, portfolioPositions]);
   const askPortfolioMsg = useCallback((text) => {
     sendPortfolioMsg(text, true);
   }, [sendPortfolioMsg]);
@@ -836,8 +884,8 @@ function PortfolioBox({ rows, asOfDate }) {
               </div>
               <div style={{ width: 1, height: 38, background: "var(--bdr)" }} />
               <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.55, flex: 1 }}>
-                <span style={{ fontSize: 9, fontWeight: 750, color: "#9b7cf7" }}>✦ AI </span>
-                {aiMessage}
+                <span style={{ fontSize: 9, fontWeight: 750, color: "#9b7cf7" }}>TÓM TẮT </span>
+                {portfolioSummary}
                 {isDirty && <div style={{ marginTop: 3, color: "var(--A)", fontSize: 10, fontWeight: 750 }}>Danh sách mới chưa phân tích.</div>}
               </div>
             </div>
@@ -869,7 +917,7 @@ function PortfolioBox({ rows, asOfDate }) {
         </div>
 
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {["Mã nào đúng sóng?", "Ngành nào dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng?"].map((text) => (
+          {["Mã nào đúng sóng đúng ngành?", "Ngành nào dẫn dắt?", "Nên cắt mã nào?", "Phân bổ tỷ trọng?"].map((text) => (
             <button key={text} type="button" onClick={() => askPortfolioMsg(text)} disabled={chatLoading} style={{ border: "0.5px solid var(--bdr)", background: "var(--elev)", color: "var(--t2)", borderRadius: 999, padding: "4px 8px", fontSize: 10, fontWeight: 650, cursor: chatLoading ? "not-allowed" : "pointer", opacity: chatLoading ? 0.55 : 1 }}>
               {text}
             </button>
@@ -1125,104 +1173,276 @@ function SignalPortfolio({ rows, date, live }) {
   );
 }
 
-const LOG_TONES = {
-  mua: { color: "#0ca30c", bg: "rgba(12,163,12,.12)", icon: "ti-trending-up" },
-  ban: { color: "#e34948", bg: "rgba(227,73,72,.12)", icon: "ti-trending-down" },
-  smdt: { color: "#9b7cf7", bg: "rgba(124,58,237,.12)", icon: "ti-bolt" },
-  dv: { color: "#0ca30c", bg: "rgba(12,163,12,.12)", icon: "ti-trending-up" },
-  nn: { color: "#1baf7a", bg: "rgba(27,175,122,.12)", icon: "ti-trending-up" },
-  dt: { color: "#eda100", bg: "rgba(237,161,0,.12)", icon: "ti-trending-down" },
-  tr: { color: "#e34948", bg: "rgba(227,73,72,.12)", icon: "ti-trending-down" },
-  song: { color: "#06B6D4", bg: "rgba(6,182,212,.12)", icon: "ti-wave-sine" },
+const SIGNAL_LOG_TABS = [
+  ["all", "Tất cả"],
+  ["thi_truong", "Thị trường"],
+  ["nganh", "Ngành"],
+  ["ma", "Mã"],
+];
+const SIGNAL_LOG_TAG_COLORS = {
+  "Cổ phiếu": "#22D3EE",
+  "Ngành": "#3DD68C",
+  "Thị trường": "#A78BFA",
 };
+const NHAT_KY_DARK_COLORS = {
+  t1: "#F0F4FF",
+  t2: "#A8B8D0",
+  t4: "#5C7090",
+  surf: "#111520",
+  elev: "#171D2E",
+  cbdr: "#1E2A3E",
+  bdrs: "#1A2232",
+  B: "#A78BFA",
+  cmb: "#0A2318",
+  cmd: "#0F3D22",
+  cmc: "#3DD68C",
+  cbb: "#2B1800",
+  cbd: "#4A2E00",
+  cbc: "#FF9F0A",
+  bab: "#200A0E",
+  bad: "#3D1018",
+  bac: "#FF2D55",
+  pb: "rgba(124,58,237,.16)",
+  pd: "#5B21B6",
+};
+const SIGNAL_LOG_SMDT_THRESHOLD = 70;
 
-function logToneForSig(sig) {
-  return { si: "dv", sn: "nn", so: "dt", st: "tr" }[sig] || "tr";
+function signalLogKeyForSig(sig) {
+  return sig === "si" || sig === "sn" ? "up" : "down";
 }
 
-function SignalLog({ topRows, branchRows, stockSignalRows, waveRows }) {
-  const [filter, setFilter] = useState("all");
-  const [page, setPage] = useState(1);
-  const logs = useMemo(() => {
-    const items = [];
-    for (const row of stockSignalRows.filter((item) => item.signal === "MUA" || item.signal === "BAN").slice(0, 14)) {
-      items.push({ kind: "ma", type: row.signal === "MUA" ? "mua" : "ban", time: row.date ? fmtFull(row.date) : "Live", title: row.ticker, tag: row.signal === "MUA" ? "MUA" : "BÁN", sub: `${row.signal === "MUA" ? "Tín hiệu mua" : "Tín hiệu bán"}${row.percent != null ? ` ${row.percent}%` : ""}${Number.isFinite(row.price) ? ` · Giá ${fmtNum(row.price)}` : ""}` });
-    }
-    for (const row of topRows.slice(0, 8)) {
-      items.push({ kind: "ma", type: "smdt", time: "SMDT", title: row.ticker, tag: "SMDT", industry: row.industry, sub: `SMDT đạt ${row.smdt.toFixed(1)}% · ${sigLabel(row.sig)}` });
-    }
-    for (const row of branchRows.slice(0, 8)) {
-      items.push({ kind: "ng", type: logToneForSig(row.sig), time: "Ngành", title: row.label, tag: sigLabel(row.sig), sub: `Dòng tiền ngành đang ở trạng thái ${sigLabel(row.sig).toLowerCase()}` });
-    }
-    for (const row of [...waveRows].slice(-2).reverse()) {
-      items.push({
-        kind: "tt",
-        type: "song",
-        time: row.date ? fmtFull(row.date) : "—",
-        title: "Thị trường",
-        tag: "Dò sóng",
-        sub: `${fmtNum(row.total ?? (row.waitbuy || 0) + (row.buy || 0) + (row.waitsell || 0) + (row.sell || 0))} mã · Chờ mua ${fmtNum(row.waitbuy || 0)} · Mua ${fmtNum(row.buy || 0)} · Chờ bán ${fmtNum(row.waitsell || 0)} · Bán ${fmtNum(row.sell || 0)}${Number.isFinite(row.reliability) ? ` · Tin cậy ${fmtNum(row.reliability)}%` : ""}`,
-      });
-    }
-    return items.filter((item) => filter === "all" || item.kind === filter);
-  }, [branchRows, filter, stockSignalRows, topRows, waveRows]);
+function signalLogPercent(value, total) {
+  const number = Number(value);
+  const base = Number(total);
+  if (!Number.isFinite(number) || !Number.isFinite(base) || base <= 0) return "0%";
+  return `${((number / base) * 100).toFixed(1)}%`.replace(".", ",");
+}
 
-  const totalPages = Math.max(1, Math.ceil(logs.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const visible = logs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+function signalLogSmdt(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${Math.round(number)}%` : "—";
+}
 
-  const switchFilter = (value) => {
-    setFilter(value);
-    setPage(1);
+function signalLogPrice(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : "";
+}
+
+function signalLogProfit(price, ave) {
+  const p = Number(price);
+  const a = Number(ave);
+  if (!Number.isFinite(p) || !Number.isFinite(a) || a === 0) return "0%";
+  const pct = ((p - a) / a) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
+
+function signalLogSmdtBand(value) {
+  const number = Number(value);
+  if (Number.isFinite(number) && number >= 100) return { bg: "#0A2A1C", bd: "#124A30", sk: "#3DE8A8" };
+  if (Number.isFinite(number) && number >= 70) return { bg: "#0A2318", bd: "#0F3D22", sk: "#3DD68C" };
+  if (Number.isFinite(number) && number >= 20) return { bg: "#2B1B08", bd: "#4A3010", sk: "#E89A3C" };
+  return { bg: "#2A0E12", bd: "#4A1820", sk: "#F0555B" };
+}
+
+function SignalLogIcon({ toneKey, smdtValue }) {
+  const C = NHAT_KY_DARK_COLORS;
+  const iconKey = toneKey === "smdt" ? "smdt" : toneKey;
+  const smdtBand = iconKey === "smdt" ? signalLogSmdtBand(smdtValue) : null;
+  const sk = smdtBand?.sk || (iconKey === "down" ? C.bac : iconKey === "warn" ? C.cbc : iconKey === "wave" ? C.B : C.cmc);
+  const bg = smdtBand?.bg || (iconKey === "down" ? C.bab : iconKey === "warn" ? C.cbb : iconKey === "wave" ? C.pb : C.cmb);
+  const bd = smdtBand?.bd || (iconKey === "down" ? C.bad : iconKey === "warn" ? C.cbd : iconKey === "wave" ? C.pd : C.cmd);
+  const paths = {
+    up: (
+      <>
+        <polyline points="3,17 9,11 13,15 21,7" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="15,7 21,7 21,13" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+    down: (
+      <>
+        <polyline points="3,7 9,13 13,9 21,17" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="15,17 21,17 21,11" stroke={sk} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+    warn: (
+      <>
+        <circle cx="12" cy="12" r="9" stroke={sk} strokeWidth="2.2" />
+        <line x1="12" y1="7.5" x2="12" y2="13" stroke={sk} strokeWidth="2.4" strokeLinecap="round" />
+        <circle cx="12" cy="16.6" r="1.3" fill={sk} />
+      </>
+    ),
+    wave: <path d="M3 12h3l2.5-6 4 12 2.5-6h6" stroke={sk} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />,
+    smdt: <path d="M12 3c3.2 3 4.5 5.4 4.5 8.2a4.5 4.5 0 0 1-9 0c0-1.3.6-2.4 1.7-3.3.1 1.2.6 1.9 1.2 2.4-.2-2.4-1-4.6 1.6-7.3Z" stroke={sk} strokeWidth="1.9" strokeLinejoin="round" fill={`${sk}22`} />,
   };
 
   return (
-    <Card noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+    <span style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", background: bg, border: `1px solid ${bd}` }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">{paths[iconKey] || paths.up}</svg>
+    </span>
+  );
+}
+
+// Giờ của một dòng nhật ký, ưu tiên theo độ tin cậy:
+//   1. Giờ nằm trong chính bản ghi (field `time`, hoặc `date` dạng datetime).
+//   2. Mốc cập nhật thật của feed sinh ra tín hiệu đó — chỉ dùng cho phiên mới
+//      nhất của feed, vì với phiên cũ mốc này không còn ý nghĩa.
+//   3. Không có gì đáng tin thì bỏ trống, không đắp giờ mặc định.
+function resolveSignalTime(row, rowDate, feed) {
+  const fromRow = formatTimeOfDay(row?.time) || formatTimeOfDay(row?.date);
+  if (fromRow) return fromRow;
+  if (!feed) return "";
+
+  const latestValue = toDateInputValue(feed.latestDate);
+  const dateValue = toDateInputValue(rowDate);
+  if (!latestValue || !dateValue || dateValue !== latestValue) return "";
+  return formatTimeOfDay(feed.updatedAt);
+}
+
+function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows, feeds = {} }) {
+  const [tab, setTab] = useState("all");
+  const [expanded, setExpanded] = useState(false);
+  const logs = useMemo(() => {
+    const items = [];
+    for (const row of [...waveRows].slice(-1).reverse()) {
+      const total = row.total ?? (row.waitbuy || 0) + (row.buy || 0) + (row.waitsell || 0) + (row.sell || 0);
+      items.push({
+        cap: "thi_truong",
+        capTag: "Thị trường",
+        k: "wave",
+        t: resolveSignalTime(row, row.date, feeds.wave),
+        sortDate: toDateInputValue(row.date),
+        title: "Tín hiệu thị trường",
+        x: `Chờ mua ${fmtNum(row.waitbuy || 0)} mã (${signalLogPercent(row.waitbuy || 0, total)}), Mua ${fmtNum(row.buy || 0)}, Chờ bán ${fmtNum(row.waitsell || 0)}, Bán ${fmtNum(row.sell || 0)}.${Number.isFinite(row.reliability) ? ` Độ tin cậy ${fmtNum(row.reliability)}%.` : ""}`,
+      });
+    }
+
+    for (const row of branchRows.filter((item) => item.sig).slice(0, 12)) {
+      items.push({
+        cap: "nganh",
+        capTag: "Ngành",
+        k: signalLogKeyForSig(row.sig),
+        t: resolveSignalTime(row, feeds.cashBranch?.date, feeds.cashBranch),
+        sortDate: toDateInputValue(feeds.cashBranch?.date),
+        title: "Cảnh báo dòng tiền",
+        x: `Dòng tiền ${sigLabel(row.sig).toLowerCase()} ở cổ phiếu ngành ${row.label}.`,
+      });
+    }
+
+    for (const row of smdtBranchRows.filter((item) => Number.isFinite(item.value) && item.value >= SIGNAL_LOG_SMDT_THRESHOLD).slice(0, 12)) {
+      items.push({
+        cap: "nganh",
+        capTag: "Ngành",
+        k: "smdt",
+        smdtValue: row.value,
+        t: resolveSignalTime(row, feeds.smdtBranch?.date, feeds.smdtBranch),
+        sortDate: toDateInputValue(feeds.smdtBranch?.date),
+        title: "Cảnh báo SMDT",
+        x: `Ngành ${row.label || row.name} có SMDT đạt ${signalLogSmdt(row.value)}.`,
+      });
+    }
+
+    for (const row of stockSignalRows.filter((item) => item.signal === "MUA" || item.signal === "BAN").slice(0, 14)) {
+      const isBuy = row.signal === "MUA";
+      const hold = Number(row.hold ?? row.weight);
+      const price = signalLogPrice(row.price);
+      items.push({
+        cap: "ma",
+        capTag: "Cổ phiếu",
+        k: isBuy ? "up" : "down",
+        t: resolveSignalTime(row, row.date, feeds.stockSignal),
+        sortDate: toDateInputValue(row.date),
+        title: isBuy ? "Khuyến nghị mua" : "Khuyến nghị bán",
+        x: isBuy
+          ? `${row.ticker} mua ${Number.isFinite(hold) ? Math.round(hold) : 0}%${price ? ` giá ${price}` : ""} trong phiên hôm nay, SMDT đạt ${signalLogSmdt(row.smdt)}.`
+          : `${row.ticker} bán ${Number.isFinite(hold) ? Math.round(hold) : 0}%${price ? ` giá ${price}` : ""} trong phiên hôm nay, lợi nhuận ${signalLogProfit(row.price, row.ave)}.`,
+      });
+    }
+
+    for (const row of topRows.filter((item) => Number.isFinite(item.smdt) && item.smdt >= SIGNAL_LOG_SMDT_THRESHOLD).slice(0, 12)) {
+      items.push({
+        cap: "ma",
+        capTag: "Cổ phiếu",
+        k: "smdt",
+        smdtValue: row.smdt,
+        t: resolveSignalTime(row, feeds.smdtTicker?.date, feeds.smdtTicker),
+        sortDate: toDateInputValue(feeds.smdtTicker?.date),
+        title: "Cảnh báo SMDT",
+        x: `Cổ phiếu ${row.ticker} có SMDT đạt ${signalLogSmdt(row.smdt)}.${row.industry ? ` Ngành ${row.industry}.` : ""}`,
+      });
+    }
+
+    for (const row of cashTickerRows.filter((item) => item.content).slice(0, 12)) {
+      const sig = tickerContentToSig(row.content);
+      items.push({
+        cap: "ma",
+        capTag: "Cổ phiếu",
+        k: signalLogKeyForSig(sig),
+        t: resolveSignalTime(row, row.date, feeds.cashTicker),
+        sortDate: toDateInputValue(row.date),
+        title: "Cảnh báo dòng tiền",
+        x: `Cổ phiếu ${row.ticker} có dòng tiền ${String(row.content).toLowerCase()}.`,
+      });
+    }
+    return items;
+  }, [branchRows, cashTickerRows, feeds, smdtBranchRows, stockSignalRows, topRows, waveRows]);
+
+  const visible = useMemo(() => logs.filter((item) => tab === "all" || item.cap === tab), [logs, tab]);
+  const collapsedLimit = 6;
+  const displayList = expanded ? visible : visible.slice(0, collapsedLimit);
+  const hasMore = visible.length > collapsedLimit;
+  const dateLabel = useMemo(() => {
+    const date = logs.map((item) => item.sortDate).filter(Boolean).sort((a, b) => b.localeCompare(a))[0];
+    return date ? fmtFull(date) : "";
+  }, [logs]);
+  const countFor = (id) => id === "all" ? logs.length : logs.filter((item) => item.cap === id).length;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [tab]);
+
+  return (
+    <Card id="signal-log-card" noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Nhật ký tín hiệu</span>
-          <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>Sóng thị trường · Ngành · Mã</span>
+          {dateLabel && <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>{dateLabel}</span>}
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
-          <ChipButton active={filter === "all"} onClick={() => switchFilter("all")}>Tất cả</ChipButton>
-          <ChipButton active={filter === "ma"} onClick={() => switchFilter("ma")}>Mã</ChipButton>
-          <ChipButton active={filter === "ng"} onClick={() => switchFilter("ng")}>Ngành</ChipButton>
-          <ChipButton active={filter === "tt"} onClick={() => switchFilter("tt")}>Thị trường</ChipButton>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
+          {SIGNAL_LOG_TABS.map(([id, label]) => {
+            const active = id === tab;
+            return (
+              <ChipButton key={id} active={active} onClick={() => setTab(id)}>{label}</ChipButton>
+            );
+          })}
+          {hasMore && <Clink onClick={() => setExpanded((value) => !value)}>{expanded ? "Thu gọn ↑" : "Xem tất cả ›"}</Clink>}
         </div>
       </div>
-      <div>
-        {visible.map((item, index) => {
-          const tone = LOG_TONES[item.type] || LOG_TONES.tr;
+
+      <div style={{ padding: "2px 18px 14px" }}>
+        {displayList.map((item, index) => {
+          const tagColor = SIGNAL_LOG_TAG_COLORS[item.capTag] || "var(--B)";
           return (
-            <div key={`${item.title}-${item.tag}-${index}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 14px", borderBottom: "0.5px solid var(--bdrs)" }}>
-              <div style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, background: tone.bg, color: tone.color }}>
-                <i className={`ti ${item.kind === "ng" ? "ti-building-community" : tone.icon}`} />
-              </div>
+            <div key={`${item.cap}-${item.title}-${item.t}-${index}`} style={{ display: "flex", gap: 10, padding: "11px 0", borderBottom: index < displayList.length - 1 ? `0.5px solid ${NHAT_KY_DARK_COLORS.bdrs}` : "none" }}>
+              <SignalLogIcon toneKey={item.k} smdtValue={item.smdtValue} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 650, color: item.kind === "ng" ? "var(--t2)" : "var(--t1)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  {item.title}
-                  <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 3, whiteSpace: "nowrap", color: tone.color, background: tone.bg, border: `0.5px solid ${tone.color}33` }}>{item.tag}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: NHAT_KY_DARK_COLORS.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: tagColor, background: `${tagColor}1A`, borderRadius: 6, padding: "1px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{item.capTag}</span>
+                  {item.t && <span style={{ fontSize: 10, color: NHAT_KY_DARK_COLORS.t4, marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.t}</span>}
                 </div>
-                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2, lineHeight: 1.5 }}>
-                  {item.industry && <><span style={{ color: "var(--t2)" }}>{item.industry}</span> · </>}
-                  {item.sub}
-                </div>
+                <div style={{ fontSize: 11, lineHeight: 1.45, color: NHAT_KY_DARK_COLORS.t2 }}>{item.x}</div>
               </div>
-              <div style={{ fontSize: 10, color: "var(--t4)", whiteSpace: "nowrap" }}>{item.time}</div>
             </div>
           );
         })}
-        {!visible.length && <EmptyHint />}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderTop: "0.5px solid var(--bdr)", marginTop: "auto", gap: 8 }}>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>{logs.length ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, logs.length)} / ${logs.length} tín hiệu` : "0 tín hiệu"}</span>
-        <Pagination compact page={safePage} totalPages={totalPages} onChange={setPage} />
+        {!visible.length && <div style={{ padding: "28px 0", textAlign: "center", color: NHAT_KY_DARK_COLORS.t4, fontSize: 12 }}>Chưa có tín hiệu ở cấp này trong phiên.</div>}
+        {expanded && hasMore && <div style={{ padding: "14px 0", textAlign: "center", fontSize: 11, color: NHAT_KY_DARK_COLORS.t4 }}>— đã hiển thị tất cả {visible.length} dòng —</div>}
       </div>
     </Card>
   );
 }
 
-export function ModDashboard() {
+export function ModDashboard({ tradingDate }) {
   const narrow = useNarrow();
   const smdt = useSMDT();
   const cashBranch = useCashFlowBranch();
@@ -1242,13 +1462,15 @@ export function ModDashboard() {
   const liveStockWave = useRealtimeStockWaveFeed(stockWave.applyTick);
   const liveBranchCross = useRealtimeSMDTBranchCrossFeed(branchCross.applyTick);
 
-  const smdtBranchDate = topDate(smdt.datesAsc);
-  const cashBranchDate = topDate(cashBranch.datesAsc);
+  const tradingDateValue = toDateInputValue(tradingDate);
   const smdtBranchDatesDesc = useMemo(() => sortDatesDesc(smdt.datesAsc), [smdt.datesAsc]);
+  const smdtBranchDate = smdtBranchDatesDesc[findDateIndex(smdtBranchDatesDesc, tradingDateValue)] || topDate(smdt.datesAsc);
   const smdtBranchDateIndex = useMemo(() => findDateIndex(smdtBranchDatesDesc, toDateInputValue(smdtBranchDate)), [smdtBranchDate, smdtBranchDatesDesc]);
   const prevSmdtBranchDate = smdtBranchDateIndex >= 0 ? smdtBranchDatesDesc[smdtBranchDateIndex + 1] || "" : "";
   const cashBranchDatesDesc = useMemo(() => sortDatesDesc(cashBranch.datesAsc), [cashBranch.datesAsc]);
-  const smdtTickerDate = topDate(smdtTicker.datesAsc);
+  const cashBranchDate = cashBranchDatesDesc[findDateIndex(cashBranchDatesDesc, tradingDateValue)] || topDate(cashBranch.datesAsc);
+  const smdtTickerDatesDesc = useMemo(() => sortDatesDesc(smdtTicker.datesAsc), [smdtTicker.datesAsc]);
+  const smdtTickerDate = smdtTickerDatesDesc[findDateIndex(smdtTickerDatesDesc, tradingDateValue)] || topDate(smdtTicker.datesAsc);
   const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt, stockSignal.updatedAt, stockWave.updatedAt, branchCross.updatedAt, totalTrade.updatedAt);
   const live =
     liveSmdtBranch.connected ||
@@ -1258,7 +1480,11 @@ export function ModDashboard() {
     liveStockSignal.connected ||
     liveStockWave.connected ||
     liveBranchCross.connected;
-  const waveLatest = stockWave.rows[stockWave.rows.length - 1] || null;
+  const waveLatest = useMemo(() => {
+    if (!stockWave.rows.length) return null;
+    if (!tradingDateValue) return stockWave.rows[stockWave.rows.length - 1] || null;
+    return [...stockWave.rows].reverse().find((row) => toDateInputValue(row.date) <= tradingDateValue) || stockWave.rows[0] || null;
+  }, [stockWave.rows, tradingDateValue]);
 
   const branchSmdtRows = useMemo(() => {
     return smdt.branches
@@ -1388,7 +1614,6 @@ export function ModDashboard() {
   }, [branchCashRows]);
 
   const stockSignalByTicker = useMemo(() => new Map(stockSignal.rows.map((row) => [row.ticker, row])), [stockSignal.rows]);
-  const smdtTickerDatesDesc = useMemo(() => sortDatesDesc(smdtTicker.datesAsc), [smdtTicker.datesAsc]);
   const smdtTickerDateIndex = useMemo(() => findDateIndex(smdtTickerDatesDesc, toDateInputValue(smdtTickerDate)), [smdtTickerDate, smdtTickerDatesDesc]);
   const prevSmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 1] || "" : "";
   const prev2SmdtTickerDate = smdtTickerDateIndex >= 0 ? smdtTickerDatesDesc[smdtTickerDateIndex + 2] || "" : "";
@@ -1405,7 +1630,7 @@ export function ModDashboard() {
       const tickerSig = tickerContentToSig(cash?.content || "");
       const branchSig = lookupIndustryValue(branchCashByLabel, industry);
       const signal = stockSignalByTicker.get(tk.key);
-      const trade = getLatestTrade(totalTrade, tk.key);
+      const trade = getLatestTrade(totalTrade, tk.key, smdtTickerDate);
       const prevSmdt = smdtTicker.matrix[tk.key]?.[prevSmdtTickerDate];
       const prev2Smdt = smdtTicker.matrix[tk.key]?.[prev2SmdtTickerDate];
       const branch = findIndustryBranch(smdt.branches, industry);
@@ -1453,13 +1678,17 @@ export function ModDashboard() {
     return rankedTopTickers.filter((row) => row.status);
   }, [rankedTopTickers]);
 
-  const latestStockSignalDate = useMemo(() => {
+  const stockSignalDatesDesc = useMemo(() => {
     const dates = stockSignal.rows.flatMap((row) => {
       const points = Array.isArray(row.points) ? row.points : [];
       return points.length ? points.map((point) => point.date).filter(Boolean) : [row.date].filter(Boolean);
     });
-    return sortDatesDesc(dates)[0] || "";
+    return sortDatesDesc(dates);
   }, [stockSignal.rows]);
+
+  const latestStockSignalDate = useMemo(() => {
+    return stockSignalDatesDesc[findDateIndex(stockSignalDatesDesc, tradingDateValue)] || stockSignalDatesDesc[0] || "";
+  }, [stockSignalDatesDesc, tradingDateValue]);
 
   const stockSignalRows = useMemo(() => {
     return stockSignal.rows.map((row) => {
@@ -1475,11 +1704,12 @@ export function ModDashboard() {
   }, [cashByTicker, latestStockSignalDate, smdtTicker.matrix, smdtTickerDate, stockSignal.rows]);
 
   const waveWindowDates = useMemo(() => {
-    const lastDate = branchCross.datesAsc.at(-1);
+    const branchCrossDatesDesc = sortDatesDesc(branchCross.datesAsc);
+    const lastDate = branchCrossDatesDesc[findDateIndex(branchCrossDatesDesc, tradingDateValue)] || branchCross.datesAsc.at(-1);
     if (!lastDate) return [];
     const yearStart = `${lastDate.slice(0, 4)}-01-01`;
-    return branchCross.datesAsc.filter((date) => date >= yearStart);
-  }, [branchCross.datesAsc]);
+    return branchCross.datesAsc.filter((date) => date >= yearStart && toDateInputValue(date) <= toDateInputValue(lastDate));
+  }, [branchCross.datesAsc, tradingDateValue]);
 
   const waveEvents = useMemo(() => {
     const windowStart = waveWindowDates[0] || "";
@@ -1521,13 +1751,42 @@ export function ModDashboard() {
   }, [waveLatest]);
   const waveTotal = waveLatest?.total ?? marketWaveItems.reduce((sum, item) => sum + item.n, 0);
 
-  const smdtBranchCore = branchSmdtRows.filter((row) => row.isCore).slice(0, 10);
-  const smdtBranchOther = branchSmdtRows.filter((row) => !row.isCore).slice(0, 10);
+  const smdtBranchCore = branchSmdtRows.filter((row) => row.isCore);
+  const smdtBranchOther = branchSmdtRows.filter((row) => !row.isCore);
   const tickerRows = rankedTopTickers.map((row) => ({ key: row.ticker, name: row.ticker, value: row.smdt, price: row.price, isCore: isCoreBranchName(row.industry) }));
   const sortTickerPreview = (rows) => [...rows].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
-  const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore)).slice(0, 10);
-  const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore)).slice(0, 10);
+  const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore));
+  const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore));
   const signalLatestDate = latestStockSignalDate || stockSignalRows.find((row) => row.date)?.date || activeCashTickerDate;
+  // Mỗi nhóm nhật ký gắn với feed sinh ra nó: ngày đang xem, phiên mới nhất feed có,
+  // và mốc cập nhật thật — đủ để suy ra giờ mà không cần hằng số.
+  const signalLogFeeds = useMemo(() => ({
+    wave: { date: waveLatest?.date || "", latestDate: stockWave.rows[stockWave.rows.length - 1]?.date || "", updatedAt: stockWave.updatedAt },
+    cashBranch: { date: cashBranchDate, latestDate: topDate(cashBranch.datesAsc), updatedAt: cashBranch.updatedAt },
+    smdtBranch: { date: smdtBranchDate, latestDate: topDate(smdt.datesAsc), updatedAt: smdt.updatedAt },
+    stockSignal: { date: latestStockSignalDate, latestDate: stockSignalDatesDesc[0] || "", updatedAt: stockSignal.updatedAt },
+    smdtTicker: { date: smdtTickerDate, latestDate: topDate(smdtTicker.datesAsc), updatedAt: smdtTicker.updatedAt },
+    cashTicker: { date: activeCashTickerDate, latestDate: cashTickerDatesDesc[0] || "", updatedAt: cashTicker.updatedAt },
+  }), [
+    activeCashTickerDate,
+    cashBranch.datesAsc,
+    cashBranch.updatedAt,
+    cashBranchDate,
+    cashTicker.updatedAt,
+    cashTickerDatesDesc,
+    latestStockSignalDate,
+    smdt.datesAsc,
+    smdt.updatedAt,
+    smdtBranchDate,
+    smdtTicker.datesAsc,
+    smdtTicker.updatedAt,
+    smdtTickerDate,
+    stockSignal.updatedAt,
+    stockSignalDatesDesc,
+    stockWave.rows,
+    stockWave.updatedAt,
+    waveLatest?.date,
+  ]);
   const waveCircleLoading = stockWave.status === "loading" && !waveLatest;
   const branchCashLoading = cashBranch.status === "loading" && !branchCashRows.length;
   const tickerCashLoading = cashTicker.status === "loading" && !cashTickerRows.length;
@@ -1602,6 +1861,7 @@ export function ModDashboard() {
           defaultTab="core"
           navId="smdt-ma"
           showPrice
+          showTabs={false}
         />
       </div>
 
@@ -1615,7 +1875,15 @@ export function ModDashboard() {
         <SignalPortfolio rows={stockSignalRows} date={signalLatestDate} live={live} />
       </div>
 
-      <SignalLog topRows={rankedTopTickers} branchRows={branchCashRows} stockSignalRows={stockSignalRows} waveRows={stockWave.rows} />
+      <SignalLog
+        topRows={rankedTopTickers}
+        branchRows={branchCashRows}
+        smdtBranchRows={branchSmdtRows}
+        cashTickerRows={cashTickerRows.map((row) => ({ ...row, date: activeCashTickerDate }))}
+        stockSignalRows={stockSignalRows}
+        waveRows={waveLatest ? [waveLatest] : []}
+        feeds={signalLogFeeds}
+      />
 
       <LiveFooter live={live} updatedAt={updatedAt} extra="Dashboard tổng hợp" />
     </div>

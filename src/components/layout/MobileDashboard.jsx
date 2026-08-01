@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { MODULES, ModuleView } from "../../app/modules";
+import { useTradingDateControl } from "../../app/useTradingDateControl";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 export function MobileDashboard({ session, onLogout }) {
   const [curMod, setCurMod] = useState("dashboard");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const tradingDateControl = useTradingDateControl();
 
   const sw = useCallback((id) => {
     if (!MODULES[id]) return;
@@ -37,10 +39,10 @@ export function MobileDashboard({ session, onLogout }) {
         <Sidebar curMod={curMod} onNav={sw} compact />
       </div>
 
-      <Topbar mod={mod} isMobile onMenuToggle={() => setDrawerOpen((o) => !o)} session={session} onLogout={onLogout} />
+      <Topbar mod={mod} isMobile onMenuToggle={() => setDrawerOpen((o) => !o)} session={session} onLogout={onLogout} tradingDateControl={tradingDateControl} />
 
       <div style={{ padding: "14px 13px calc(18px + env(safe-area-inset-bottom,0px))", display: "flex", flexDirection: "column", gap: 13 }}>
-        <ModuleView id={curMod} />
+        <ModuleView id={curMod} tradingDate={tradingDateControl.date} />
         <div style={{ textAlign: "center", fontSize: 11, color: "var(--t3)" }}>
           Dữ liệu chỉ mang tính tham khảo, không phải lời khuyên đầu tư.
         </div>

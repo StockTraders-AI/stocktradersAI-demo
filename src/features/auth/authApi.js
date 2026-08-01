@@ -7,6 +7,8 @@ const REQUEST_OTP_API_URL = "/api/auth/request-otp";
 const VERIFY_OTP_API_URL = "/api/auth/verify-otp";
 const SUCCESS_CODE = "S0000";
 const DEVICE_ID_KEY = "st-auth-device-id";
+const LOGIN_FAILED_MESSAGE = "Tài khoản chưa đăng ký hoặc mật khẩu không đúng.";
+const SOCIAL_LOGIN_FAILED_MESSAGE = "Tài khoản chưa đăng ký hoặc chưa liên kết Google.";
 
 const REPLY_KEYS = {
   login: ["UserLoginReply", "UserLoginRequest"],
@@ -114,7 +116,9 @@ function normalizeText(value) {
 function getContactType(value, explicitType = "") {
   const requestedType = normalizeText(explicitType).toLowerCase();
   if (requestedType === "email" || requestedType === "phone") return requestedType;
-  return normalizeText(value).includes("@") ? "email" : "phone";
+  const normalizedValue = normalizeText(value);
+  const looksLikePhone = /^[+\d().\-\s]+$/.test(normalizedValue) && /\d/.test(normalizedValue);
+  return looksLikePhone ? "phone" : "email";
 }
 
 function parseMaybeJson(value) {
@@ -253,6 +257,11 @@ function isLoginAccessBlocked(reply) {
   return status === 2 && !token;
 }
 
+function isBackendLoginFailed(reply) {
+  const message = normalizeText(readMessage(reply)).toLowerCase();
+  return message === "login false" || message.includes("login false");
+}
+
 export async function loginUser({ identifier, password }) {
   const userName = normalizeText(identifier);
 
@@ -275,6 +284,9 @@ export async function loginUser({ identifier, password }) {
 
   const code = readCode(reply);
   if (code && code !== SUCCESS_CODE) {
+    if (isBackendLoginFailed(reply)) {
+      throw new Error(LOGIN_FAILED_MESSAGE);
+    }
     if (isLoginAccessBlocked(reply)) {
       throw new AccessDeniedError(
         "Tài khoản đã đăng ký nhưng chưa có quyền truy cập gói Premium.",
@@ -354,6 +366,9 @@ export async function loginWithSocial({
   );
   const code = readCode(reply);
   if (code && code !== SUCCESS_CODE) {
+    if (isBackendLoginFailed(reply)) {
+      throw new Error(SOCIAL_LOGIN_FAILED_MESSAGE);
+    }
     if (isLoginAccessBlocked(reply)) {
       throw new AccessDeniedError(
         "Tài khoản đã đăng ký nhưng chưa có quyền truy cập gói Premium.",
@@ -390,14 +405,14 @@ export async function registerUser({
   password,
   otpVerificationToken,
 }) {
-  const normalizedUserName = normalizeText(userName);
   const normalizedContact = normalizeText(contact || email || phoneNumber);
+  const normalizedUserName = normalizeText(userName) || normalizedContact;
   const resolvedContactType = getContactType(normalizedContact, contactType);
   const normalizedEmail = resolvedContactType === "email" ? normalizedContact : normalizeText(email);
   const normalizedPhone = resolvedContactType === "phone" ? normalizedContact : normalizeText(phoneNumber);
 
-  if (!normalizedUserName || !password || !fullName || !normalizedContact) {
-    throw new Error("Vui lòng nhập đầy đủ họ tên, tài khoản, email/số điện thoại và mật khẩu.");
+  if (!password || !fullName || !normalizedContact) {
+    throw new Error("Vui lòng nhập đầy đủ họ tên, email/số điện thoại và mật khẩu.");
   }
 
   const { data, reply } = await postJson(
@@ -541,7 +556,7 @@ export async function changePassword({ phoneNumber, password, otpVerificationTok
       },
     },
     REPLY_KEYS.changePassword,
-    "Không thể đổi mật khẩu.",
+    "Số điện thoại chưa đăng ký hoặc không thể đổi mật khẩu.",
   );
 
   return {

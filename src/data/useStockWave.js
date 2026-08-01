@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
+import { pickTimeField } from "../app/dateUtils";
 
 /* ───────────────────────────────────────────────────────────────────────
  * useStockWave — nguồn dữ liệu "Sóng cổ phiếu"
@@ -52,6 +53,7 @@ function normalize(reply) {
     .filter((item) => item?.date)
     .map((item) => ({
       date: item.date,
+      time: pickTimeField(item),
       buy: toNumber(item.buy),
       waitbuy: toNumber(item.waitbuy),
       waitsell: toNumber(item.waitsell),
@@ -107,6 +109,7 @@ function toRealtimeTick(item) {
 
   return {
     date,
+    time: pickTimeField(item),
     buy: toNumber(item.buy),
     waitbuy: toNumber(item.waitbuy),
     waitsell: toNumber(item.waitsell),
@@ -249,11 +252,11 @@ export function useStockWave() {
     let cancelled = false;
     const cached = getCachedData();
     fetchSnapshot({ background: Boolean(cached), limit: cached ? FULL_LIMIT : INITIAL_LIMIT }).then(() => {
-      if (!cancelled && !cached) fetchSnapshot({ background: true, force: true, limit: FULL_LIMIT });
+      if (!cancelled && !cached) fetchSnapshot({ background: true, limit: FULL_LIMIT });
     });
 
     const refresh = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && shouldRunClientRefresh("stock-wave")) {
         fetchSnapshot({ background: true, limit: INITIAL_LIMIT, merge: true });
       }
     };

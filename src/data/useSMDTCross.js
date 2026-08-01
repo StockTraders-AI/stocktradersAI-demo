@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { CORE_BRANCHES } from "./useSMDT";
 
 const ACCOUNT = "thao.dtt";
@@ -219,7 +219,9 @@ function useCrossData({ cacheKey, initialState, fetcher, normalize, validate, me
   useEffect(() => {
     fetchSnapshot();
     // Fetch lại snapshot khi socket realtime reconnect để bù dữ liệu hụt lúc mất kết nối.
-    const refresh = () => fetchSnapshot();
+    const refresh = () => {
+      if (shouldRunClientRefresh("smdt-cross")) fetchSnapshot();
+    };
     window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
     return () => window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
   }, [fetchSnapshot]);

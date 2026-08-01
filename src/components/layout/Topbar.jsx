@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMarketIndices } from "../../data/useMarketIndices";
+import { toDateInputValue } from "../../app/dateUtils";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
 
@@ -38,13 +39,13 @@ function readInitials(session) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout }) {
+export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, tradingDateControl }) {
   const { t, dark, toggle } = useTheme();
   const { indices } = useMarketIndices();
   const now = useClock();
   const accountMenuRef = useRef(null);
   const [accountOpen, setAccountOpen] = useState(false);
-  const stamp = `${now.toLocaleDateString("vi-VN")} · ${now.toLocaleTimeString("vi-VN")}`;
+  const clockStamp = now.toLocaleTimeString("vi-VN");
   const displayName = readSessionName(session);
   const initials = readInitials(session);
 
@@ -116,15 +117,35 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout }) {
         {!isMobile && (
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--t3)" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.G, display: "inline-block", animation: "pulse 2s infinite" }} />
-            {stamp}
+            {clockStamp}
           </div>
         )}
-        {!isMobile && [["ti-calendar", false], ["ti-bell", true], ["ti-help", false]].map(([ic, badge], i) => (
-          <div key={i} style={{ ...iconBtn, position: "relative" }}>
-            <i className={`ti ${ic}`} style={{ fontSize: 15 }} />
-            {badge && <span style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, background: t.R, borderRadius: "50%", border: "1.5px solid var(--surf)" }} />}
+        {!isMobile && tradingDateControl?.dates?.length > 0 && (
+          <TopbarDateControl control={tradingDateControl} />
+        )}
+        {!isMobile && (
+          <div
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("st-nav", { detail: "dashboard" }));
+              setTimeout(() => {
+                const el = document.getElementById("signal-log-card");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              }, 150);
+            }}
+            title="Nhật ký tín hiệu"
+            style={{ ...iconBtn, position: "relative" }}
+          >
+            <i className="ti ti-bell" style={{ fontSize: 15 }} />
+            <span style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, background: t.R, borderRadius: "50%", border: "1.5px solid var(--surf)" }} />
           </div>
-        ))}
+        )}
+        {!isMobile && (
+          <div style={{ ...iconBtn, position: "relative" }}>
+            <i className="ti ti-help" style={{ fontSize: 15 }} />
+          </div>
+        )}
         <div onClick={toggle} title="Đổi Sáng/Tối" style={iconBtn}>
           <i className={`ti ${dark ? "ti-sun" : "ti-moon"}`} style={{ fontSize: 15 }} />
         </div>
@@ -172,6 +193,46 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout }) {
         {!isMobile && <div style={{ fontSize: 9, background: t.P, color: "#fff", borderRadius: 4, padding: "2px 6px", fontWeight: 700 }}>PREMIUM</div>}
       </div>
     </header>
+  );
+}
+
+function TopbarDateControl({ control }) {
+  const availableValues = useMemo(() => {
+    return [...new Set((control.dates || []).map(toDateInputValue).filter(Boolean))].sort();
+  }, [control.dates]);
+  const minDate = availableValues[0] || undefined;
+  const maxDate = availableValues[availableValues.length - 1] || undefined;
+
+  return (
+    <div style={{ ...iconBtn, position: "relative" }} title="Lùi ngày / Chọn phiên giao dịch">
+      <i className="ti ti-calendar" style={{ fontSize: 15 }} />
+      <input
+        type="date"
+        value={control.dateInputValue || ""}
+        min={minDate}
+        max={maxDate}
+        onClick={(e) => {
+          try {
+            e.target.showPicker();
+          } catch (err) {}
+        }}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next) {
+            control.goToDate(next);
+          }
+        }}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          opacity: 0,
+          cursor: "pointer",
+        }}
+      />
+    </div>
   );
 }
 

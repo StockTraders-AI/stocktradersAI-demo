@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl } from "./realtimeUrl";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
+import { pickTimeField } from "../app/dateUtils";
 
 const API_URL = "/api/stock-signal";
 const CACHE_KEY = "stock_signal_data_cache_v4";
@@ -86,6 +87,7 @@ function normalizeSignalPoint(point) {
   if (!point) return null;
   return {
     date: point.date || "",
+    time: pickTimeField(point),
     signal: pickSignal(point),
     weight: pickWeight(point),
     hold: pickWeight({ hold: point.hold }),
@@ -226,6 +228,7 @@ function serializeRows(data, pointLimit) {
     points: Array.isArray(row.points)
       ? row.points.slice(-pointLimit).map((point) => ({
           date: point.date,
+          time: point.time,
           signal: point.signal,
           weight: point.weight,
           hold: point.hold,
@@ -326,7 +329,9 @@ export function useStockSignal() {
   useEffect(() => {
     fetchSnapshot({ background: Boolean(cached) });
     const refresh = () => {
-      if (document.visibilityState === "visible") fetchSnapshot({ background: true });
+      if (document.visibilityState === "visible" && shouldRunClientRefresh("stock-signal")) {
+        fetchSnapshot({ background: true });
+      }
     };
     // Không poll định kỳ: dữ liệu mới đến qua Socket.IO; chỉ fetch lại snapshot
     // khi tab hiện lại / được focus hoặc khi socket realtime reconnect (bù dữ liệu hụt).

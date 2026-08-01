@@ -9,7 +9,7 @@ export { Loading } from "./Loading";
  * từ useTheme() để JS chọn đúng màu.
  * ─────────────────────────────────────────────────────────────────────── */
 
-export function Card({ children, style, noPad }) {
+export function Card({ children, style, noPad, ...rest }) {
   return (
     <div
       style={{
@@ -21,6 +21,7 @@ export function Card({ children, style, noPad }) {
         transition: "background .2s, border-color .2s",
         ...style,
       }}
+      {...rest}
     >
       {children}
     </div>

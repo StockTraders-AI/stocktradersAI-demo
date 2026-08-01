@@ -1,5 +1,6 @@
 let serverCache = null;
 let lastFetched = 0;
+let refreshPromise = null;
 const CACHE_DURATION = 3 * 1000;
 const API_ACCOUNT = "thao.dtt";
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
@@ -61,6 +62,25 @@ function sliceReply(data, limit) {
   };
 }
 
+async function refreshCache() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = fetchStockWaveFromSource()
+    .then((data) => {
+      serverCache = data;
+      lastFetched = Date.now();
+      return data;
+    })
+    .catch((error) => {
+      console.error("Failed to refresh stock wave cache from source:", error);
+      if (!serverCache) throw error;
+      return serverCache;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+  return refreshPromise;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -73,20 +93,19 @@ export default async function handler(req, res) {
 
   const now = Date.now();
   const limit = parseLimit(req.query.limit);
+  const isStale = !serverCache || now - lastFetched > CACHE_DURATION;
 
-  if (!serverCache || now - lastFetched > CACHE_DURATION) {
+  if (!serverCache) {
     try {
-      serverCache = await fetchStockWaveFromSource();
-      lastFetched = now;
+      await refreshCache();
     } catch (error) {
-      console.error("Failed to refresh stock wave cache from source:", error);
-      if (!serverCache) {
-        return res.status(502).json({
-          error: "Failed to load data from source",
-          details: error.message,
-        });
-      }
+      return res.status(502).json({
+        error: "Failed to load data from source",
+        details: error.message,
+      });
     }
+  } else if (isStale) {
+    refreshCache();
   }
 
   try {
