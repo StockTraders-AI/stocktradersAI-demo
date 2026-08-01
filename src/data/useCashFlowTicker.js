@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, removeDataCache, writeDataCache } from "./cacheStorage";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
+import { pickTimeField } from "../app/dateUtils";
 
 const API_BASE_URL = "/api/cashflow-ticker";
 const INITIAL_LIMIT = 25;
@@ -80,6 +81,7 @@ function normalizeTicker(item) {
     price: toNumber(item?.price),
     percent: normalizePercent(item?.percent),
     content: item?.content || "",
+    time: pickTimeField(item),
   };
 }
 

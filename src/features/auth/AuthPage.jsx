@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useMarketIndices } from "../../data/useMarketIndices";
 import { mono } from "../../styles/tokens";
@@ -31,6 +31,21 @@ const SOCIAL_PROVIDERS = [
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 let turnstileScriptPromise = null;
+
+/* ───────────────────────────────────────────────────────────────────────
+ * Khoá tạm tính năng Đăng ký.
+ *
+ * Bấm tab "Đăng ký" sẽ hiện toast báo đang nâng cấp và giữ nguyên form đăng
+ * nhập. Khi mở lại: đổi REGISTER_ENABLED = true là đủ — luồng đăng ký cũ
+ * (RegisterForm + handleRegister) vẫn còn nguyên bên dưới.
+ * ─────────────────────────────────────────────────────────────────────── */
+const REGISTER_ENABLED = false;
+const REGISTER_NOTICE = {
+  title: "Tính năng đăng ký đang nâng cấp",
+  body: "Hiện tại hệ thống chỉ hỗ trợ đăng nhập. Bạn vui lòng dùng tài khoản đã có.",
+};
+const NOTICE_VISIBLE_MS = 3600;
+const NOTICE_EXIT_MS = 300;
 
 function normalizeFormText(value) {
   return String(value || "").trim();
@@ -830,11 +845,48 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
   );
 }
 
+// Toast góc dưới màn hình, tự ẩn. Mỗi lần bấm lại được remount qua `key` nên
+// hiệu ứng vào luôn chạy từ đầu thay vì đứng im ở trạng thái đang hiện.
+function NoticeToast({ notice, onDismiss }) {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const raf = requestAnimationFrame(() => setShown(true));
+    const hideTimer = setTimeout(() => setShown(false), NOTICE_VISIBLE_MS);
+    const dropTimer = setTimeout(() => onDismiss?.(), NOTICE_VISIBLE_MS + NOTICE_EXIT_MS);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(hideTimer);
+      clearTimeout(dropTimer);
+    };
+  }, [notice, onDismiss]);
+
+  if (!notice) return null;
+
+  return (
+    <div style={styles.toastWrap} aria-live="polite">
+      <div className="auth-toast" role="status" style={{ ...styles.toast, ...(shown ? styles.toastShown : null) }}>
+        <svg style={styles.toastIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <div>
+          <div style={styles.toastTitle}>{notice.title}</div>
+          <div style={styles.toastBody}>{notice.body}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AuthCard({ onLogin }) {
   const { t } = useTheme();
   const [tab, setTab] = useState("login");
   const [state, setState] = useState({ loading: false, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
   const [googleLoginRequest, setGoogleLoginRequest] = useState(0);
+  const [notice, setNotice] = useState(null);
   const isLogin = tab === "login";
   const isRegister = tab === "register";
 
@@ -843,6 +895,17 @@ function AuthCard({ onLogin }) {
   const openTab = (nextTab) => {
     resetState();
     setTab(nextTab);
+  };
+
+  const dismissNotice = useCallback(() => setNotice(null), []);
+
+  const openRegisterTab = () => {
+    if (REGISTER_ENABLED) {
+      openTab("register");
+      return;
+    }
+    // Giữ nguyên form đăng nhập, chỉ báo cho người dùng biết tính năng đang khoá.
+    setNotice({ ...REGISTER_NOTICE, key: Date.now() });
   };
 
   const completeLogin = async (session, remember = true) => {
@@ -988,10 +1051,17 @@ function AuthCard({ onLogin }) {
         </button>
         <button
           type="button"
-          onClick={() => openTab("register")}
-          style={{ ...styles.tab, ...(isRegister ? { background: t.B, color: "#fff" } : null) }}
+          onClick={openRegisterTab}
+          aria-disabled={!REGISTER_ENABLED}
+          title={REGISTER_ENABLED ? undefined : REGISTER_NOTICE.title}
+          style={{
+            ...styles.tab,
+            ...(isRegister ? { background: t.B, color: "#fff" } : null),
+            ...(REGISTER_ENABLED ? null : styles.tabLocked),
+          }}
         >
           Đăng ký
+          {!REGISTER_ENABLED && <span style={styles.lockBadge}>Nâng cấp</span>}
         </button>
         </div>
       )}
@@ -1030,6 +1100,7 @@ function AuthCard({ onLogin }) {
           message={state.message}
         />
       )}
+      <NoticeToast key={notice?.key} notice={notice} onDismiss={dismissNotice} />
     </section>
   );
 }
@@ -1061,6 +1132,12 @@ export function AuthPage({ onLogin }) {
 const authScrollbarCss = `
   .auth-register-card::-webkit-scrollbar {
     display: none;
+  }
+  .auth-toast {
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .auth-toast { transition: none; }
   }
 `;
 
@@ -1222,6 +1299,69 @@ const styles = {
     fontSize: 13,
     fontWeight: 800,
     cursor: "pointer",
+  },
+  tabLocked: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minWidth: 0,
+    whiteSpace: "nowrap",
+    color: "var(--t4)",
+  },
+  lockBadge: {
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: .3,
+    padding: "2px 6px",
+    borderRadius: 999,
+    background: "var(--Bs)",
+    border: "0.5px solid var(--Bb)",
+    color: "var(--P)",
+  },
+  toastWrap: {
+    position: "fixed",
+    left: "50%",
+    bottom: 28,
+    transform: "translateX(-50%)",
+    width: "min(440px, calc(100vw - 40px))",
+    zIndex: 50,
+    pointerEvents: "none",
+  },
+  toast: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 12,
+    background: "var(--elev)",
+    border: "0.5px solid var(--bdr)",
+    borderLeft: "3px solid var(--B)",
+    borderRadius: 12,
+    padding: "14px 16px",
+    boxShadow: "0 24px 60px -24px rgba(0,0,0,.55)",
+    opacity: 0,
+    transform: "translateY(14px)",
+  },
+  toastShown: {
+    opacity: 1,
+    transform: "translateY(0)",
+  },
+  toastIcon: {
+    flex: "0 0 auto",
+    width: 20,
+    height: 20,
+    marginTop: 1,
+    color: "var(--P)",
+  },
+  toastTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "var(--t1)",
+    marginBottom: 3,
+  },
+  toastBody: {
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "var(--t2)",
   },
   socialBtn: {
     width: "100%",

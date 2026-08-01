@@ -3,6 +3,7 @@ import { useTheme } from "../../theme";
 import { mono, sigStyle } from "../../styles/tokens";
 import { useNarrow } from "../../app/useNarrow";
 import { fmtFull, fmtNum } from "../../app/formatters";
+import { formatTimeOfDay } from "../../app/dateUtils";
 import { CORE_BRANCHES, useSMDT, useRealtimeFeed as useRealtimeSMDTBranchFeed } from "../../data/useSMDT";
 import { useCashFlowBranch, useRealtimeCashFlowFeed, contentToSig } from "../../data/useCashFlowBranch";
 import { useSMDTTicker, useRealtimeSMDTTickerFeed } from "../../data/useSMDTTicker";
@@ -1281,7 +1282,23 @@ function SignalLogIcon({ toneKey, smdtValue }) {
   );
 }
 
-function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows }) {
+// Giờ của một dòng nhật ký, ưu tiên theo độ tin cậy:
+//   1. Giờ nằm trong chính bản ghi (field `time`, hoặc `date` dạng datetime).
+//   2. Mốc cập nhật thật của feed sinh ra tín hiệu đó — chỉ dùng cho phiên mới
+//      nhất của feed, vì với phiên cũ mốc này không còn ý nghĩa.
+//   3. Không có gì đáng tin thì bỏ trống, không đắp giờ mặc định.
+function resolveSignalTime(row, rowDate, feed) {
+  const fromRow = formatTimeOfDay(row?.time) || formatTimeOfDay(row?.date);
+  if (fromRow) return fromRow;
+  if (!feed) return "";
+
+  const latestValue = toDateInputValue(feed.latestDate);
+  const dateValue = toDateInputValue(rowDate);
+  if (!latestValue || !dateValue || dateValue !== latestValue) return "";
+  return formatTimeOfDay(feed.updatedAt);
+}
+
+function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows, feeds = {} }) {
   const [tab, setTab] = useState("all");
   const [expanded, setExpanded] = useState(false);
   const logs = useMemo(() => {
@@ -1292,7 +1309,7 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         cap: "thi_truong",
         capTag: "Thị trường",
         k: "wave",
-        t: row.date ? fmtFull(row.date) : "—",
+        t: resolveSignalTime(row, row.date, feeds.wave),
         sortDate: toDateInputValue(row.date),
         title: "Tín hiệu thị trường",
         x: `Chờ mua ${fmtNum(row.waitbuy || 0)} mã (${signalLogPercent(row.waitbuy || 0, total)}), Mua ${fmtNum(row.buy || 0)}, Chờ bán ${fmtNum(row.waitsell || 0)}, Bán ${fmtNum(row.sell || 0)}.${Number.isFinite(row.reliability) ? ` Độ tin cậy ${fmtNum(row.reliability)}%.` : ""}`,
@@ -1304,8 +1321,8 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         cap: "nganh",
         capTag: "Ngành",
         k: signalLogKeyForSig(row.sig),
-        t: "Ngành",
-        sortDate: "",
+        t: resolveSignalTime(row, feeds.cashBranch?.date, feeds.cashBranch),
+        sortDate: toDateInputValue(feeds.cashBranch?.date),
         title: "Cảnh báo dòng tiền",
         x: `Dòng tiền ${sigLabel(row.sig).toLowerCase()} ở cổ phiếu ngành ${row.label}.`,
       });
@@ -1317,8 +1334,8 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         capTag: "Ngành",
         k: "smdt",
         smdtValue: row.value,
-        t: "SMDT",
-        sortDate: "",
+        t: resolveSignalTime(row, feeds.smdtBranch?.date, feeds.smdtBranch),
+        sortDate: toDateInputValue(feeds.smdtBranch?.date),
         title: "Cảnh báo SMDT",
         x: `Ngành ${row.label || row.name} có SMDT đạt ${signalLogSmdt(row.value)}.`,
       });
@@ -1332,7 +1349,7 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         cap: "ma",
         capTag: "Cổ phiếu",
         k: isBuy ? "up" : "down",
-        t: row.date ? fmtFull(row.date) : "Live",
+        t: resolveSignalTime(row, row.date, feeds.stockSignal),
         sortDate: toDateInputValue(row.date),
         title: isBuy ? "Khuyến nghị mua" : "Khuyến nghị bán",
         x: isBuy
@@ -1347,8 +1364,8 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         capTag: "Cổ phiếu",
         k: "smdt",
         smdtValue: row.smdt,
-        t: "SMDT",
-        sortDate: "",
+        t: resolveSignalTime(row, feeds.smdtTicker?.date, feeds.smdtTicker),
+        sortDate: toDateInputValue(feeds.smdtTicker?.date),
         title: "Cảnh báo SMDT",
         x: `Cổ phiếu ${row.ticker} có SMDT đạt ${signalLogSmdt(row.smdt)}.${row.industry ? ` Ngành ${row.industry}.` : ""}`,
       });
@@ -1360,14 +1377,14 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         cap: "ma",
         capTag: "Cổ phiếu",
         k: signalLogKeyForSig(sig),
-        t: row.date ? fmtFull(row.date) : "Mã",
+        t: resolveSignalTime(row, row.date, feeds.cashTicker),
         sortDate: toDateInputValue(row.date),
         title: "Cảnh báo dòng tiền",
         x: `Cổ phiếu ${row.ticker} có dòng tiền ${String(row.content).toLowerCase()}.`,
       });
     }
     return items;
-  }, [branchRows, cashTickerRows, smdtBranchRows, stockSignalRows, topRows, waveRows]);
+  }, [branchRows, cashTickerRows, feeds, smdtBranchRows, stockSignalRows, topRows, waveRows]);
 
   const visible = useMemo(() => logs.filter((item) => tab === "all" || item.cap === tab), [logs, tab]);
   const collapsedLimit = 6;
@@ -1661,14 +1678,17 @@ export function ModDashboard({ tradingDate }) {
     return rankedTopTickers.filter((row) => row.status);
   }, [rankedTopTickers]);
 
-  const latestStockSignalDate = useMemo(() => {
+  const stockSignalDatesDesc = useMemo(() => {
     const dates = stockSignal.rows.flatMap((row) => {
       const points = Array.isArray(row.points) ? row.points : [];
       return points.length ? points.map((point) => point.date).filter(Boolean) : [row.date].filter(Boolean);
     });
-    const datesDesc = sortDatesDesc(dates);
-    return datesDesc[findDateIndex(datesDesc, tradingDateValue)] || datesDesc[0] || "";
-  }, [stockSignal.rows, tradingDateValue]);
+    return sortDatesDesc(dates);
+  }, [stockSignal.rows]);
+
+  const latestStockSignalDate = useMemo(() => {
+    return stockSignalDatesDesc[findDateIndex(stockSignalDatesDesc, tradingDateValue)] || stockSignalDatesDesc[0] || "";
+  }, [stockSignalDatesDesc, tradingDateValue]);
 
   const stockSignalRows = useMemo(() => {
     return stockSignal.rows.map((row) => {
@@ -1738,6 +1758,35 @@ export function ModDashboard({ tradingDate }) {
   const tickerCoreRows = sortTickerPreview(tickerRows.filter((row) => row.isCore));
   const tickerOtherRows = sortTickerPreview(tickerRows.filter((row) => !row.isCore));
   const signalLatestDate = latestStockSignalDate || stockSignalRows.find((row) => row.date)?.date || activeCashTickerDate;
+  // Mỗi nhóm nhật ký gắn với feed sinh ra nó: ngày đang xem, phiên mới nhất feed có,
+  // và mốc cập nhật thật — đủ để suy ra giờ mà không cần hằng số.
+  const signalLogFeeds = useMemo(() => ({
+    wave: { date: waveLatest?.date || "", latestDate: stockWave.rows[stockWave.rows.length - 1]?.date || "", updatedAt: stockWave.updatedAt },
+    cashBranch: { date: cashBranchDate, latestDate: topDate(cashBranch.datesAsc), updatedAt: cashBranch.updatedAt },
+    smdtBranch: { date: smdtBranchDate, latestDate: topDate(smdt.datesAsc), updatedAt: smdt.updatedAt },
+    stockSignal: { date: latestStockSignalDate, latestDate: stockSignalDatesDesc[0] || "", updatedAt: stockSignal.updatedAt },
+    smdtTicker: { date: smdtTickerDate, latestDate: topDate(smdtTicker.datesAsc), updatedAt: smdtTicker.updatedAt },
+    cashTicker: { date: activeCashTickerDate, latestDate: cashTickerDatesDesc[0] || "", updatedAt: cashTicker.updatedAt },
+  }), [
+    activeCashTickerDate,
+    cashBranch.datesAsc,
+    cashBranch.updatedAt,
+    cashBranchDate,
+    cashTicker.updatedAt,
+    cashTickerDatesDesc,
+    latestStockSignalDate,
+    smdt.datesAsc,
+    smdt.updatedAt,
+    smdtBranchDate,
+    smdtTicker.datesAsc,
+    smdtTicker.updatedAt,
+    smdtTickerDate,
+    stockSignal.updatedAt,
+    stockSignalDatesDesc,
+    stockWave.rows,
+    stockWave.updatedAt,
+    waveLatest?.date,
+  ]);
   const waveCircleLoading = stockWave.status === "loading" && !waveLatest;
   const branchCashLoading = cashBranch.status === "loading" && !branchCashRows.length;
   const tickerCashLoading = cashTicker.status === "loading" && !cashTickerRows.length;
@@ -1833,6 +1882,7 @@ export function ModDashboard({ tradingDate }) {
         cashTickerRows={cashTickerRows.map((row) => ({ ...row, date: activeCashTickerDate }))}
         stockSignalRows={stockSignalRows}
         waveRows={waveLatest ? [waveLatest] : []}
+        feeds={signalLogFeeds}
       />
 
       <LiveFooter live={live} updatedAt={updatedAt} extra="Dashboard tổng hợp" />
