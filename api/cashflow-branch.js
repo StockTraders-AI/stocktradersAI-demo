@@ -1,6 +1,7 @@
 let serverCache = null;
 let lastFetched = 0;
-const CACHE_DURATION = 3 * 1000;
+let refreshPromise = null;
+const CACHE_DURATION = 15 * 1000;
 const API_ACCOUNT = "thao.dtt";
 
 function parseLimit(value) {
@@ -50,7 +51,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=10, stale-while-revalidate=120");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -59,12 +60,29 @@ export default async function handler(req, res) {
   const now = Date.now();
   const limit = parseLimit(req.query.limit);
 
+  async function refreshCache() {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = fetchCashFlowBranchFromSource()
+      .then((data) => {
+        serverCache = data;
+        lastFetched = Date.now();
+        return data;
+      })
+      .catch((error) => {
+        console.error("Failed to refresh cash flow branch cache from source:", error);
+        if (!serverCache) throw error;
+        return serverCache;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+    return refreshPromise;
+  }
+
   if (!serverCache || now - lastFetched > CACHE_DURATION) {
     try {
-      serverCache = await fetchCashFlowBranchFromSource();
-      lastFetched = now;
+      await refreshCache();
     } catch (error) {
-      console.error("Failed to refresh cash flow branch cache from source:", error);
       if (!serverCache) {
         return res.status(502).json({
           error: "Failed to load data from source",

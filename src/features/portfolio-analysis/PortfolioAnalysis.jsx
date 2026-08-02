@@ -399,9 +399,10 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
                 <i className="ti ti-search" style={{ color: "var(--t3)", fontSize: 16 }} />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} autoFocus={!mobile} placeholder="Tìm ngành hoặc mã cổ phiếu..." style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t1)", fontFamily: "inherit", fontSize: mobile ? 16 : 13, padding: "10px 0" }} />
               </div>
-              <button type="button" onClick={() => setLeadOnly((value) => !value)} style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, border: "none", background: "transparent", color: leadOnly ? "var(--t1)" : "var(--t3)", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
-                <span style={{ width: 38, height: 22, borderRadius: 11, background: leadOnly ? "var(--G)" : "rgba(255,255,255,.1)", position: "relative", transition: ".18s", flexShrink: 0 }}>
-                  <span style={{ position: "absolute", top: 2, left: leadOnly ? 18 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: ".18s" }} />
+              <button type="button" aria-pressed={leadOnly} onClick={() => setLeadOnly((value) => !value)} style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, border: "none", background: "transparent", color: leadOnly ? "var(--t1)" : "var(--t3)", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                <span style={{ width: 46, height: 24, borderRadius: 999, background: leadOnly ? "var(--G)" : "var(--elev)", border: `0.5px solid ${leadOnly ? "var(--Gb)" : "var(--bdr)"}`, position: "relative", transition: ".18s", flexShrink: 0, boxShadow: leadOnly ? "0 0 0 3px var(--Gs)" : "inset 0 1px 2px rgba(0,0,0,.08)" }}>
+                  <span style={{ position: "absolute", top: 5, left: leadOnly ? 7 : 20, color: leadOnly ? "#fff" : "var(--t4)", fontSize: 7, lineHeight: 1, fontWeight: 900, letterSpacing: ".04em", pointerEvents: "none" }}>{leadOnly ? "ON" : "OFF"}</span>
+                  <span style={{ position: "absolute", top: 2, left: leadOnly ? 22 : 2, width: 18, height: 18, borderRadius: "50%", background: leadOnly ? "#fff" : "var(--surf)", border: "0.5px solid var(--bdr)", boxShadow: "0 2px 5px rgba(0,0,0,.18)", transition: ".18s" }} />
                 </span>
                 <span style={{ fontSize: 12 }}>Chỉ hiện ngành dẫn sóng (SMDT ≥ 70%)</span>
               </button>

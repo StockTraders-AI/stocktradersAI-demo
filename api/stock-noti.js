@@ -1,6 +1,6 @@
 const API_ACCOUNT = "thao.dtt";
 const SOURCE_URL = "https://stocktraders.vn/service/data/getStockNoti";
-const CACHE_DURATION = 3 * 1000;
+const CACHE_DURATION = 15 * 1000;
 const REPLY_KEYS = ["StockNotiReply", "StockNotiRequest"];
 const cacheByDate = new Map();
 
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=3, stale-while-revalidate=30");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -58,8 +58,28 @@ export default async function handler(req, res) {
 
   if (!cached || wantsFresh || now - cached.lastFetched > CACHE_DURATION) {
     try {
-      const data = await fetchStockNotiFromSource(date);
-      cacheByDate.set(date, { data, lastFetched: now });
+      const request =
+        !wantsFresh && cached?.promise
+          ? cached.promise
+          : fetchStockNotiFromSource(date)
+              .then((data) => {
+                cacheByDate.set(date, { data, lastFetched: Date.now() });
+                return data;
+              })
+              .catch((error) => {
+                const fallback = cacheByDate.get(date);
+                if (fallback?.data) return fallback.data;
+                throw error;
+              })
+              .finally(() => {
+                const latest = cacheByDate.get(date);
+                if (latest?.promise === request) {
+                  const { promise, ...rest } = latest;
+                  cacheByDate.set(date, rest);
+                }
+              });
+      cacheByDate.set(date, { ...(cached || {}), promise: request, lastFetched: cached?.lastFetched || 0 });
+      await request;
     } catch (error) {
       console.error("Failed to refresh stock noti cache from source:", error);
       if (!cached) {

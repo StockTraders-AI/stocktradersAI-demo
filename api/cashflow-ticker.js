@@ -4,7 +4,7 @@ let refreshPromise = null;
 let totalTradeTickerCache = null;
 let totalTradeLastFetched = 0;
 let totalTradeRefreshPromise = null;
-const CACHE_DURATION = 3 * 1000;
+const CACHE_DURATION = 15 * 1000;
 const TOTAL_TRADE_CACHE_DURATION = 5 * 60 * 1000;
 const API_ACCOUNT = "thao.dtt";
 const REPLY_KEYS = ["CashFlowTickerReply", "CashFlowTickerRequest"];
@@ -179,7 +179,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=3, stale-while-revalidate=30");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();

@@ -62,10 +62,27 @@ export default async function handler(req, res) {
 
   if (!cached || now - cached.lastFetched > CACHE_DURATION) {
     try {
-      serverCache.set(cacheKey, {
-        data: await fetchPerformanceFromSource(branchPath, date),
-        lastFetched: now,
-      });
+      const request =
+        cached?.promise ||
+        fetchPerformanceFromSource(branchPath, date)
+          .then((data) => {
+            serverCache.set(cacheKey, { data, lastFetched: Date.now() });
+            return data;
+          })
+          .catch((error) => {
+            const fallback = serverCache.get(cacheKey);
+            if (fallback?.data) return fallback.data;
+            throw error;
+          })
+          .finally(() => {
+            const latest = serverCache.get(cacheKey);
+            if (latest?.promise === request) {
+              const { promise, ...rest } = latest;
+              serverCache.set(cacheKey, rest);
+            }
+          });
+      serverCache.set(cacheKey, { ...(cached || {}), promise: request, lastFetched: cached?.lastFetched || 0 });
+      await request;
     } catch (error) {
       console.error("Failed to refresh performance cache from source:", error);
       if (!cached) {

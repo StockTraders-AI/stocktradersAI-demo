@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchJsonWithClientCache } from "./requestCache";
 import { formatTimeOfDay, pickTimeField, toDateInputValue } from "../app/dateUtils";
 
 const API_URL = "/api/stock-noti";
@@ -152,9 +153,7 @@ export function useStockNoti(date) {
           params.set("fresh", "1");
           params.set("_", String(Date.now()));
         }
-        const res = await fetch(`${API_URL}?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await fetchJsonWithClientCache(`${API_URL}?${params.toString()}`, { force });
         const code = getReply(json)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
         setRows(normalize(json, dateValue));

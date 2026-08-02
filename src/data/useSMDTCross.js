@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
+import { fetchJsonWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { CORE_BRANCHES } from "./useSMDT";
 
@@ -142,23 +143,23 @@ function hasCrossData(data) {
   return Boolean(data?.datesAsc?.length && data?.matrix && Object.keys(data.matrix).length);
 }
 
-async function postJson(url, body) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store",
+async function postJson(url, body, force = false) {
+  return fetchJsonWithClientCache(url, {
+    force,
+    options: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
 }
 
-function fetchBranchCross() {
-  return postJson(BRANCH_CROSS_API, { SMDTBranchCrossRequest: { account: ACCOUNT } });
+function fetchBranchCross(force = false) {
+  return postJson(BRANCH_CROSS_API, { SMDTBranchCrossRequest: { account: ACCOUNT } }, force);
 }
 
-function fetchTickerCross() {
-  return postJson(TICKER_CROSS_API, { SMDTTickerCrossRequest: { account: ACCOUNT } });
+function fetchTickerCross(force = false) {
+  return postJson(TICKER_CROSS_API, { SMDTTickerCrossRequest: { account: ACCOUNT } }, force);
 }
 
 function validateBranchCross(json) {
@@ -189,7 +190,7 @@ function useCrossData({ cacheKey, initialState, fetcher, normalize, validate, me
     const request = (async () => {
       setStatus((current) => (current === "ready" ? "ready" : "loading"));
       try {
-        const json = await fetcher();
+        const json = await fetcher(force);
         validate(json);
         const normalized = normalize(json);
         const now = new Date();

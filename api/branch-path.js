@@ -1,5 +1,6 @@
 let serverCache = null;
 let lastFetched = 0;
+let refreshPromise = null;
 const CACHE_DURATION = 5 * 60 * 1000; // Thành phần ngành/mã ít đổi trong phiên → cache dài hơn cash flow.
 const API_ACCOUNT = "thao.dtt";
 
@@ -40,12 +41,29 @@ export default async function handler(req, res) {
 
   const now = Date.now();
 
+  async function refreshCache() {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = fetchBranchPathFromSource()
+      .then((data) => {
+        serverCache = data;
+        lastFetched = Date.now();
+        return data;
+      })
+      .catch((error) => {
+        console.error("Failed to refresh branch path cache from source:", error);
+        if (!serverCache) throw error;
+        return serverCache;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+    return refreshPromise;
+  }
+
   if (!serverCache || now - lastFetched > CACHE_DURATION) {
     try {
-      serverCache = await fetchBranchPathFromSource();
-      lastFetched = now;
+      await refreshCache();
     } catch (error) {
-      console.error("Failed to refresh branch path cache from source:", error);
       if (!serverCache) {
         return res.status(502).json({
           error: "Failed to load data from source",
