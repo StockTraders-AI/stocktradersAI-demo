@@ -1264,6 +1264,7 @@ const styles = {
     boxSizing: "border-box",
   },
   card: {
+    position: "relative",
     width: "100%",
     maxWidth: 374,
     background: "var(--surf)",
@@ -1320,15 +1321,16 @@ const styles = {
     color: "var(--P)",
   },
   toastWrap: {
-    position: "fixed",
+    position: "absolute",
     left: "50%",
-    bottom: 28,
+    top: "calc(100% + 26px)",
     transform: "translateX(-50%)",
     width: "min(440px, calc(100vw - 40px))",
-    zIndex: 50,
+    zIndex: 1000,
     pointerEvents: "none",
   },
   toast: {
+    boxSizing: "border-box",
     display: "flex",
     alignItems: "flex-start",
     gap: 12,

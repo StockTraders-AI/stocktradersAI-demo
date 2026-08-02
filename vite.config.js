@@ -41,6 +41,7 @@ let totalTradeRealDevLastFetched = 0;
 let totalTradeRealDevRefreshPromise = null;
 let smdtTickerDevCache = null;
 let smdtTickerDevLastFetched = 0;
+const stockNotiDevCache = new Map();
 let stockSignalDevCache = null;
 let stockSignalDevLastFetched = 0;
 let branchPathDevCache = null;
@@ -941,6 +942,54 @@ function smdtDevPlugin() {
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ error: err.message }));
           }
+        } else if (reqUrl.startsWith("/api/stock-noti")) {
+          const host = req.headers.host || "localhost:3000";
+          const parsedUrl = new URL(reqUrl, `http://${host}`);
+          const date = String(parsedUrl.searchParams.get("date") || "").trim().slice(0, 10);
+          if (!date) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Missing date" }));
+            return;
+          }
+
+          const now = Date.now();
+          const cached = stockNotiDevCache.get(date);
+          if (!cached || now - cached.lastFetched > CACHE_DURATION) {
+            try {
+              const response = await fetch(
+                "https://stocktraders.vn/service/data/getStockNoti",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    StockNotiRequest: { account: API_ACCOUNT, date },
+                  }),
+                },
+              );
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const data = await response.json();
+              const code =
+                data?.StockNotiReply?.codeReply?.codeID ||
+                data?.StockNotiRequest?.codeReply?.codeID;
+              if (code && code !== "S0000")
+                throw new Error(`API response code ${code}`);
+              stockNotiDevCache.set(date, { data, lastFetched: now });
+            } catch (err) {
+              console.error("Local dev stock noti proxy fetch error:", err);
+              if (!cached) {
+                res.statusCode = 502;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ error: err.message }));
+                return;
+              }
+            }
+          }
+
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store, max-age=0");
+          res.end(JSON.stringify(stockNotiDevCache.get(date)?.data || cached.data));
         } else if (reqUrl.startsWith("/api/stock-signal")) {
           const now = Date.now();
           if (
