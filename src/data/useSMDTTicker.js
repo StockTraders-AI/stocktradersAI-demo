@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
+import { fetchJsonWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 
 /* ───────────────────────────────────────────────────────────────────────
@@ -249,9 +250,7 @@ export function useSMDTTicker() {
         const params = new URLSearchParams();
         applyLimitParam(params, limit);
         if (bust) params.set("_", String(startedAt));
-        const res = await fetch(`${API_BASE_URL}?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await fetchJsonWithClientCache(`${API_BASE_URL}?${params.toString()}`, { force: bust || force });
         const code = getReply(json)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
+import { fetchJsonWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { pickTimeField } from "../app/dateUtils";
 
@@ -292,9 +293,7 @@ export function useStockSignal() {
       try {
         // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi force refresh.
         const url = force ? `${API_URL}?fresh=1&_=${Date.now()}` : API_URL;
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await fetchJsonWithClientCache(url, { force });
         const code = getReply(json)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 

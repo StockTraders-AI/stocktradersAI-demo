@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readDataCache, writeDataCache } from "./cacheStorage";
+import { fetchJsonWithClientCache } from "./requestCache";
 
 /* ───────────────────────────────────────────────────────────────────────
  * useBranchPath — bản đồ "mã cổ phiếu → ngành" lấy từ API getBranchPath.
@@ -103,9 +104,7 @@ export function useBranchPath() {
     const request = (async () => {
       try {
         // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi force refresh.
-        const res = await fetch(force ? `${API_URL}?_=${Date.now()}` : API_URL, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await fetchJsonWithClientCache(force ? `${API_URL}?_=${Date.now()}` : API_URL, { force, ttlMs: 5 * 60_000 });
         const code = json?.BranchPathReply?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 

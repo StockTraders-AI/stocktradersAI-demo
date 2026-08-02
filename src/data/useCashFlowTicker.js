@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, removeDataCache, writeDataCache } from "./cacheStorage";
+import { fetchJsonWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { pickTimeField } from "../app/dateUtils";
 
@@ -286,9 +287,7 @@ export function useCashFlowTicker() {
       const startedAt = Date.now();
       try {
         const apiUrl = getApiUrl(limit, { fresh, bust: force || fresh });
-        const res = await fetch(apiUrl, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await fetchJsonWithClientCache(apiUrl, { force: force || fresh });
         const code = getReply(json)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 

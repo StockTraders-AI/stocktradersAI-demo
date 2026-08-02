@@ -11,6 +11,7 @@ import { useCashFlowTicker, useRealtimeCashFlowTickerFeed, tickerContentToSig } 
 import { useBranchPath } from "../../data/useBranchPath";
 import { useRealtimeSMDTBranchCrossFeed, useSMDTBranchCross } from "../../data/useSMDTCross";
 import { useRealtimeStockSignalFeed, useStockSignal } from "../../data/useStockSignal";
+import { useStockNoti } from "../../data/useStockNoti";
 import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave";
 import { useTotalTrade } from "../../data/useTotalTrade";
 import { Card, Clink, LiveFooter, Loading, Pagination } from "../../components/ui";
@@ -1205,6 +1206,24 @@ const NHAT_KY_DARK_COLORS = {
   pb: "rgba(124,58,237,.16)",
   pd: "#5B21B6",
 };
+const NHAT_KY_LIGHT_COLORS = {
+  t1: "var(--t1)",
+  t2: "var(--t2)",
+  t4: "var(--t3)",
+  bdrs: "var(--bdrs)",
+  B: "var(--B)",
+  cmb: "#E7F8EF",
+  cmd: "#BFEBD1",
+  cmc: "#0C9F61",
+  cbb: "#FFF2D8",
+  cbd: "#F5D08A",
+  cbc: "#B26A00",
+  bab: "#FFE8EC",
+  bad: "#F3B7C1",
+  bac: "#E11D48",
+  pb: "rgba(124,58,237,.10)",
+  pd: "#C4B5FD",
+};
 const SIGNAL_LOG_SMDT_THRESHOLD = 70;
 
 function signalLogKeyForSig(sig) {
@@ -1236,18 +1255,17 @@ function signalLogProfit(price, ave) {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
 }
 
-function signalLogSmdtBand(value) {
+function signalLogSmdtBand(value, C = NHAT_KY_DARK_COLORS) {
   const number = Number(value);
-  if (Number.isFinite(number) && number >= 100) return { bg: "#0A2A1C", bd: "#124A30", sk: "#3DE8A8" };
-  if (Number.isFinite(number) && number >= 70) return { bg: "#0A2318", bd: "#0F3D22", sk: "#3DD68C" };
-  if (Number.isFinite(number) && number >= 20) return { bg: "#2B1B08", bd: "#4A3010", sk: "#E89A3C" };
-  return { bg: "#2A0E12", bd: "#4A1820", sk: "#F0555B" };
+  if (Number.isFinite(number) && number >= 70) return { bg: C.cmb, bd: C.cmd, sk: C.cmc };
+  if (Number.isFinite(number) && number >= 20) return { bg: C.cbb, bd: C.cbd, sk: C.cbc };
+  return { bg: C.bab, bd: C.bad, sk: C.bac };
 }
 
-function SignalLogIcon({ toneKey, smdtValue }) {
-  const C = NHAT_KY_DARK_COLORS;
+function SignalLogIcon({ toneKey, smdtValue, colors }) {
+  const C = colors || NHAT_KY_DARK_COLORS;
   const iconKey = toneKey === "smdt" ? "smdt" : toneKey;
-  const smdtBand = iconKey === "smdt" ? signalLogSmdtBand(smdtValue) : null;
+  const smdtBand = iconKey === "smdt" ? signalLogSmdtBand(smdtValue, C) : null;
   const sk = smdtBand?.sk || (iconKey === "down" ? C.bac : iconKey === "warn" ? C.cbc : iconKey === "wave" ? C.B : C.cmc);
   const bg = smdtBand?.bg || (iconKey === "down" ? C.bab : iconKey === "warn" ? C.cbb : iconKey === "wave" ? C.pb : C.cmb);
   const bd = smdtBand?.bd || (iconKey === "down" ? C.bad : iconKey === "warn" ? C.cbd : iconKey === "wave" ? C.pd : C.cmd);
@@ -1298,10 +1316,14 @@ function resolveSignalTime(row, rowDate, feed) {
   return formatTimeOfDay(feed.updatedAt);
 }
 
-function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows, feeds = {} }) {
+function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows, feeds = {}, notificationRows = null }) {
+  const { dark } = useTheme();
+  const C = dark ? NHAT_KY_DARK_COLORS : NHAT_KY_LIGHT_COLORS;
   const [tab, setTab] = useState("all");
   const [expanded, setExpanded] = useState(false);
   const logs = useMemo(() => {
+    if (Array.isArray(notificationRows)) return notificationRows;
+
     const items = [];
     for (const row of [...waveRows].slice(-1).reverse()) {
       const total = row.total ?? (row.waitbuy || 0) + (row.buy || 0) + (row.waitsell || 0) + (row.sell || 0);
@@ -1384,7 +1406,7 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
       });
     }
     return items;
-  }, [branchRows, cashTickerRows, feeds, smdtBranchRows, stockSignalRows, topRows, waveRows]);
+  }, [branchRows, cashTickerRows, feeds, notificationRows, smdtBranchRows, stockSignalRows, topRows, waveRows]);
 
   const visible = useMemo(() => logs.filter((item) => tab === "all" || item.cap === tab), [logs, tab]);
   const collapsedLimit = 6;
@@ -1422,21 +1444,21 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
         {displayList.map((item, index) => {
           const tagColor = SIGNAL_LOG_TAG_COLORS[item.capTag] || "var(--B)";
           return (
-            <div key={`${item.cap}-${item.title}-${item.t}-${index}`} style={{ display: "flex", gap: 10, padding: "11px 0", borderBottom: index < displayList.length - 1 ? `0.5px solid ${NHAT_KY_DARK_COLORS.bdrs}` : "none" }}>
-              <SignalLogIcon toneKey={item.k} smdtValue={item.smdtValue} />
+            <div key={`${item.cap}-${item.title}-${item.t}-${index}`} style={{ display: "flex", gap: 10, padding: "11px 0", borderBottom: index < displayList.length - 1 ? `0.5px solid ${C.bdrs}` : "none" }}>
+              <SignalLogIcon toneKey={item.k} smdtValue={item.smdtValue} colors={C} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, minWidth: 0 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: NHAT_KY_DARK_COLORS.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</span>
+                  <span style={{ fontSize: 11, fontWeight: 750, color: C.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</span>
                   <span style={{ fontSize: 10, fontWeight: 600, color: tagColor, background: `${tagColor}1A`, borderRadius: 6, padding: "1px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{item.capTag}</span>
-                  {item.t && <span style={{ fontSize: 10, color: NHAT_KY_DARK_COLORS.t4, marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.t}</span>}
+                  {item.t && <span style={{ fontSize: 10, color: C.t4, marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.t}</span>}
                 </div>
-                <div style={{ fontSize: 11, lineHeight: 1.45, color: NHAT_KY_DARK_COLORS.t2 }}>{item.x}</div>
+                <div style={{ fontSize: 11, lineHeight: 1.45, color: C.t2 }}>{item.x}</div>
               </div>
             </div>
           );
         })}
-        {!visible.length && <div style={{ padding: "28px 0", textAlign: "center", color: NHAT_KY_DARK_COLORS.t4, fontSize: 12 }}>Chưa có tín hiệu ở cấp này trong phiên.</div>}
-        {expanded && hasMore && <div style={{ padding: "14px 0", textAlign: "center", fontSize: 11, color: NHAT_KY_DARK_COLORS.t4 }}>— đã hiển thị tất cả {visible.length} dòng —</div>}
+        {!visible.length && <div style={{ padding: "28px 0", textAlign: "center", color: C.t4, fontSize: 12 }}>Chưa có tín hiệu ở cấp này trong phiên.</div>}
+        {expanded && hasMore && <div style={{ padding: "14px 0", textAlign: "center", fontSize: 11, color: C.t4 }}>— đã hiển thị tất cả {visible.length} dòng —</div>}
       </div>
     </Card>
   );
@@ -1485,6 +1507,7 @@ export function ModDashboard({ tradingDate }) {
     if (!tradingDateValue) return stockWave.rows[stockWave.rows.length - 1] || null;
     return [...stockWave.rows].reverse().find((row) => toDateInputValue(row.date) <= tradingDateValue) || stockWave.rows[0] || null;
   }, [stockWave.rows, tradingDateValue]);
+  const stockNoti = useStockNoti(tradingDateValue || cashBranchDate || smdtTickerDate);
 
   const branchSmdtRows = useMemo(() => {
     return smdt.branches
@@ -1883,6 +1906,7 @@ export function ModDashboard({ tradingDate }) {
         stockSignalRows={stockSignalRows}
         waveRows={waveLatest ? [waveLatest] : []}
         feeds={signalLogFeeds}
+        notificationRows={stockNoti.rows}
       />
 
       <LiveFooter live={live} updatedAt={updatedAt} extra="Dashboard tổng hợp" />

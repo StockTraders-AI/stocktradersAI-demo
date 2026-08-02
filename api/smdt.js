@@ -1,7 +1,8 @@
 // Global memory cache in Serverless Function
 let serverCache = null;
 let lastFetched = 0;
-const CACHE_DURATION = 3 * 1000; // Realtime là đường chính; proxy chỉ phục vụ snapshot ban đầu + lưới dự phòng, giữ ngắn để tươi.
+let refreshPromise = null;
+const CACHE_DURATION = 15 * 1000; // Realtime là đường chính; proxy chỉ phục vụ snapshot ban đầu + lưới dự phòng.
 const API_ACCOUNT = "thao.dtt";
 
 function parseLimit(value) {
@@ -15,7 +16,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=10, stale-while-revalidate=120");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -24,9 +25,9 @@ export default async function handler(req, res) {
   const now = Date.now();
   const limit = parseLimit(req.query.limit);
 
-  // Fetch from target if cache is missing or expired
-  if (!serverCache || (now - lastFetched > CACHE_DURATION)) {
-    try {
+  async function refreshCache() {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = (async () => {
       const response = await fetch("https://stocktraders.vn/service/data/getSMDTBranch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,10 +43,24 @@ export default async function handler(req, res) {
       }
 
       serverCache = data;
-      lastFetched = now;
+      lastFetched = Date.now();
+      return data;
+    })()
+      .catch((error) => {
+        console.error("Failed to refresh SMDT cache from source:", error);
+        if (!serverCache) throw error;
+        return serverCache;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+    return refreshPromise;
+  }
+
+  if (!serverCache || (now - lastFetched > CACHE_DURATION)) {
+    try {
+      await refreshCache();
     } catch (error) {
-      console.error("Failed to refresh SMDT cache from source:", error);
-      // Fallback to stale cache if request fails
       if (!serverCache) {
         return res.status(502).json({
           error: "Failed to load data from source",

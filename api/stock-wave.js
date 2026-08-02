@@ -1,7 +1,7 @@
 let serverCache = null;
 let lastFetched = 0;
 let refreshPromise = null;
-const CACHE_DURATION = 3 * 1000;
+const CACHE_DURATION = 15 * 1000;
 const API_ACCOUNT = "thao.dtt";
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 
@@ -97,7 +97,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=10, stale-while-revalidate=120");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();

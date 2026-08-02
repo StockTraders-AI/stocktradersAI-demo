@@ -384,7 +384,7 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
 
       {pickerOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(4,6,10,.72)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: mobile ? 12 : 20, zIndex: 900 }} onClick={() => setPickerOpen(false)}>
-          <div role="dialog" aria-label="Chọn mã theo ngành" onClick={(event) => event.stopPropagation()} style={{ width: "100%", maxWidth: 860, maxHeight: mobile ? "92dvh" : "88vh", background: "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 18, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(0,0,0,.8)" }}>
+          <div role="dialog" aria-label="Chọn mã theo ngành" onClick={(event) => event.stopPropagation()} style={{ width: "100%", maxWidth: 860, height: mobile ? "92dvh" : undefined, maxHeight: mobile ? "92dvh" : "88vh", background: "var(--surf)", border: "0.5px solid var(--bdr)", borderRadius: 18, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(0,0,0,.8)" }}>
             <div style={{ padding: mobile ? "15px 15px 13px" : "18px 20px 14px", borderBottom: "0.5px solid var(--bdr)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 14 }}>
                 <span style={{ width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center", background: "var(--Bs)", color: "var(--B)", flexShrink: 0 }}>
@@ -399,16 +399,17 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
                 <i className="ti ti-search" style={{ color: "var(--t3)", fontSize: 16 }} />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} autoFocus={!mobile} placeholder="Tìm ngành hoặc mã cổ phiếu..." style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "var(--t1)", fontFamily: "inherit", fontSize: mobile ? 16 : 13, padding: "10px 0" }} />
               </div>
-              <button type="button" onClick={() => setLeadOnly((value) => !value)} style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, border: "none", background: "transparent", color: leadOnly ? "var(--t1)" : "var(--t3)", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
-                <span style={{ width: 38, height: 22, borderRadius: 11, background: leadOnly ? "var(--G)" : "rgba(255,255,255,.1)", position: "relative", transition: ".18s", flexShrink: 0 }}>
-                  <span style={{ position: "absolute", top: 2, left: leadOnly ? 18 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: ".18s" }} />
+              <button type="button" aria-pressed={leadOnly} onClick={() => setLeadOnly((value) => !value)} style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, border: "none", background: "transparent", color: leadOnly ? "var(--t1)" : "var(--t3)", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                <span style={{ width: 46, height: 24, borderRadius: 999, background: leadOnly ? "var(--G)" : "var(--elev)", border: `0.5px solid ${leadOnly ? "var(--Gb)" : "var(--bdr)"}`, position: "relative", transition: ".18s", flexShrink: 0, boxShadow: leadOnly ? "0 0 0 3px var(--Gs)" : "inset 0 1px 2px rgba(0,0,0,.08)" }}>
+                  <span style={{ position: "absolute", top: 5, left: leadOnly ? 7 : 20, color: leadOnly ? "#fff" : "var(--t4)", fontSize: 7, lineHeight: 1, fontWeight: 900, letterSpacing: ".04em", pointerEvents: "none" }}>{leadOnly ? "ON" : "OFF"}</span>
+                  <span style={{ position: "absolute", top: 2, left: leadOnly ? 22 : 2, width: 18, height: 18, borderRadius: "50%", background: leadOnly ? "#fff" : "var(--surf)", border: "0.5px solid var(--bdr)", boxShadow: "0 2px 5px rgba(0,0,0,.18)", transition: ".18s" }} />
                 </span>
                 <span style={{ fontSize: 12 }}>Chỉ hiện ngành dẫn sóng (SMDT ≥ 70%)</span>
               </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "300px 1fr", minHeight: 0, flex: 1 }}>
-              <div style={{ overflowY: "auto", minHeight: 0, borderRight: mobile ? "none" : "0.5px solid var(--bdr)", borderBottom: mobile ? "0.5px solid var(--bdr)" : "none", padding: 8, maxHeight: mobile ? "34vh" : undefined }}>
+            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "300px 1fr", gridTemplateRows: mobile ? "minmax(116px, 34%) minmax(0, 1fr)" : undefined, minHeight: 0, flex: 1, overflow: "hidden" }}>
+              <div style={{ overflowY: "auto", minHeight: 0, borderRight: mobile ? "none" : "0.5px solid var(--bdr)", borderBottom: mobile ? "0.5px solid var(--bdr)" : "none", padding: 8 }}>
                 <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t4)", padding: "8px 10px 6px", fontWeight: 800 }}>Ngành · sắp theo SMDT</div>
                 {!visibleSectors.length ? (
                   <div style={{ color: "var(--t4)", fontSize: 13, textAlign: "center", padding: "34px 16px" }}>Không có ngành phù hợp.</div>
@@ -430,7 +431,7 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
                 })}
               </div>
 
-              <div style={{ overflowY: "auto", minHeight: 0, padding: mobile ? 8 : "8px 8px 8px 4px" }}>
+              <div style={{ overflowY: "auto", minHeight: 0, padding: mobile ? "8px 8px 16px" : "8px 8px 8px 4px", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px 10px", gap: 10 }}>
                   <div style={{ color: "var(--t1)", fontSize: 13, fontWeight: 750 }}>
                     {activeSector ? activeSector.name : "Chọn một ngành"}
@@ -448,7 +449,7 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
                   const added = selected.has(stock.code);
                   const disabled = !added && isFull;
                   return (
-                    <div key={stock.code} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 11px", borderRadius: 10 }}>
+                    <div key={stock.code} style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) auto 30px", alignItems: "center", gap: 12, padding: "9px 11px", borderRadius: 10, minWidth: 0 }}>
                       <span style={{ width: 52, flexShrink: 0, color: "var(--t1)", fontWeight: 800, fontSize: 13, letterSpacing: 0, ...mono }}>{stock.code}</span>
                       <span style={{ flex: 1, minWidth: 0, color: "var(--t3)", fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stock.name}</span>
                       <span style={{ ...smdtBadgeStyle(stock.smdt), fontSize: 11.5, fontWeight: 800, padding: "3px 8px", borderRadius: 7, flexShrink: 0, ...mono }}>{formatPickerSmdt(stock.smdt)}</span>
@@ -461,7 +462,7 @@ function PortfolioInput({ input, setInput, codes, onAnalyze, loading, compact, d
               </div>
             </div>
 
-            <div style={{ padding: mobile ? "12px 15px" : "14px 20px", borderTop: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ padding: mobile ? "12px 15px calc(12px + env(safe-area-inset-bottom, 0px))" : "14px 20px", borderTop: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexShrink: 0, background: "var(--surf)", position: "relative", zIndex: 1 }}>
               <span style={{ color: isFull ? "var(--A)" : "var(--t3)", fontSize: 12 }}>Đã chọn <b style={{ color: isFull ? "var(--A)" : "var(--B)" }}>{codes.length}</b> / {PORTFOLIO_MAX_CODES} mã</span>
               <button type="button" onClick={() => setPickerOpen(false)} style={{ background: "var(--B)", border: "none", color: "#fff", fontWeight: 800, fontSize: 12.5, padding: "9px 22px", borderRadius: 9, cursor: "pointer", fontFamily: "inherit" }}>Xong</button>
             </div>
@@ -816,7 +817,7 @@ export function ModPhanTichDanhMuc() {
         <DetailTable rows={rows} codes={analyzedCodes} dateLabel={dateLabel} />
       )}
       <div style={{ color: "var(--t4)", fontSize: 11 }}>
-        Tín hiệu và tỷ trọng lấy từ StockSignal API khi có dữ liệu; cột Đánh giá dùng logic 4-key theo động lượng SMDT 3 phiên của mã và ngành.
+        Tính năng được vận hành bởi công nghệ AI độc quyền của StockTraders AI, phân tích sức mạnh dòng tiền (SMDT) của mã và ngành để đưa ra góc nhìn khách quan. Dữ liệu cập nhật liên tục theo thị trường.
       </div>
     </div>
   );

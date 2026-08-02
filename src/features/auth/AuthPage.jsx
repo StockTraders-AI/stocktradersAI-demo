@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useMarketIndices } from "../../data/useMarketIndices";
+import { Sidebar } from "../../components/layout/Sidebar";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
 import {
@@ -13,17 +14,6 @@ import {
   requestOtp,
   verifyOtp,
 } from "./authApi";
-
-const NAV_ITEMS = [
-  { icon: "ti-layout-dashboard", label: "Dashboard", dim: false },
-  { icon: "ti-chart-line", label: "Thị trường", dim: false },
-  { icon: "ti-briefcase", label: "Ngành", dim: true },
-  { icon: "ti-building-store", label: "Cổ phiếu", dim: true },
-  { icon: "ti-binoculars", label: "Dò sóng thị trường", dim: true },
-  { icon: "ti-file-report", label: "Báo cáo", dim: true },
-  { icon: "ti-book", label: "Kiến thức", dim: false },
-  { icon: "ti-users", label: "Cộng đồng", dim: false },
-];
 
 const SOCIAL_PROVIDERS = [
   { id: "2", key: "google", icon: "ti-brand-google", label: "Google" },
@@ -95,16 +85,23 @@ function AuthTopbar({ isMobile }) {
   const stamp = `${now.toLocaleDateString("vi-VN")} · ${now.toLocaleTimeString("vi-VN")}`;
 
   return (
-    <header style={styles.topbar}>
-      <div style={styles.brandWrap}>
-        <div style={styles.logo}>
-          <i className="ti ti-chart-candle" style={{ color: "#fff", fontSize: 17 }} />
+    <header style={{ ...styles.topbar, ...(!isMobile ? styles.topbarDesktop : null) }}>
+      {isMobile ? (
+        <div style={styles.brandWrap}>
+          <div style={styles.logo}>
+            <i className="ti ti-chart-candle" style={{ color: "#fff", fontSize: 17 }} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={styles.brandTitle}>StockTraders AI</div>
+            <div style={styles.brandSub}>Đăng nhập để tiếp tục</div>
+          </div>
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={styles.brandTitle}>StockTraders AI</div>
-          <div style={styles.brandSub}>Đăng nhập để tiếp tục</div>
+      ) : (
+        <div style={{ minWidth: 0, flexShrink: 0 }}>
+          <div style={styles.pageTitle}>Đăng nhập</div>
+          <div style={styles.pageSub}>Truy cập StockTraders AI để tiếp tục</div>
         </div>
-      </div>
+      )}
 
       {!isMobile && (
         <div style={styles.indexWrap}>
@@ -153,29 +150,7 @@ function AuthTopbar({ isMobile }) {
 }
 
 function AuthSidebar() {
-  const { t, dark } = useTheme();
-
-  return (
-    <aside style={styles.sidebar}>
-      {NAV_ITEMS.map((item) => (
-        <div key={item.label} style={{ ...styles.navItem, opacity: item.dim ? 0.42 : 1 }}>
-          <i className={`ti ${item.icon}`} style={styles.navIcon} />
-          <span>{item.label}</span>
-        </div>
-      ))}
-
-      <div style={{ flex: 1 }} />
-      <div style={{ ...styles.lockCard, background: dark ? "linear-gradient(135deg,#1A1430,#12172A)" : t.Bs, borderColor: t.Bb }}>
-        <div style={{ ...styles.lockTitle, color: dark ? t.P : t.B }}>
-          <i className="ti ti-lock-star" />
-          Đăng nhập để tiếp tục
-        </div>
-        <div style={styles.lockBody}>
-          Vào hệ thống để xem dữ liệu SMDT, dòng tiền theo ngành và mã cổ phiếu.
-        </div>
-      </div>
-    </aside>
-  );
+  return <Sidebar curMod="dashboard" onNav={() => {}} />;
 }
 
 function TextField({ label, placeholder, onFocus, onBlur, groupStyle, ...props }) {
@@ -1116,15 +1091,21 @@ export function AuthPage({ onLogin }) {
   }, []);
 
   return (
-    <div style={styles.shell}>
+    <div style={isMobile ? styles.shell : styles.desktopShell}>
       <style>{authScrollbarCss}</style>
       <AuthTopbar isMobile={isMobile} />
-      <div style={styles.content}>
-        {!isMobile && <AuthSidebar />}
-        <main style={{ ...styles.main, padding: isMobile ? "20px 14px 28px" : "32px 24px 40px" }}>
+      {isMobile ? (
+        <main style={{ ...styles.main, padding: "20px 14px 28px" }}>
           <AuthCard onLogin={onLogin} />
         </main>
-      </div>
+      ) : (
+        <>
+          <AuthSidebar />
+          <main style={{ ...styles.main, gridColumn: 2, padding: "32px 24px 40px" }}>
+            <AuthCard onLogin={onLogin} />
+          </main>
+        </>
+      )}
     </div>
   );
 }
@@ -1150,6 +1131,15 @@ const styles = {
     color: "var(--t1)",
     overflow: "hidden",
   },
+  desktopShell: {
+    display: "grid",
+    gridTemplateColumns: "224px 1fr",
+    gridTemplateRows: "52px 1fr",
+    height: "100vh",
+    background: "var(--bg)",
+    color: "var(--t1)",
+    overflow: "hidden",
+  },
   topbar: {
     height: 52,
     flexShrink: 0,
@@ -1160,6 +1150,9 @@ const styles = {
     justifyContent: "space-between",
     padding: "0 20px",
     gap: 16,
+  },
+  topbarDesktop: {
+    gridColumn: 2,
   },
   brandWrap: { display: "flex", alignItems: "center", gap: 10, minWidth: 0, flexShrink: 0 },
   logo: {
@@ -1174,6 +1167,8 @@ const styles = {
   },
   brandTitle: { fontSize: 14, fontWeight: 800, color: "var(--t1)", letterSpacing: "-.2px", whiteSpace: "nowrap" },
   brandSub: { fontSize: 10.5, color: "var(--t3)", marginTop: 1, whiteSpace: "nowrap" },
+  pageTitle: { fontSize: 15, fontWeight: 800, color: "var(--t1)", letterSpacing: "-.2px", whiteSpace: "nowrap" },
+  pageSub: { fontSize: 11, color: "var(--t3)", marginTop: 1, whiteSpace: "nowrap" },
   indexWrap: { display: "flex", gap: 7, minWidth: 0, flex: 1 },
   indexPill: {
     display: "flex",
@@ -1264,6 +1259,7 @@ const styles = {
     boxSizing: "border-box",
   },
   card: {
+    position: "relative",
     width: "100%",
     maxWidth: 374,
     background: "var(--surf)",
@@ -1320,15 +1316,16 @@ const styles = {
     color: "var(--P)",
   },
   toastWrap: {
-    position: "fixed",
+    position: "absolute",
     left: "50%",
-    bottom: 28,
+    top: "calc(100% + 26px)",
     transform: "translateX(-50%)",
     width: "min(440px, calc(100vw - 40px))",
-    zIndex: 50,
+    zIndex: 1000,
     pointerEvents: "none",
   },
   toast: {
+    boxSizing: "border-box",
     display: "flex",
     alignItems: "flex-start",
     gap: 12,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readDataCache, writeDataCache } from "./cacheStorage";
+import { fetchJsonWithClientCache } from "./requestCache";
 
 const API_URL = "/api/performance";
 const CACHE_KEY_PREFIX = "performance_by_branch_path";
@@ -98,9 +99,8 @@ export function usePerformance(branchPath, date) {
         const params = new URLSearchParams({ branch_path: branchPath });
         if (date) params.set("date", date);
         const url = `${API_URL}?${params.toString()}`;
-        const response = await fetch(force ? `${url}&_=${Date.now()}` : url, { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const normalized = normalize(await response.json());
+        const json = await fetchJsonWithClientCache(force ? `${url}&_=${Date.now()}` : url, { force, ttlMs: 30_000 });
+        const normalized = normalize(json);
         const now = new Date();
         if (latestKeyRef.current === requestKey) {
           setState(normalized);
