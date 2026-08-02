@@ -1799,7 +1799,7 @@ export function ModDashboard({ tradingDate }) {
           maCount={waveTotal}
           reliability={waveLatest?.reliability ?? 0}
           dateLabel={waveLatest?.date ? fmtFull(waveLatest.date) : ""}
-          onDetail={() => nav("do-song")}
+          onDetail={() => nav("dong-tien-tt")}
           loading={waveCircleLoading}
         />
 

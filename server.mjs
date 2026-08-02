@@ -6,13 +6,20 @@ import { fileURLToPath } from "node:url";
 import branchPath from "./api/branch-path.js";
 import cashflowBranch from "./api/cashflow-branch.js";
 import cashflowTicker from "./api/cashflow-ticker.js";
+import conditionSignalLatest from "./api/condition-signal-latest.js";
+import doSongAdvice from "./api/do-song-advice.js";
+import portfolioChat from "./api/portfolio-chat.js";
 import smdt from "./api/smdt.js";
 import smdtTicker from "./api/smdt-ticker.js";
+import stockNoti from "./api/stock-noti.js";
 import stockSignal from "./api/stock-signal.js";
 import stockWave from "./api/stock-wave.js";
+import stockWaveCurrent from "./api/stock-wave-current.js";
 import stockWaveHistory from "./api/stock-wave-history.js";
+import stockWaveTickers from "./api/stock-wave-tickers.js";
 import totalTrade from "./api/total-trade.js";
 import totalTradeReal from "./api/total-trade-real.js";
+import waveBottomConfirmPairs from "./api/wave-bottom-confirm-pairs.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const DIST_DIR = resolve(__dirname, "dist");
@@ -22,13 +29,20 @@ const apiHandlers = new Map([
   ["/api/branch-path", branchPath],
   ["/api/cashflow-branch", cashflowBranch],
   ["/api/cashflow-ticker", cashflowTicker],
+  ["/api/condition-signal-latest", conditionSignalLatest],
+  ["/api/do-song-advice", doSongAdvice],
+  ["/api/portfolio-chat", portfolioChat],
   ["/api/smdt", smdt],
   ["/api/smdt-ticker", smdtTicker],
+  ["/api/stock-noti", stockNoti],
   ["/api/stock-signal", stockSignal],
   ["/api/stock-wave", stockWave],
+  ["/api/stock-wave-current", stockWaveCurrent],
   ["/api/stock-wave-history", stockWaveHistory],
+  ["/api/stock-wave-tickers", stockWaveTickers],
   ["/api/total-trade", totalTrade],
   ["/api/total-trade-real", totalTradeReal],
+  ["/api/wave-bottom-confirm-pairs", waveBottomConfirmPairs],
 ]);
 
 const mimeTypes = {

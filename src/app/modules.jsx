@@ -7,7 +7,6 @@ import { ModTopMaManh } from "../features/top-strong-tickers/TopStrongTickers";
 import { ModDongTienTT } from "../features/market-flow/MarketFlow";
 import { ModPhanTichDanhMuc } from "../features/portfolio-analysis/PortfolioAnalysis";
 import { ModLoTrinhDanSong } from "../features/wave-path/WavePath";
-import { ModDoSong } from "../features/wave/ModDoSong";
 
 /* ─────────────────────────── MODULE REGISTRY ───────────────────────────
  * Mỗi module: tiêu đề + phụ đề cho topbar, render qua <ModuleView>.
@@ -16,8 +15,7 @@ import { ModDoSong } from "../features/wave/ModDoSong";
  * ─────────────────────────────────────────────────────────────────────── */
 export const MODULES = {
   "dashboard":       { title: "Dashboard",          sub: "Tổng quan thị trường hôm nay" },
-  "do-song":         { title: "Dò sóng thị trường", sub: "Nhận diện sớm chu kỳ · đi trước dòng tiền" },
-  "dong-tien-tt":    { title: "Thị trường",          sub: "Tổng hợp GTGD · Khối ngoại · Tự doanh" },
+  "dong-tien-tt":    { title: "Thị trường",          sub: "Dò sóng thị trường · nhận diện sớm chu kỳ" },
   "dong-tien-nganh": { title: "Dòng tiền ngành",     sub: "Chủ lực 6 ngành — theo dõi vào/ra theo ngày" },
   "smdt-nganh":      { title: "SMDT ngành",          sub: "Sức mạnh dòng tiền theo ngành · Heatmap" },
   "lo-trinh-dan-song": { title: "Lộ trình dẫn sóng", sub: "Timeline ngành vượt ngưỡng SMDT · dữ liệu thật" },
@@ -42,7 +40,6 @@ export const BOTTOM_TABS = [
 export function ModuleView({ id, tradingDate }) {
   switch (id) {
     case "dashboard":       return <ModDashboard tradingDate={tradingDate} />;
-    case "do-song":         return <ModDoSong />;
     case "smdt-nganh":      return <ModSMDTNganh />;
     case "lo-trinh-dan-song": return <ModLoTrinhDanSong />;
     case "dong-tien-nganh": return <ModDongTienNganh />;

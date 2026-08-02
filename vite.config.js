@@ -5,6 +5,14 @@ import registerHandler from "./api/auth/register.js";
 import requestOtpHandler from "./api/auth/request-otp.js";
 import verifyOtpHandler from "./api/auth/verify-otp.js";
 import smsDlrHandler from "./api/sms/dlr.js";
+import conditionSignalLatestHandler from "./api/condition-signal-latest.js";
+import doSongAdviceHandler from "./api/do-song-advice.js";
+import stockNotiHandler from "./api/stock-noti.js";
+import stockWaveCurrentHandler from "./api/stock-wave-current.js";
+import stockWaveHistoryHandler from "./api/stock-wave-history.js";
+import stockWaveTickersHandler from "./api/stock-wave-tickers.js";
+import waveBottomConfirmPairsHandler from "./api/wave-bottom-confirm-pairs.js";
+import portfolioChatHandler from "./api/portfolio-chat.js";
 
 const serverEnv = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 for (const [key, value] of Object.entries(serverEnv)) {
@@ -65,6 +73,14 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/auth/register", registerHandler],
   ["/api/auth/change-password", changePasswordHandler],
   ["/api/sms/dlr", smsDlrHandler],
+  ["/api/condition-signal-latest", conditionSignalLatestHandler],
+  ["/api/do-song-advice", doSongAdviceHandler],
+  ["/api/stock-noti", stockNotiHandler],
+  ["/api/stock-wave-current", stockWaveCurrentHandler],
+  ["/api/stock-wave-history", stockWaveHistoryHandler],
+  ["/api/stock-wave-tickers", stockWaveTickersHandler],
+  ["/api/wave-bottom-confirm-pairs", waveBottomConfirmPairsHandler],
+  ["/api/portfolio-chat", portfolioChatHandler],
 ]);
 
 function normalizeMarketTicker(value) {

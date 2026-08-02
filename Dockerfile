@@ -12,9 +12,14 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+RUN npm prune --omit=dev
+
 COPY --from=builder /app/dist ./dist
-COPY api ./api
-COPY server.mjs ./server.mjs
+COPY --from=builder /app/api ./api
+COPY --from=builder /app/server ./server
+COPY --from=builder /app/server.mjs ./server.mjs
 
 EXPOSE 3000
 
