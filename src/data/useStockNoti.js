@@ -16,12 +16,23 @@ function firstString(...values) {
   return values.map((value) => String(value ?? "").trim()).find(Boolean) || "";
 }
 
+function foldText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/\s+/g, " ");
+}
+
 function normalizeCap(value) {
-  const raw = String(value || "").trim().toLowerCase();
+  const raw = foldText(value);
   if (!raw) return "";
-  if (["thi_truong", "thị trường", "thi truong", "market", "tt"].includes(raw) || raw.includes("market") || raw.includes("thi_truong") || raw.includes("thitruong")) return "thi_truong";
-  if (["nganh", "ngành", "industry", "branch"].includes(raw) || raw.includes("nganh") || raw.includes("industry") || raw.includes("branch")) return "nganh";
-  if (["ma", "mã", "co phieu", "cổ phiếu", "stock", "ticker"].includes(raw) || raw.includes("ticker") || raw.includes("stock") || raw.includes("symbol")) return "ma";
+  const compact = raw.replace(/[\s_-]+/g, "");
+  if (["thitruong", "market", "tt"].includes(compact) || raw.includes("market")) return "thi_truong";
+  if (["nganh", "industry", "branch"].includes(compact) || raw.includes("industry") || raw.includes("branch")) return "nganh";
+  if (["ma", "cophieu", "stock", "ticker", "symbol"].includes(compact) || raw.includes("ticker") || raw.includes("stock") || raw.includes("symbol")) return "ma";
   return "";
 }
 
