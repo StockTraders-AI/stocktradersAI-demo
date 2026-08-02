@@ -1316,7 +1316,7 @@ function resolveSignalTime(row, rowDate, feed) {
   return formatTimeOfDay(feed.updatedAt);
 }
 
-function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows, feeds = {}, notificationRows = null }) {
+function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockSignalRows, waveRows, feeds = {}, notificationRows = null, narrow = false }) {
   const { dark } = useTheme();
   const C = dark ? NHAT_KY_DARK_COLORS : NHAT_KY_LIGHT_COLORS;
   const [tab, setTab] = useState("all");
@@ -1424,19 +1424,19 @@ function SignalLog({ topRows, branchRows, smdtBranchRows, cashTickerRows, stockS
 
   return (
     <Card id="signal-log-card" noPad style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <div>
+      <div style={{ padding: narrow ? "12px 14px 10px" : "10px 14px", borderBottom: "0.5px solid var(--bdr)", display: "flex", flexDirection: narrow ? "column" : "row", alignItems: narrow ? "stretch" : "center", justifyContent: "space-between", flexWrap: narrow ? "nowrap" : "wrap", gap: narrow ? 9 : 8 }}>
+        <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ fontSize: 12, fontWeight: 750, color: "var(--t1)" }}>Nhật ký tín hiệu</span>
-          {dateLabel && <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 8 }}>{dateLabel}</span>}
+          {dateLabel && <span style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap" }}>{dateLabel}</span>}
         </div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "nowrap", overflowX: narrow ? "auto" : "visible", overflowY: "hidden", scrollbarWidth: "none", msOverflowStyle: "none" }}>
           {SIGNAL_LOG_TABS.map(([id, label]) => {
             const active = id === tab;
             return (
-              <ChipButton key={id} active={active} onClick={() => setTab(id)}>{label}</ChipButton>
+              <ChipButton key={id} active={active} onClick={() => setTab(id)} style={narrow ? { flexShrink: 0, padding: "2px 10px", minHeight: 22 } : null}>{label}</ChipButton>
             );
           })}
-          {hasMore && <Clink onClick={() => setExpanded((value) => !value)}>{expanded ? "Thu gọn ↑" : "Xem tất cả ›"}</Clink>}
+          {hasMore && <Clink onClick={() => setExpanded((value) => !value)} style={narrow ? { flexShrink: 0, marginLeft: 4, whiteSpace: "nowrap" } : null}>{expanded ? "Thu gọn ↑" : "Xem tất cả ›"}</Clink>}
         </div>
       </div>
 
@@ -1907,6 +1907,7 @@ export function ModDashboard({ tradingDate }) {
         waveRows={waveLatest ? [waveLatest] : []}
         feeds={signalLogFeeds}
         notificationRows={stockNoti.rows}
+        narrow={narrow}
       />
 
       <LiveFooter live={live} updatedAt={updatedAt} extra="Dashboard tổng hợp" />
