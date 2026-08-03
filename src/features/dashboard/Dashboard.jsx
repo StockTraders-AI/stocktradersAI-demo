@@ -11,7 +11,7 @@ import { useCashFlowTicker, useRealtimeCashFlowTickerFeed, tickerContentToSig } 
 import { useBranchPath } from "../../data/useBranchPath";
 import { useRealtimeSMDTBranchCrossFeed, useSMDTBranchCross } from "../../data/useSMDTCross";
 import { useRealtimeStockSignalFeed, useStockSignal } from "../../data/useStockSignal";
-import { useStockNoti } from "../../data/useStockNoti";
+import { useRealtimeStockNotiFeed, useStockNoti } from "../../data/useStockNoti";
 import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave";
 import { useTotalTrade } from "../../data/useTotalTrade";
 import { Card, Clink, LiveFooter, Loading, Pagination } from "../../components/ui";
@@ -1475,6 +1475,7 @@ export function ModDashboard({ tradingDate }) {
   const stockSignal = useStockSignal();
   const stockWave = useStockWave();
   const totalTrade = useTotalTrade();
+  const tradingDateValue = toDateInputValue(tradingDate);
 
   const liveSmdtBranch = useRealtimeSMDTBranchFeed(smdt.applyTick);
   const liveCashBranch = useRealtimeCashFlowFeed(cashBranch.applyTick);
@@ -1484,7 +1485,6 @@ export function ModDashboard({ tradingDate }) {
   const liveStockWave = useRealtimeStockWaveFeed(stockWave.applyTick);
   const liveBranchCross = useRealtimeSMDTBranchCrossFeed(branchCross.applyTick);
 
-  const tradingDateValue = toDateInputValue(tradingDate);
   const smdtBranchDatesDesc = useMemo(() => sortDatesDesc(smdt.datesAsc), [smdt.datesAsc]);
   const smdtBranchDate = smdtBranchDatesDesc[findDateIndex(smdtBranchDatesDesc, tradingDateValue)] || topDate(smdt.datesAsc);
   const smdtBranchDateIndex = useMemo(() => findDateIndex(smdtBranchDatesDesc, toDateInputValue(smdtBranchDate)), [smdtBranchDate, smdtBranchDatesDesc]);
@@ -1493,13 +1493,16 @@ export function ModDashboard({ tradingDate }) {
   const cashBranchDate = cashBranchDatesDesc[findDateIndex(cashBranchDatesDesc, tradingDateValue)] || topDate(cashBranch.datesAsc);
   const smdtTickerDatesDesc = useMemo(() => sortDatesDesc(smdtTicker.datesAsc), [smdtTicker.datesAsc]);
   const smdtTickerDate = smdtTickerDatesDesc[findDateIndex(smdtTickerDatesDesc, tradingDateValue)] || topDate(smdtTicker.datesAsc);
-  const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt, stockSignal.updatedAt, stockWave.updatedAt, branchCross.updatedAt, totalTrade.updatedAt);
+  const stockNoti = useStockNoti(tradingDateValue || cashBranchDate || smdtTickerDate);
+  const liveStockNoti = useRealtimeStockNotiFeed(stockNoti.applyTick);
+  const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt, stockSignal.updatedAt, stockNoti.updatedAt, stockWave.updatedAt, branchCross.updatedAt, totalTrade.updatedAt);
   const live =
     liveSmdtBranch.connected ||
     liveCashBranch.connected ||
     liveSmdtTicker.connected ||
     liveCashTicker.connected ||
     liveStockSignal.connected ||
+    liveStockNoti.connected ||
     liveStockWave.connected ||
     liveBranchCross.connected;
   const waveLatest = useMemo(() => {
@@ -1507,7 +1510,6 @@ export function ModDashboard({ tradingDate }) {
     if (!tradingDateValue) return stockWave.rows[stockWave.rows.length - 1] || null;
     return [...stockWave.rows].reverse().find((row) => toDateInputValue(row.date) <= tradingDateValue) || stockWave.rows[0] || null;
   }, [stockWave.rows, tradingDateValue]);
-  const stockNoti = useStockNoti(tradingDateValue || cashBranchDate || smdtTickerDate);
 
   const branchSmdtRows = useMemo(() => {
     return smdt.branches

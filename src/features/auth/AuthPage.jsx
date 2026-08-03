@@ -486,7 +486,7 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
       </button>
       <div style={styles.note}>
         <i className="ti ti-info-circle" style={{ fontSize: 14 }} />
-        Tài khoản mới mặc định non-paid. Nâng cấp Premium để xem đầy đủ dữ liệu không giới hạn.
+        10 năm lịch sử dò sóng, SMDT 49 ngành — dữ liệu cập nhật theo từng phiên.
       </div>
     </form>
   );
@@ -661,7 +661,7 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, s
       </button>
       <div style={styles.note}>
         <i className="ti ti-info-circle" style={{ fontSize: 14 }} />
-        Tài khoản mới mặc định non-paid. Nâng cấp Premium để xem đầy đủ dữ liệu không giới hạn.
+        10 năm lịch sử dò sóng, SMDT 49 ngành — đăng ký miễn phí để bắt đầu ngay. Nâng cấp khi cần dữ liệu chuyên sâu không giới hạn.
       </div>
     </form>
   );
