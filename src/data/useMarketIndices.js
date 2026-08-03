@@ -3,13 +3,13 @@ import { readDataCache, writeDataCache } from "./cacheStorage";
 import { fetchJsonWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, shouldRunClientRefresh } from "./realtimeUrl";
 
-const API_URL = "/api/total-trade-real";
-const CACHE_KEY = "market_indices_real_cache_v1";
-const CACHE_SCHEMA_VERSION = 1;
+const API_URL = "/api/index-daily-changes";
+const CACHE_KEY = "market_indices_daily_changes_cache_v1";
+const CACHE_SCHEMA_VERSION = 2;
 
 const INDEX_CONFIG = [
   { name: "VNINDEX", aliases: ["VNINDEX", "VN-INDEX", "VN_INDEX"] },
-  { name: "HNX", aliases: ["HNXINDEX", "HNX-INDEX", "HNX_INDEX"] },
+  { name: "HNX", aliases: ["HNXINDEX", "HNX", "HNX-INDEX", "HNX_INDEX"] },
   { name: "UPCOM", aliases: ["UPCOM", "UPCOMINDEX", "UPCOM-INDEX", "UPCOM_INDEX"] },
 ];
 
@@ -49,8 +49,8 @@ function emptyIndex(item) {
 }
 
 function normalize(reply) {
-  const data = reply?.TotalTradeRealReply || reply?.TotalTradeRealRequest || reply || {};
-  const rows = Array.isArray(data.stockTotalReals) ? data.stockTotalReals : [];
+  const data = reply?.IndexDailyChangesReply || reply || {};
+  const rows = Array.isArray(data.indices) ? data.indices : [];
   const rowByTicker = new Map();
 
   for (const row of rows) {
@@ -64,9 +64,8 @@ function normalize(reply) {
     if (!row) return emptyIndex(item);
 
     const close = toNumber(row.close);
-    const open = toNumber(row.open);
-    const chg = close != null && open != null ? close - open : null;
-    const pct = chg != null && open ? (chg / open) * 100 : null;
+    const chg = toNumber(row.change);
+    const pct = toNumber(row.percent);
 
     return {
       name: item.name,
@@ -75,6 +74,8 @@ function normalize(reply) {
       pct: formatPct(pct),
       rawPct: pct,
       date: row.date,
+      previousDate: row.previousDate,
+      previousClose: toNumber(row.previousClose),
       live: close != null,
     };
   });
@@ -131,8 +132,8 @@ export function useMarketIndices() {
       try {
         // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi force refresh.
         const url = force ? `${API_URL}?fresh=1&_=${Date.now()}` : API_URL;
-        const json = await fetchJsonWithClientCache(url, { force, ttlMs: 10_000 });
-        const code = (json?.TotalTradeRealReply || json?.TotalTradeRealRequest)?.codeReply?.codeID;
+        const json = await fetchJsonWithClientCache(url, { force, ttlMs: 30_000 });
+        const code = json?.IndexDailyChangesReply?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 
         const indices = normalize(json);
@@ -148,13 +149,13 @@ export function useMarketIndices() {
           updatedAt,
         });
       } catch (error) {
-        console.error("TotalTradeReal Fetch error:", error);
+        console.error("IndexDailyChanges Fetch error:", error);
         const currentCache = getCachedData();
         setState((current) => ({
           indices: currentCache?.indices || current.indices,
           updatedAt: currentCache?.updatedAt || current.updatedAt,
           status: current.status === "ready" || currentCache ? "ready" : "error",
-          error: currentCache ? null : error.message || "Lỗi tải dữ liệu realtime",
+          error: currentCache ? null : error.message || "Lỗi tải dữ liệu chỉ số",
         }));
       } finally {
         if (inFlightRef.current === request) inFlightRef.current = null;

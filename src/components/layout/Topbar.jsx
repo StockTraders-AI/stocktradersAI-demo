@@ -103,7 +103,7 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, trading
         {!isMobile && (
           <div style={{ display: "flex", gap: 7 }}>
             {indices.map((idx) => (
-              <div key={idx.name} title={idx.live ? "Dữ liệu từ getTotalTradeReal" : "Chưa có dữ liệu index trong getTotalTradeReal"} style={{ display: "flex", alignItems: "baseline", gap: 4, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 7, padding: "5px 10px" }}>
+              <div key={idx.name} title={idx.live ? "Dữ liệu từ getIndexDailyChanges" : "Chưa có dữ liệu index trong getIndexDailyChanges"} style={{ display: "flex", alignItems: "baseline", gap: 4, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 7, padding: "5px 10px" }}>
                 <span style={{ fontSize: 10, color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em" }}>{idx.name}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)", ...mono }}>{idx.val}</span>
                 <span style={{ fontSize: 10, color: idx.rawPct == null ? "var(--t3)" : idx.rawPct >= 0 ? t.G : t.R, fontWeight: 600 }}>{idx.pct}</span>
