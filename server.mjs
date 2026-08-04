@@ -20,6 +20,8 @@ import stockWaveTickers from "./api/stock-wave-tickers.js";
 import totalTrade from "./api/total-trade.js";
 import totalTradeReal from "./api/total-trade-real.js";
 import waveBottomConfirmPairs from "./api/wave-bottom-confirm-pairs.js";
+import performance from "./api/performance.js";
+import indexDailyChanges from "./api/index-daily-changes.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const DIST_DIR = resolve(__dirname, "dist");
@@ -43,6 +45,8 @@ const apiHandlers = new Map([
   ["/api/total-trade", totalTrade],
   ["/api/total-trade-real", totalTradeReal],
   ["/api/wave-bottom-confirm-pairs", waveBottomConfirmPairs],
+  ["/api/performance", performance],
+  ["/api/index-daily-changes", indexDailyChanges],
 ]);
 
 const mimeTypes = {
@@ -107,8 +111,7 @@ async function sendFile(res, filePath) {
   res.statusCode = 200;
   res.setHeader(
     "Content-Type",
-    mimeTypes[extname(filePath).toLowerCase()] ||
-      "application/octet-stream",
+    mimeTypes[extname(filePath).toLowerCase()] || "application/octet-stream",
   );
   res.end(body);
 }
@@ -122,7 +125,9 @@ async function handleStatic(req, res, url) {
 
   const requestedPath = decodeURIComponent(url.pathname);
   const safePath = normalize(requestedPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = resolve(join(DIST_DIR, safePath === "/" ? "index.html" : safePath));
+  const filePath = resolve(
+    join(DIST_DIR, safePath === "/" ? "index.html" : safePath),
+  );
 
   if (!filePath.startsWith(DIST_DIR)) {
     res.statusCode = 403;
@@ -138,7 +143,10 @@ async function handleStatic(req, res, url) {
 }
 
 createServer(async (req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  const url = new URL(
+    req.url || "/",
+    `http://${req.headers.host || "localhost"}`,
+  );
   if (await handleApi(req, res, url)) return;
   await handleStatic(req, res, url);
 }).listen(PORT, "0.0.0.0", () => {

@@ -77,7 +77,6 @@ export function Topbar({
     setAccountOpen(false);
     onLogout?.();
   };
-  console.log(indices);
 
   return (
     <header
