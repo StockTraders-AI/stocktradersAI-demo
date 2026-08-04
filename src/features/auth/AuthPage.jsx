@@ -20,6 +20,7 @@ const SOCIAL_PROVIDERS = [
 ];
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
+const REMEMBERED_LOGIN_IDENTIFIER_KEY = "st-auth-remembered-login-identifier";
 let turnstileScriptPromise = null;
 
 /* ───────────────────────────────────────────────────────────────────────
@@ -39,6 +40,26 @@ const NOTICE_EXIT_MS = 300;
 
 function normalizeFormText(value) {
   return String(value || "").trim();
+}
+
+function readRememberedLoginIdentifier() {
+  try {
+    return localStorage.getItem(REMEMBERED_LOGIN_IDENTIFIER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberLoginIdentifier({ identifier, remember }) {
+  try {
+    if (remember) {
+      localStorage.setItem(REMEMBERED_LOGIN_IDENTIFIER_KEY, normalizeFormText(identifier));
+      return;
+    }
+    localStorage.removeItem(REMEMBERED_LOGIN_IDENTIFIER_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 function resolveContactType(value, explicitType = "") {
@@ -164,8 +185,6 @@ function TextField({ label, placeholder, onFocus, onBlur, groupStyle, ...props }
         autoCorrect="off"
         autoCapitalize="none"
         spellCheck={false}
-        data-lpignore="true"
-        data-1p-ignore="true"
         placeholder={focused ? "" : placeholder}
         onFocus={(event) => {
           setFocused(true);
@@ -452,7 +471,7 @@ function AccessLockedNotice({ notice }) {
 }
 
 function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, error, message, socialMessage, socialError, accessNotice }) {
-  const [identifier, setIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState(readRememberedLoginIdentifier);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
 
@@ -466,8 +485,8 @@ function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, er
       <StatusMessage>{socialMessage}</StatusMessage>
       <DividerText />
 
-      <TextField label="Email hoặc số điện thoại" type="text" autoComplete="new-password" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Email hoặc số điện thoại" type="text" autoComplete="username" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
+      <TextField label="Mật khẩu" type="password" autoComplete="current-password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
 
       <div style={styles.helperRow}>
         <label style={styles.checkboxLabel}>
@@ -929,6 +948,7 @@ function AuthCard({ onLogin }) {
     setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
     try {
       const session = await loginUser(credentials);
+      rememberLoginIdentifier(credentials);
       await completeLogin(session, credentials.remember);
     } catch (error) {
       if (error instanceof AccessDeniedError || error?.code === "ACCESS_DENIED") {
