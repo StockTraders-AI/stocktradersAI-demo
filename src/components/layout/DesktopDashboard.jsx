@@ -1,18 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MODULES, ModuleView } from "../../app/modules";
+import {
+  MODULES,
+  ModuleView,
+  getInitialModuleId,
+  resolveModuleId,
+  writeModulePath,
+} from "../../app/modules";
 import { useTradingDateControl } from "../../app/useTradingDateControl";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 /* ─────────────────────────── DESKTOP LAYOUT ──────────────────────────── */
 export function DesktopDashboard({ session, onLogout }) {
-  const [curMod, setCurMod] = useState("dashboard");
+  const [curMod, setCurMod] = useState(getInitialModuleId);
   const mainRef = useRef(null);
   const tradingDateControl = useTradingDateControl();
 
-  const sw = useCallback((id) => {
-    if (!MODULES[id]) return;
+  const sw = useCallback((target, options = {}) => {
+    const id = resolveModuleId(target);
+    if (!id || !MODULES[id]) return;
     setCurMod(id);
+    writeModulePath(id, options);
     setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: "instant" }), 0);
   }, []);
 
@@ -24,6 +32,16 @@ export function DesktopDashboard({ session, onLogout }) {
   }, [sw]);
 
   const mod = MODULES[curMod];
+
+  useEffect(() => {
+    writeModulePath(curMod, { replace: true });
+  }, [curMod]);
+
+  useEffect(() => {
+    const handler = () => sw(window.location.pathname, { replace: true });
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, [sw]);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "224px 1fr", gridTemplateRows: "52px 1fr", height: "100vh", background: "var(--bg)", color: "var(--t1)" }}>
