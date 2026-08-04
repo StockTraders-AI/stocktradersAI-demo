@@ -130,8 +130,8 @@ export function Topbar({
                 key={idx.name}
                 title={
                   idx.live
-                    ? "Dữ liệu từ getTotalTradeReal"
-                    : "Chưa có dữ liệu index trong getTotalTradeReal"
+                    ? "Dữ liệu từ getIndexDailyChanges"
+                    : "Chưa có dữ liệu index trong getIndexDailyChanges"
                 }
                 style={{
                   display: "flex",

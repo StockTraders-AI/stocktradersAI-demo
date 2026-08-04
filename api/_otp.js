@@ -229,8 +229,11 @@ export function createSessionId() {
 }
 
 export function createRequestId(purpose, phone) {
-  const suffix = crypto.randomBytes(8).toString("hex");
-  return `${purpose}-${phone}-${Date.now()}-${suffix}`.slice(0, 100);
+  const purposePrefix = purpose === "change-password" ? "cp" : "rg";
+  const phoneSuffix = normalizeText(phone).replace(/\D/g, "").slice(-4);
+  const timestamp = Date.now().toString(36);
+  const random = crypto.randomBytes(6).toString("hex");
+  return `${purposePrefix}${phoneSuffix}${timestamp}${random}`.slice(0, 32);
 }
 
 export function renderOtpMessage(template, otp, ttlSeconds) {
@@ -319,17 +322,22 @@ export function verifyOtpProof({ verificationToken, phone, email, purpose, signi
 }
 
 export async function requestFptAccessToken(config) {
-  const response = await fetch(config.tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      scope: config.scope,
-      session_id: createSessionId(),
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(config.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "client_credentials",
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        scope: config.scope,
+        session_id: createSessionId(),
+      }),
+    });
+  } catch (error) {
+    throw createFptNetworkError(error, "Không kết nối được FPT SMS để lấy access token.");
+  }
 
   const data = await readResponseJson(response);
   logFptDebug(config, "oauth2/token response", data);
@@ -348,26 +356,35 @@ export async function requestFptAccessToken(config) {
 
 export async function sendFptOtpMessage({ config, accessToken, phone, message, requestId }) {
   const encodedMessage = Buffer.from(message, "utf8").toString("base64");
+  const sessionId = createSessionId();
   logFptDebug(config, "push-brandname-otp encoded message", {
     BrandName: config.brandName,
     Phone: phone,
     Message: encodedMessage,
     RequestId: requestId,
+    session_id: sessionId,
   });
 
-  const response = await fetch(config.sendUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({
-      BrandName: config.brandName,
-      Phone: phone,
-      Message: encodedMessage,
-      RequestId: requestId,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(config.sendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        access_token: accessToken,
+        session_id: sessionId,
+        BrandName: config.brandName,
+        Phone: phone,
+        Message: encodedMessage,
+        RequestId: requestId,
+      }),
+    });
+  } catch (error) {
+    throw createFptNetworkError(error, "Không kết nối được FPT SMS để gửi OTP.");
+  }
 
   const data = await readResponseJson(response);
   logFptDebug(config, "push-brandname-otp response", data);
@@ -537,6 +554,12 @@ function createFptError(data, fallbackMessage) {
   const error = new Error(message || fallbackMessage);
   error.code = code;
   error.raw = data;
+  return error;
+}
+
+function createFptNetworkError(cause, fallbackMessage) {
+  const error = new Error(cause?.message ? `${fallbackMessage} (${cause.message})` : fallbackMessage);
+  error.cause = cause;
   return error;
 }
 

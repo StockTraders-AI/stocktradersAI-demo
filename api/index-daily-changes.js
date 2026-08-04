@@ -1,0 +1,76 @@
+let serverCache = null;
+let lastFetched = 0;
+let refreshPromise = null;
+const CACHE_DURATION = 30 * 1000;
+const SOURCE_URL = "https://stocktradersai.vn/service/data/getIndexDailyChanges";
+
+async function fetchIndexDailyChangesFromSource() {
+  const response = await fetch(SOURCE_URL, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`External API returned status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const indices = Array.isArray(data?.indices) ? data.indices : null;
+  if (!indices) {
+    throw new Error("API response missing indices");
+  }
+
+  return data;
+}
+
+async function refreshCache() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = fetchIndexDailyChangesFromSource()
+    .then((data) => {
+      serverCache = data;
+      lastFetched = Date.now();
+      return data;
+    })
+    .catch((error) => {
+      console.error("Failed to refresh index daily changes cache:", error);
+      if (!serverCache) throw error;
+      return serverCache;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+  return refreshPromise;
+}
+
+export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=30, stale-while-revalidate=120");
+
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  const now = Date.now();
+  const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
+  if (wantsFresh) res.setHeader("Cache-Control", "no-store, max-age=0");
+
+  if (!serverCache || wantsFresh) {
+    try {
+      await refreshCache();
+    } catch (error) {
+      return res.status(502).json({
+        error: "Failed to load index daily changes from source",
+        details: error.message,
+      });
+    }
+  } else if (now - lastFetched > CACHE_DURATION) {
+    refreshCache();
+  }
+
+  return res.status(200).json({
+    IndexDailyChangesReply: {
+      codeReply: { codeID: "S0000", codeName: "SUCSESS" },
+      indices: Array.isArray(serverCache?.indices) ? serverCache.indices : [],
+    },
+  });
+}

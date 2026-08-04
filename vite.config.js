@@ -47,6 +47,9 @@ let totalTradeDevRefreshPromise = null;
 let totalTradeRealDevCache = null;
 let totalTradeRealDevLastFetched = 0;
 let totalTradeRealDevRefreshPromise = null;
+let indexDailyChangesDevCache = null;
+let indexDailyChangesDevLastFetched = 0;
+let indexDailyChangesDevRefreshPromise = null;
 let smdtTickerDevCache = null;
 let smdtTickerDevLastFetched = 0;
 const stockNotiDevCache = new Map();
@@ -59,8 +62,11 @@ const BRANCH_PATH_CACHE_DURATION = 5 * 60 * 1000; // Thành phần ngành/mã í
 const PERFORMANCE_CACHE_DURATION = 30 * 1000;
 const TOTAL_TRADE_CACHE_DURATION = 5 * 60 * 1000;
 const TOTAL_TRADE_REAL_CACHE_DURATION = 10 * 1000;
+const INDEX_DAILY_CHANGES_CACHE_DURATION = 30 * 1000;
 const CACHE_DURATION = 3 * 1000; // Realtime là đường chính; proxy chỉ phục vụ snapshot ban đầu + lưới dự phòng, giữ ngắn để tươi.
 const API_ACCOUNT = "thao.dtt";
+const INDEX_DAILY_CHANGES_URL =
+  "https://stocktradersai.vn/service/data/getIndexDailyChanges";
 const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 const CASH_FLOW_TICKER_REPLY_KEYS = [
   "CashFlowTickerReply",
@@ -241,6 +247,21 @@ async function fetchTotalTradeRealFromSource() {
   return data;
 }
 
+async function fetchIndexDailyChangesFromSource() {
+  const response = await fetch(INDEX_DAILY_CHANGES_URL, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok)
+    throw new Error(`IndexDailyChanges HTTP ${response.status}`);
+
+  const data = await response.json();
+  if (!Array.isArray(data?.indices))
+    throw new Error("IndexDailyChanges API response missing indices");
+
+  return data;
+}
+
 async function fetchTotalTradeTickersFromSource() {
   const data = await fetchTotalTradeFromSource();
   const reply = data?.TotalTradeReply || data?.TotalTradeRequest || {};
@@ -333,6 +354,28 @@ async function refreshTotalTradeRealDevCache() {
     });
 
   return totalTradeRealDevRefreshPromise;
+}
+
+async function refreshIndexDailyChangesDevCache() {
+  if (indexDailyChangesDevRefreshPromise)
+    return indexDailyChangesDevRefreshPromise;
+
+  indexDailyChangesDevRefreshPromise = fetchIndexDailyChangesFromSource()
+    .then((data) => {
+      indexDailyChangesDevCache = data;
+      indexDailyChangesDevLastFetched = Date.now();
+      return data;
+    })
+    .catch((err) => {
+      console.error("Local dev index daily changes proxy fetch error:", err);
+      if (!indexDailyChangesDevCache) throw err;
+      return indexDailyChangesDevCache;
+    })
+    .finally(() => {
+      indexDailyChangesDevRefreshPromise = null;
+    });
+
+  return indexDailyChangesDevRefreshPromise;
 }
 
 function filterCashTickerDatas(datas, allowedTickerSet) {
@@ -665,6 +708,40 @@ function smdtDevPlugin() {
             res.end(JSON.stringify(out));
           } catch (err) {
             res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        } else if (reqUrl.startsWith("/api/index-daily-changes")) {
+          const host = req.headers.host || "localhost:3000";
+          const parsedUrl = new URL(reqUrl, `http://${host}`);
+          const wantsFresh =
+            parsedUrl.searchParams.get("fresh") === "1" ||
+            parsedUrl.searchParams.get("fresh") === "true";
+          const now = Date.now();
+
+          try {
+            if (!indexDailyChangesDevCache || wantsFresh) {
+              await refreshIndexDailyChangesDevCache();
+            } else if (
+              now - indexDailyChangesDevLastFetched >
+              INDEX_DAILY_CHANGES_CACHE_DURATION
+            ) {
+              refreshIndexDailyChangesDevCache();
+            }
+            const out = {
+              IndexDailyChangesReply: {
+                codeReply: { codeID: "S0000", codeName: "SUCSESS" },
+                indices: Array.isArray(indexDailyChangesDevCache?.indices)
+                  ? indexDailyChangesDevCache.indices
+                  : [],
+              },
+            };
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store, max-age=0");
+            res.end(JSON.stringify(out));
+          } catch (err) {
+            res.statusCode = 502;
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ error: err.message }));
           }

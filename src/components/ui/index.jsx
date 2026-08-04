@@ -41,9 +41,9 @@ export function CardHeader({ icon, title, meta, right, mb = 13 }) {
   );
 }
 
-export function Clink({ children, onClick }) {
+export function Clink({ children, onClick, style }) {
   return (
-    <span onClick={onClick} style={{ fontSize: 12, color: "var(--B)", cursor: "pointer", fontWeight: 600 }}>
+    <span onClick={onClick} style={{ fontSize: 12, color: "var(--B)", cursor: "pointer", fontWeight: 600, ...style }}>
       {children}
     </span>
   );

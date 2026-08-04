@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
 import { fetchJsonWithClientCache } from "./requestCache";
+import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { formatTimeOfDay, pickTimeField, toDateInputValue } from "../app/dateUtils";
 
 const API_URL = "/api/stock-noti";
 const REPLY_KEYS = ["StockNotiReply", "StockNotiRequest"];
+const CHANNELS = ["stock-noti"];
 
 function getReply(data) {
   for (const key of REPLY_KEYS) {
@@ -140,6 +143,39 @@ function normalize(data, fallbackDate) {
     .filter((item) => item.title || item.x);
 }
 
+function rowKey(row) {
+  return row?.id || `${row?.sortDate || ""}-${row?.cap || ""}-${row?.title || ""}-${row?.x || ""}`;
+}
+
+function mergeRows(baseRows = [], patchRows = []) {
+  const patchKeys = new Set(patchRows.map(rowKey));
+  return [
+    ...patchRows,
+    ...baseRows.filter((row) => !patchKeys.has(rowKey(row))),
+  ];
+}
+
+function extractRealtimeRows(payload, fallbackDate) {
+  if (!payload) return [];
+
+  if (typeof payload === "string") {
+    try {
+      return extractRealtimeRows(JSON.parse(payload), fallbackDate);
+    } catch {
+      return [];
+    }
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.flatMap((item) => extractRealtimeRows(item, fallbackDate));
+  }
+
+  if (payload?.channel && !CHANNELS.includes(payload.channel)) return [];
+  const data = CHANNELS.includes(payload?.channel) && payload?.data ? payload.data : payload;
+  const rows = normalize(data, fallbackDate);
+  return fallbackDate ? rows.filter((row) => !row.sortDate || row.sortDate === fallbackDate) : rows;
+}
+
 export function useStockNoti(date) {
   const dateValue = toDateInputValue(date);
   const inFlightRef = useRef(null);
@@ -187,7 +223,66 @@ export function useStockNoti(date) {
 
   useEffect(() => {
     fetchSnapshot();
+    const refresh = () => {
+      if (document.visibilityState === "visible" && shouldRunClientRefresh(`stock-noti:${dateValue || "all"}`)) {
+        fetchSnapshot({ force: true });
+      }
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener(REALTIME_RECONNECT_EVENT, refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener(REALTIME_RECONNECT_EVENT, refresh);
+    };
   }, [fetchSnapshot]);
 
-  return { rows, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }) };
+  const applyTick = useCallback((payload) => {
+    const tickRows = extractRealtimeRows(payload, dateValue);
+    if (!tickRows.length) return;
+
+    const now = new Date();
+    setRows((current) => mergeRows(current, tickRows));
+    setUpdatedAt(now);
+    setStatus("ready");
+    setError(null);
+  }, [dateValue]);
+
+  return { rows, status, error, updatedAt, refresh: () => fetchSnapshot({ force: true }), applyTick };
+}
+
+function getRealtimeUrl() {
+  return resolveRealtimeUrl(import.meta.env.VITE_STOCK_NOTI_WS_URL, import.meta.env.VITE_SMDT_WS_URL);
+}
+
+export function useRealtimeStockNotiFeed(onTick) {
+  const cbRef = useRef(onTick);
+  cbRef.current = onTick;
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    const socket = io(getRealtimeUrl(), { autoConnect: true, transports: ["websocket"] });
+
+    const handlePayload = (payload) => {
+      if (extractRealtimeRows(payload).length > 0) cbRef.current?.(payload);
+    };
+
+    let hadConnected = false;
+    socket.on("connect", () => {
+      console.log("Socket.IO (stock noti) connected to namespace:", socket.nsp);
+      setConnected(true);
+      socket.emit("message", { action: "subscribe", channels: CHANNELS });
+      if (hadConnected) emitRealtimeReconnected();
+      hadConnected = true;
+    });
+
+    socket.on("message", handlePayload);
+    socket.on("connect_error", (error) => console.error("Socket.IO (stock noti) connection error:", error.message));
+    socket.on("disconnect", () => setConnected(false));
+
+    return () => socket.disconnect();
+  }, []);
+
+  return { connected };
 }
