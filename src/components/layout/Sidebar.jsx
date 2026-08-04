@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { SIDEBAR_GROUPS } from "../../app/modules";
+import { getModulePath, SIDEBAR_GROUPS } from "../../app/modules";
 import { useTheme } from "../../theme";
 
 /* ─────────────────────────── SIDEBAR ───────────────────────────────────
@@ -29,9 +29,20 @@ export function Sidebar({ curMod, onNav, compact }) {
     { onClick, isParent, isOpen, subIds } = {},
   ) => {
     const active = subIds ? subIds.includes(curMod) : curMod === id;
+    const path = id ? getModulePath(id) : undefined;
+    const Component = path ? "a" : "div";
     return (
-      <div
-        onClick={onClick || (id ? () => onNav(id) : undefined)}
+      <Component
+        href={path}
+        title={path}
+        onClick={(event) => {
+          if (path) event.preventDefault();
+          if (onClick) {
+            onClick(event);
+            return;
+          }
+          if (id) onNav(id);
+        }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -43,6 +54,7 @@ export function Sidebar({ curMod, onNav, compact }) {
           borderLeft: `3px solid ${active ? t.B : "transparent"}`,
           fontSize: 14,
           fontWeight: active ? 600 : 500,
+          textDecoration: "none",
           transition: "all .12s",
           userSelect: "none",
         }}
@@ -69,16 +81,21 @@ export function Sidebar({ curMod, onNav, compact }) {
             }}
           />
         )}
-      </div>
+      </Component>
     );
   };
 
   const sub = (id, icon, label) => {
     const active = curMod === id;
     return (
-      <div
+      <a
         key={id}
-        onClick={() => onNav(id)}
+        href={getModulePath(id)}
+        title={getModulePath(id)}
+        onClick={(event) => {
+          event.preventDefault();
+          onNav(id);
+        }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -90,11 +107,12 @@ export function Sidebar({ curMod, onNav, compact }) {
           borderLeft: `3px solid ${active ? t.B : "transparent"}`,
           fontSize: 13,
           fontWeight: active ? 600 : 400,
+          textDecoration: "none",
           transition: "all .12s",
         }}
       >
         {label}
-      </div>
+      </a>
     );
   };
 

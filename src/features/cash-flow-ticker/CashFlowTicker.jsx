@@ -9,7 +9,7 @@ import { DateSessionSelect, SMDTToolbarPill, SMDTSearchPill, InlineFilterChips, 
 import { CashFlowMatrixTable } from "./CashFlowMatrixTable";
 import { CfBadge } from "./CfBadge";
 import { IndustryPicker } from "./IndustryPicker";
-import { CF_SIG, CF_SIG_ORDER, cfSigStyle } from "./cashFlowUtils";
+import { CF_SIG, cfSigStyle } from "./cashFlowUtils";
 
 const HIDDEN_INDUSTRIES_KEY = "cashflow_ticker_hidden_industries_v1";
 const COLLAPSED_INDUSTRIES_KEY = "cashflow_ticker_collapsed_industries_v1";
@@ -480,20 +480,10 @@ export function ModDongTienCP() {
         )}
       </Card>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <CashFlowLegend />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
         <Pagination page={safePage} totalPages={totalPages} onChange={changePage} />
       </div>
       <LiveFooter live={live} updatedAt={footerUpdatedAt} extra={`${fmtNum(activeTickers)} / ${fmtNum(tickerPool.length)} mã · ${datesDesc.length} phiên`} />
-    </div>
-  );
-}
-
-/* Chú giải màu tín hiệu (góc dưới bảng). */
-function CashFlowLegend() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-      {CF_SIG_ORDER.map((k) => <CfBadge key={k} sig={k} small />)}
     </div>
   );
 }

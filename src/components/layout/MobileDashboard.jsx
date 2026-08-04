@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
-import { MODULES, ModuleView } from "../../app/modules";
+import {
+  MODULES,
+  ModuleView,
+  getInitialModuleId,
+  resolveModuleId,
+  writeModulePath,
+} from "../../app/modules";
 import { useTradingDateControl } from "../../app/useTradingDateControl";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 export function MobileDashboard({ session, onLogout }) {
-  const [curMod, setCurMod] = useState("dashboard");
+  const [curMod, setCurMod] = useState(getInitialModuleId);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const tradingDateControl = useTradingDateControl();
 
-  const sw = useCallback((id) => {
-    if (!MODULES[id]) return;
+  const sw = useCallback((target, options = {}) => {
+    const id = resolveModuleId(target);
+    if (!id || !MODULES[id]) return;
     setCurMod(id);
+    writeModulePath(id, options);
     setDrawerOpen(false);
     window.scrollTo({ top: 0, behavior: "instant" });
   }, []);
@@ -23,6 +31,16 @@ export function MobileDashboard({ session, onLogout }) {
   }, [sw]);
 
   const mod = MODULES[curMod];
+
+  useEffect(() => {
+    writeModulePath(curMod, { replace: true });
+  }, [curMod]);
+
+  useEffect(() => {
+    const handler = () => sw(window.location.pathname, { replace: true });
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, [sw]);
 
   return (
     <div data-mobile-dashboard-scroll="true" style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", position: "relative", background: "var(--bg)", color: "var(--t1)" }}>
