@@ -21,14 +21,14 @@ export const MODULES = {
     sub: "Tổng quan thị trường hôm nay",
     path: "/dashboard",
   },
-  "do-song": {
-    title: "Dò sóng thị trường",
-    sub: "Nhận diện sớm chu kỳ · đi trước dòng tiền",
-    path: "/do-song-thi-truong",
-  },
+  // "do-song": {
+  //   title: "Dò sóng thị trường",
+  //   sub: "Nhận diện sớm chu kỳ · đi trước dòng tiền",
+  //   path: "/do-song-thi-truong",
+  // },
   "dong-tien-tt": {
     title: "Thị trường",
-    sub: "Tổng hợp GTGD · Khối ngoại · Tự doanh",
+    sub: "Dự báo chân sóng thị trường",
     path: "/thi-truong",
   },
   "dong-tien-nganh": {

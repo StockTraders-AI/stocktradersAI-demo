@@ -22,9 +22,35 @@ import totalTradeReal from "./api/total-trade-real.js";
 import waveBottomConfirmPairs from "./api/wave-bottom-confirm-pairs.js";
 import performance from "./api/performance.js";
 import indexDailyChanges from "./api/index-daily-changes.js";
+import {
+  handleStockWaveCurrent as doSongHandleStockWaveCurrent,
+  handleStockWaveCurrentStream as doSongHandleStockWaveCurrentStream,
+  startStockWaveCurrentSocket as startDoSongStockWaveCurrentSocket,
+} from "./embedded/stocktraders-web/stockWaveCurrentCache.js";
+import {
+  handleStockWaveHistory as doSongHandleStockWaveHistory,
+  preloadStockWaveHistorySnapshot as preloadDoSongStockWaveHistorySnapshot,
+} from "./embedded/stocktraders-web/stockWaveHistoryCache.js";
+import { handleStockWaveTickers as doSongHandleStockWaveTickers } from "./embedded/stocktraders-web/stockWaveTickersCache.js";
+import { handleWaveBottomConfirmPairs as doSongHandleWaveBottomConfirmPairs } from "./embedded/stocktraders-web/waveBottomConfirmPairsCache.js";
+import {
+  handleStockNoti as doSongHandleStockNoti,
+  startStockNotiSocket as startDoSongStockNotiSocket,
+} from "./embedded/stocktraders-web/stockNotiCache.js";
+import { handlePortfolioChat as doSongHandlePortfolioChat } from "./embedded/stocktraders-web/portfolioChatApi.js";
+import {
+  handleConditionSignalLatest as doSongHandleConditionSignalLatest,
+  handleDoSongAdvice as doSongHandleDoSongAdvice,
+} from "./embedded/stocktraders-web/conditionSignalApi.js";
+import { handleDoSongRecommendation as doSongHandleDoSongRecommendation } from "./embedded/stocktraders-web/doSongRecommendationDb.js";
+import {
+  DB_PATH as DOSONG_DB_PATH,
+  initStockDataDb as initDoSongStockDataDb,
+} from "./embedded/stocktraders-web/stockDataDb.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const DIST_DIR = resolve(__dirname, "dist");
+const DOSONG_API_PREFIX = "/thi-truong";
 const PORT = Number(process.env.PORT || 3000);
 
 const apiHandlers = new Map([
@@ -48,6 +74,20 @@ const apiHandlers = new Map([
   ["/api/performance", performance],
   ["/api/index-daily-changes", indexDailyChanges],
 ]);
+
+
+initDoSongStockDataDb()
+  .then(async () => {
+    console.log(`Do-song DB ready at ${DOSONG_DB_PATH}`);
+    const rows = await preloadDoSongStockWaveHistorySnapshot();
+    console.log(`Do-song history snapshot ready: ${rows.length} rows`);
+  })
+  .catch((error) => {
+    console.error("Do-song DB init failed", error);
+  });
+
+startDoSongStockWaveCurrentSocket();
+startDoSongStockNotiSocket();
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -76,6 +116,89 @@ function attachResponseHelpers(res) {
     }
     res.end(JSON.stringify(data));
   };
+}
+
+
+function stripDoSongApiPrefix(rawUrl = "") {
+  return rawUrl.startsWith(DOSONG_API_PREFIX)
+    ? rawUrl.slice(DOSONG_API_PREFIX.length) || "/"
+    : rawUrl;
+}
+
+async function callDoSongApi(handler, req, res, rawUrl) {
+  attachResponseHelpers(res);
+  const embeddedUrl = stripDoSongApiPrefix(rawUrl);
+
+  try {
+    await handler(req, res, embeddedUrl);
+  } catch (error) {
+    console.error(`Do-song API error ${rawUrl}:`, error);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+    }
+    if (!res.writableEnded) {
+      res.end(
+        JSON.stringify({
+          error: "Internal server error",
+          details: error.message,
+        }),
+      );
+    }
+  }
+}
+
+async function handleDoSongApi(req, res, url) {
+  if (!url.pathname.startsWith(`${DOSONG_API_PREFIX}/api/`)) return false;
+
+  const rawUrl = req.url || url.pathname;
+  const embeddedPath = stripDoSongApiPrefix(url.pathname);
+
+  if (embeddedPath === "/api/stock-wave-current/stream") {
+    doSongHandleStockWaveCurrentStream(req, res);
+    return true;
+  }
+  if (embeddedPath === "/api/stock-wave-current") {
+    await callDoSongApi(doSongHandleStockWaveCurrent, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/stock-wave-history") {
+    await callDoSongApi(doSongHandleStockWaveHistory, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/stock-wave-tickers") {
+    await callDoSongApi(doSongHandleStockWaveTickers, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/wave-bottom-confirm-pairs") {
+    await callDoSongApi(doSongHandleWaveBottomConfirmPairs, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/stock-noti" || embeddedPath === "/api/stock-noti/stream") {
+    await callDoSongApi(doSongHandleStockNoti, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/portfolio-chat") {
+    await callDoSongApi(doSongHandlePortfolioChat, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/condition-signal-latest") {
+    await callDoSongApi(doSongHandleConditionSignalLatest, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/do-song-advice") {
+    await callDoSongApi(doSongHandleDoSongAdvice, req, res, rawUrl);
+    return true;
+  }
+  if (embeddedPath === "/api/do-song-recommendation") {
+    await callDoSongApi(doSongHandleDoSongRecommendation, req, res, rawUrl);
+    return true;
+  }
+
+  res.statusCode = 404;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify({ error: "Do-song API not found" }));
+  return true;
 }
 
 async function handleApi(req, res, url) {
@@ -147,6 +270,7 @@ createServer(async (req, res) => {
     req.url || "/",
     `http://${req.headers.host || "localhost"}`,
   );
+  if (await handleDoSongApi(req, res, url)) return;
   if (await handleApi(req, res, url)) return;
   await handleStatic(req, res, url);
 }).listen(PORT, "0.0.0.0", () => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { io } from "socket.io-client";
+import { useTheme } from "../../../theme";
 import branchLookup from "../data/branchLookup.json";
 import VongTronDoSong from "./VongTronDoSong.jsx";
 import DateTimeTravel from "./DateTimeTravel.jsx";
@@ -9,8 +9,6 @@ import TuVanAiCard from "./TuVanAiCard.jsx";
 import NhatKyTinHieu from "./NhatKyTinHieu/index.jsx";
 import { fetchStockNoti, mergeStockNotiRows, normalizeStockNotiRows, pickStockNotiRowsForDate } from "./NhatKyTinHieu/helpers.js";
 import { danhGiaDoSong } from "../utils/doSongEngine.js";
-import { useTheme } from "../../../theme";
-import { resolveRealtimeUrl } from "../../../data/realtimeUrl";
 // ─────────────────────────────────────────────────────────────
 // TOKENS
 // ─────────────────────────────────────────────────────────────
@@ -41,15 +39,12 @@ let T = DARK_T;
 // ─────────────────────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────────────────────
-const STOCK_WAVE_CURRENT_URL = import.meta.env.VITE_STOCK_WAVE_CURRENT_URL || "/api/stock-wave-current";
-const STOCK_WAVE_HISTORY_URL = import.meta.env.VITE_STOCK_WAVE_HISTORY_URL || "/api/stock-wave-history";
-const STOCK_WAVE_TICKERS_URL = import.meta.env.VITE_STOCK_WAVE_TICKERS_URL || "/api/stock-wave-tickers";
-const WAVE_BOTTOM_CONFIRM_PAIRS_URL = import.meta.env.VITE_WAVE_BOTTOM_CONFIRM_PAIRS_URL || "/api/wave-bottom-confirm-pairs";
-const STOCK_NOTI_STREAM_URL = import.meta.env.VITE_STOCK_NOTI_STREAM_URL || "";
-const REALTIME_WAVE_URL = resolveRealtimeUrl(
-  import.meta.env.VITE_REALTIME_WAVE_URL,
-  import.meta.env.VITE_REALTIME_URL,
-);
+const STOCK_WAVE_CURRENT_URL = import.meta.env.VITE_STOCK_WAVE_CURRENT_URL || "/thi-truong/api/stock-wave-current";
+const STOCK_WAVE_HISTORY_URL = import.meta.env.VITE_STOCK_WAVE_HISTORY_URL || "/thi-truong/api/stock-wave-history";
+const STOCK_WAVE_TICKERS_URL = import.meta.env.VITE_STOCK_WAVE_TICKERS_URL || "/thi-truong/api/stock-wave-tickers";
+const WAVE_BOTTOM_CONFIRM_PAIRS_URL = import.meta.env.VITE_WAVE_BOTTOM_CONFIRM_PAIRS_URL || "/thi-truong/api/wave-bottom-confirm-pairs";
+const STOCK_NOTI_STREAM_URL = import.meta.env.VITE_STOCK_NOTI_STREAM_URL || "/thi-truong/api/stock-noti/stream";
+const STOCK_WAVE_CURRENT_STREAM_URL = import.meta.env.VITE_STOCK_WAVE_CURRENT_STREAM_URL || "/thi-truong/api/stock-wave-current/stream";
 const WAVE_CHANNEL = "wave";
 const STOCK_NOTI_CHANNEL = "stock-noti";
 const EMPTY_WAVE = {
@@ -416,43 +411,17 @@ function fetchStockWaveCurrent() {
     })
     .then((payload) => {
       if (!payload) return null;
-      return normalizeWavePayload(payload.data ?? payload)[0] || null;
+      return {
+        row: normalizeWavePayload(payload.data ?? payload)[0] || null,
+        allRows: normalizeWavePayload(payload.allRows ?? []),
+      };
     });
 }
 
 const stockWaveHistoryRequests = new Map();
 const stockWaveTickerRequests = new Map();
-const STOCK_WAVE_HISTORY_STORAGE_PREFIX = "stocktraders:stock-wave-history:";
 let waveBottomConfirmPairsRequest = null;
 
-function getStoredStockWaveHistory(referenceDate) {
-  if (!referenceDate || typeof window === "undefined" || !window.localStorage) return null;
-  try {
-    const payload = JSON.parse(window.localStorage.getItem(`${STOCK_WAVE_HISTORY_STORAGE_PREFIX}${referenceDate}`) || "null");
-    if (!payload || payload.referenceDate !== referenceDate || !Array.isArray(payload.allRows)) return null;
-    const allRows = normalizeWavePayload(payload.allRows);
-    const rows = Array.isArray(payload.rows) && payload.rows.length
-      ? normalizeWavePayload(payload.rows)
-      : getPreviousWaveSessions(allRows, referenceDate);
-    return { rows, allRows };
-  } catch {
-    return null;
-  }
-}
-
-function storeStockWaveHistory(referenceDate, rows, allRows) {
-  if (!referenceDate || typeof window === "undefined" || !window.localStorage) return;
-  try {
-    window.localStorage.setItem(`${STOCK_WAVE_HISTORY_STORAGE_PREFIX}${referenceDate}`, JSON.stringify({
-      referenceDate,
-      cachedAt:new Date().toISOString(),
-      rows,
-      allRows:allRows?.length ? allRows : rows,
-    }));
-  } catch {
-    // Ignore storage quota/private-mode failures; network cache still works.
-  }
-}
 
 function getHistoryUrl(referenceDate, force = false) {
   const url = new URL(STOCK_WAVE_HISTORY_URL, window.location.origin);
@@ -760,20 +729,34 @@ function DanhMucDoSong({ wave = EMPTY_WAVE, countWave = wave }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// LỊCH SỬ CHÂN SÓNG
-// ─────────────────────────────────────────────────────────────
+ // -------------------------------------------------------------
+ // LỊCH SỬ CHÂN SÓNG
+ // -------------------------------------------------------------
 function ChanSong({ data = [], onRefresh = null }) {
   const [showAll, setShowAll] = useState(false);
+  const [selectedYear, setSelectedYear] = useState("");
 
   const sortedRows = [...data].sort((a, b) =>
     String(b.confirm_wave_date || "").localeCompare(
       String(a.confirm_wave_date || "")
     )
   );
+  const yearOptions = useMemo(() => {
+    return [...new Set(sortedRows
+      .map((row) => String(row.confirm_wave_date || "").slice(0, 4))
+      .filter((year) => /^\d{4}$/.test(year))
+    )];
+  }, [sortedRows]);
+  const activeYear = selectedYear || yearOptions[0] || String(new Date().getFullYear());
+  const filteredRows = sortedRows.filter((row) => String(row.confirm_wave_date || "").startsWith(activeYear));
+  const visibleRows = showAll ? filteredRows : filteredRows.slice(0, 5);
+  const canToggle = filteredRows.length > 5;
 
-  const visibleRows = showAll ? sortedRows : sortedRows.slice(0, 5);
-  const canToggle = sortedRows.length > 5;
+  useEffect(() => {
+    if (selectedYear && !yearOptions.includes(selectedYear)) {
+      setSelectedYear("");
+    }
+  }, [selectedYear, yearOptions]);
 
   function formatIncreasePoints(value) {
     const number = Number(value);
@@ -830,6 +813,79 @@ function ChanSong({ data = [], onRefresh = null }) {
     wordBreak: "keep-all",
   };
 
+  const yearFilterControls = (
+    <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, marginLeft:18 }}>
+      <div
+        style={{
+          position:"relative",
+          width:68,
+          height:32,
+          borderRadius:10,
+          border:`0.5px solid ${T.Bb}`,
+          background:T.surf,
+          boxShadow:T === LIGHT_T ? "0 6px 18px rgba(15,23,42,.06)" : "none",
+          overflow:"hidden",
+        }}
+      >
+        <span
+          style={{
+            position:"absolute",
+            left:13,
+            top:"50%",
+            transform:"translateY(-50%)",
+            color:T.t1,
+            fontSize:13,
+            fontWeight:700,
+            lineHeight:1,
+            pointerEvents:"none",
+          }}
+        >
+          {activeYear}
+        </span>
+        <select
+          value={activeYear}
+          onChange={(event) => {
+            if (!event.target.value) return;
+            setSelectedYear(event.target.value);
+            setShowAll(false);
+          }}
+          style={{
+            position:"absolute",
+            inset:0,
+            width:"100%",
+            height:"100%",
+            border:0,
+            opacity:0,
+            cursor:"pointer",
+          }}
+        >
+          {yearOptions.map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+        <span
+          style={{
+            position:"absolute",
+            right:7,
+            top:"50%",
+            width:12,
+            height:12,
+            transform:"translateY(-50%)",
+            display:"flex",
+            alignItems:"center",
+            justifyContent:"center",
+            color:T.t3,
+            pointerEvents:"none",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </div>
+    </div>
+  );
+
   return (
     <Card style={{ padding: "16px 17px" }}>
       {/* Header giống HTML mẫu */}
@@ -847,7 +903,7 @@ function ChanSong({ data = [], onRefresh = null }) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 12,
             fontFamily: "'Be Vietnam Pro', Inter, sans-serif",
             fontSize: 16,
             fontWeight: 600,
@@ -857,7 +913,7 @@ function ChanSong({ data = [], onRefresh = null }) {
             margin: 0,
           }}
         >
-          <span><span onClick={onRefresh || undefined} title="Tải lại lịch sử chân sóng" style={{ cursor: onRefresh ? "pointer" : "inherit" }}>Lịch</span> sử chân sóng</span>
+          <span><span onClick={onRefresh || undefined} title="Tất cả lịch sử chân sóng" style={{ cursor: onRefresh ? "pointer" : "inherit" }}>Lịch</span> sử chân sóng</span>{yearFilterControls}
         </div>
 
         <span
@@ -1073,18 +1129,12 @@ function ChanSong({ data = [], onRefresh = null }) {
           cursor: canToggle ? "pointer" : "default",
         }}
       >
-        {showAll ? "Thu gọn" : "Xem tất cả lịch sử chân sóng →"}
+        {showAll ? "Thu gọn" : "Xem tất cả lịch sử chân sóng"}
       </div>
     </Card>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// RIGHT PANEL: Nhật ký tín hiệu
-// ─────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────
-// ROOT COMPONENT
-// ─────────────────────────────────────────────────────────────
 export default function DoSongThiTruong() {
   const { dark } = useTheme();
   const theme = dark ? "dark" : "light";
@@ -1093,7 +1143,7 @@ export default function DoSongThiTruong() {
   const [latestWave, setLatestWave] = useState(EMPTY_WAVE);
   const [historyWaves, setHistoryWaves] = useState([]);
   const [historyAllWaves, setHistoryAllWaves] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [chanSongRows, setChanSongRows] = useState([]);
   const [tickerWave, setTickerWave] = useState(EMPTY_WAVE);
   const [signalRefreshKey, setSignalRefreshKey] = useState(0);
@@ -1148,7 +1198,7 @@ export default function DoSongThiTruong() {
   ), [historySource, mainDonutDisplayWave, selectedMainDonutWave.rawDate]);
   function refreshHistoryFromTitle() {
     if (!latestWave.rawDate) return;
-    setHistoryLoading(true);
+    if (!historyAllWaves.length) setHistoryLoading(true);
     fetchStockWaveHistory(latestWave.rawDate, true)
       .then(({ rows, allRows }) => {
         setHistoryWaves(rows);
@@ -1176,26 +1226,20 @@ export default function DoSongThiTruong() {
     let active = true;
 
     fetchStockWaveCurrent()
-      .then((row) => {
+      .then((snapshot) => {
+        const row = snapshot?.row;
         if (!active || !row) return;
+        if (snapshot.allRows?.length) {
+          setHistoryAllWaves(snapshot.allRows);
+          setHistoryWaves(getPreviousWaveSessions(snapshot.allRows, row.rawDate));
+          setHistoryLoading(false);
+        }
         setLatestWave(row);
         setSignalRefreshKey((key) => key + 1);
       })
       .catch((error) => {
         console.error("Load stock wave current cache failed", error);
       });
-
-    const socket = io(REALTIME_WAVE_URL, {
-      transports:["websocket"],
-    });
-
-    socket.on("connect", () => {
-      if (!active) return;
-      socket.emit("message", {
-        action:"subscribe",
-        channels:[WAVE_CHANNEL, STOCK_NOTI_CHANNEL],
-      });
-    });
 
     const applyStockNotiPayload = (payload) => {
       if (!active) return false;
@@ -1214,25 +1258,28 @@ export default function DoSongThiTruong() {
       return true;
     };
 
-    socket.on("message", (payload) => {
+    const stockWaveCurrentStream = typeof EventSource !== "undefined"
+      ? new EventSource(STOCK_WAVE_CURRENT_STREAM_URL)
+      : null;
+
+    stockWaveCurrentStream?.addEventListener("stock-wave-current", (event) => {
       if (!active) return;
-      if (applyStockNotiPayload(payload)) return;
+      try {
+        const payload = JSON.parse(event.data);
+        const data = getSocketWaveData(payload);
+        if (!data) return;
 
-      const data = getSocketWaveData(payload);
-      if (!data) return;
+        const rows = normalizeWavePayload(data);
+        if (!rows.length) return;
 
-      const rows = normalizeWavePayload(data);
-      if (!rows.length) return;
-
-      setLatestWave(rows[0]);
-      setSignalRefreshKey((key) => key + 1);
+        setLatestWave(rows[0]);
+        setSignalRefreshKey((key) => key + 1);
+      } catch (error) {
+        console.error("Parse stock-wave-current stream failed", error);
+      }
     });
 
-    socket.on(STOCK_NOTI_CHANNEL, (payload) => {
-      applyStockNotiPayload({ channel:STOCK_NOTI_CHANNEL, data:payload });
-    });
-
-    const stockNotiStream = STOCK_NOTI_STREAM_URL && typeof EventSource !== "undefined"
+    const stockNotiStream = typeof EventSource !== "undefined"
       ? new EventSource(STOCK_NOTI_STREAM_URL)
       : null;
 
@@ -1246,13 +1293,13 @@ export default function DoSongThiTruong() {
       }
     });
 
-    socket.on("connect_error", (error) => {
-      console.error("Realtime wave socket failed", error);
+    stockWaveCurrentStream?.addEventListener("error", (error) => {
+      if (active) console.error("Stock wave current stream failed", error);
     });
 
     return () => {
       active = false;
-      socket.disconnect();
+      stockWaveCurrentStream?.close();
       stockNotiStream?.close();
     };
   }, []);
@@ -1298,14 +1345,13 @@ export default function DoSongThiTruong() {
 
   useEffect(() => {
     if (!latestWave.rawDate) return;
+    if (historyAllWaves.length) {
+      setHistoryLoading(false);
+      return;
+    }
 
     let active = true;
-    const cachedHistory = getStoredStockWaveHistory(latestWave.rawDate);
-    if (cachedHistory) {
-      setHistoryWaves(cachedHistory.rows);
-      setHistoryAllWaves(cachedHistory.allRows?.length ? cachedHistory.allRows : cachedHistory.rows);
-    }
-    setHistoryLoading(!cachedHistory);
+    setHistoryLoading(true);
 
     fetchStockWaveHistory(latestWave.rawDate)
       .then(({ rows, allRows }) => {
@@ -1313,7 +1359,6 @@ export default function DoSongThiTruong() {
         const nextAllRows = allRows?.length ? allRows : rows;
         setHistoryWaves(rows);
         setHistoryAllWaves(nextAllRows);
-        storeStockWaveHistory(latestWave.rawDate, rows, nextAllRows);
         setHistoryLoading(false);
       })
       .catch((error) => {
@@ -1324,7 +1369,7 @@ export default function DoSongThiTruong() {
     return () => {
       active = false;
     };
-  }, [latestWave.rawDate]);
+  }, [latestWave.rawDate, historyAllWaves.length]);
 
 
   useEffect(() => {
@@ -1353,19 +1398,15 @@ export default function DoSongThiTruong() {
     <>
       <style>{`
         @import url('https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.19.0/iconfont/tabler-icons.min.css');
-        .dosong-shell,.dosong-shell *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
-        .dosong-shell button{font-family:inherit}
-        body.portfolio-ai-panel-open .dosong-theme-toggle{display:none !important}
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+        body{background:${T.bg};color:${T.t1};font-family:-apple-system,"Inter","Segoe UI",sans-serif;font-size:13px}
+        button{font-family:inherit}
         ::-webkit-scrollbar{width:5px;height:4px}
         ::-webkit-scrollbar-thumb{background:${T.bdr};border-radius:3px}
-        .dosong-mobile-burger{display:none}
-        .dosong-mobile-backdrop{display:none}
         @media (max-width: 768px){
           body{overflow-x:hidden}
           .dosong-shell{display:block !important; width:100%; overflow-x:hidden}
-          .dosong-mobile-burger{display:flex !important; position:fixed; top:10px; left:10px; z-index:1003; width:38px; height:38px; align-items:center; justify-content:center; border-radius:10px; background:var(--surf); border:.5px solid var(--bdr); color:var(--t1); font-size:18px; font-weight:800; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,.22)}
-          .dosong-theme-toggle{top:12px !important; right:14px !important; padding:7px 12px !important}
-          .dosong-main{width:100% !important; padding:0 !important; max-width:480px; margin:0 auto}
+          .dosong-main{width:100% !important; padding:58px 12px 26px !important; max-width:480px; margin:0 auto}
           .dosong-layout{display:grid !important; grid-template-columns:minmax(0,1fr) !important; gap:14px !important}
           .dosong-left,.dosong-right{min-width:0 !important; display:contents !important}
           .dosong-mobile-item{min-width:0}
@@ -1376,10 +1417,6 @@ export default function DoSongThiTruong() {
           .dosong-order-chat{order:5}
           .dosong-order-list{order:6}
           .dosong-order-log{order:7}
-          .dosong-sidebar-frame{position:fixed; top:0; left:0; height:100vh; width:224px; z-index:1002; transform:translateX(-100%); transition:transform .22s ease; pointer-events:none}
-          .dosong-sidebar-frame.open{transform:translateX(0); pointer-events:auto}
-          .dosong-sidebar-frame aside{width:224px !important; max-width:224px !important; height:100vh !important; box-shadow:18px 0 45px rgba(0,0,0,.34)}
-          .dosong-mobile-backdrop{display:block; position:fixed; inset:0; z-index:1001; background:rgba(0,0,0,.52)}
           .dosong-layout table{font-size:12px}
           .dosong-layout th,.dosong-layout td{padding-left:7px !important; padding-right:7px !important}
           .chan-song-table-wrap{overflow-x:auto !important}
@@ -1410,7 +1447,7 @@ export default function DoSongThiTruong() {
           .lsds-loading-metric{border-radius:7px !important; padding:6px 4px !important; min-width:0 !important}
         }
         @media (max-width: 560px){
-          .dosong-main{padding-left:0 !important; padding-right:0 !important}
+          .dosong-main{padding-left:10px !important; padding-right:10px !important}
           .dosong-layout{gap:12px !important}
         }
       `}</style>
@@ -1450,14 +1487,13 @@ export default function DoSongThiTruong() {
         fontFamily: '-apple-system,"Inter","Segoe UI",sans-serif',
         fontSize: 13,
         display:"flex",
-        minHeight: 0,
-        width: "100%",
+        minHeight: "100vh",
       }}>
-        <main className="dosong-main" style={{ flex:1, minWidth:0, padding:0 }}>
+        <main className="dosong-main" style={{ flex:1, minWidth:0, padding:"18px 22px 32px" }}>
           {/* 60/40 content layout */}
           <div className="dosong-layout" style={{ display:"grid", gridTemplateColumns:"minmax(0, 3fr) minmax(0, 2fr)", gap:14 }}>
 
-          {/* ── CỘT TRÁI ── */}
+          {/* CỘT TRÁI */}
           <div className="dosong-left" style={{ display:"flex", flexDirection:"column", gap:14 }}>
             {/* Vòng tròn dò sóng */}
             <div className="dosong-mobile-item dosong-order-main">
@@ -1484,7 +1520,7 @@ export default function DoSongThiTruong() {
 
             {/* Lịch sử dò sóng */}
             <div className="dosong-mobile-item dosong-order-history">
-              <HistNavigator data={selectedHistoryDisplayWaves} totalDays={selectedHistoryDisplayWaves.length} theme={theme} loading={historyLoading} onRefresh={refreshHistoryFromTitle} />
+              <HistNavigator data={selectedHistoryDisplayWaves} totalDays={selectedHistoryDisplayWaves.length} theme={theme} loading={historyLoading && !selectedHistoryDisplayWaves.length} onRefresh={refreshHistoryFromTitle} />
             </div>
 
             {/* Lịch sử chân sóng */}
@@ -1493,7 +1529,7 @@ export default function DoSongThiTruong() {
             </div>
           </div>
 
-          {/* ── CỘT PHẢI ── */}
+          {/* CỘT PHẢI */}
           <div className="dosong-right" style={{ display:"flex", flexDirection:"column", gap:14, minWidth:0 }}>
             <div className="dosong-mobile-item dosong-order-ai">
               <KhuyenNghiTuVanAI
@@ -1501,6 +1537,7 @@ export default function DoSongThiTruong() {
                 buy={selectedMainDonutWave.mu}
                 refreshKey={signalRefreshKey}
                 checkDate={selectedMainDonutWave.rawDate}
+                realtime={selectedMainDonutWave.rawDate === latestWave.rawDate}
                 doSongAdvice={selectedDoSongAdvice}
                 adviceMode={selectedAdviceMode}
                 theme={theme}

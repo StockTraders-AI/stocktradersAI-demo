@@ -1,230 +1,92 @@
 import { useEffect, useState } from "react";
 
-const DEFAULT_SIGNAL_KEY = "waitbuy_over_threshold";
-const BUY_SIGNAL_KEY = "buy_over_threshold";
 const EMPTY_SIGNAL = { title: "", response: "", recommendation: "" };
-const LAST_SIGNAL_STORAGE_KEY = "stocktraders:last-do-song-advice";
 
 function hasSignalContent(signal) {
   return Boolean(String(signal?.response || "").trim());
 }
-function readLastSignal() {
-  if (typeof window === "undefined") return EMPTY_SIGNAL;
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(LAST_SIGNAL_STORAGE_KEY) || "null");
-    return hasSignalContent(parsed) ? {
-      title: String(parsed.title || "").trim(),
-      response: String(parsed.response || "").trim(),
-      recommendation: String(parsed.recommendation || "").trim(),
-    } : EMPTY_SIGNAL;
-  } catch {
-    return EMPTY_SIGNAL;
-  }
+
+function normalizeSignal(data) {
+  return {
+    title: String(data?.title || "").trim(),
+    response: String(data?.response || data?.body || "").trim(),
+    recommendation: String(data?.recommendation || data?.action || "").trim(),
+  };
 }
 
-function cacheLastSignal(signal) {
-  if (typeof window === "undefined" || !hasSignalContent(signal)) return;
-  try {
-    window.localStorage.setItem(LAST_SIGNAL_STORAGE_KEY, JSON.stringify({
-      title: String(signal.title || "").trim(),
-      response: String(signal.response || "").trim(),
-      recommendation: String(signal.recommendation || "").trim(),
-    }));
-  } catch {
-    // localStorage may be unavailable in private mode; keeping in-memory state is enough.
-  }
-}
-
-
-function buildDoSongAdviceKey(advice) {
-  if (!advice?.engine) return "";
-  const wave = advice.wave || {};
-  const engine = advice.engine || {};
-  return JSON.stringify({
-    date: advice.check_date || wave.date || "",
-    signal_keys: advice.signal_keys || [],
-    maTrangThai: engine.maTrangThai || "",
-    pha: engine.pha || "",
-    choMua: wave.choMua,
-    mua: wave.mua,
-    choBan: wave.choBan,
-    ban: wave.ban,
-    tong: wave.tong,
-  });
-}
-
-function getSignalCandidates(signalKey, currentBuy) {
-  const keys = [];
-  if (signalKey && signalKey !== DEFAULT_SIGNAL_KEY) keys.push(signalKey);
-  if (Number.isFinite(currentBuy)) keys.push(BUY_SIGNAL_KEY);
-  keys.push(DEFAULT_SIGNAL_KEY);
-  return [...new Set(keys)];
-}
-
-function getAdviceSignalCandidates(adviceMode, signalKey, currentBuy) {
-  if (adviceMode === "buy") return [BUY_SIGNAL_KEY];
-  if (adviceMode === "waitbuy") return [DEFAULT_SIGNAL_KEY];
-  return getSignalCandidates(signalKey || DEFAULT_SIGNAL_KEY, currentBuy);
-}
-
-export default function KhuyenNghiTuVanAI({ signalKey = DEFAULT_SIGNAL_KEY, waitbuy = 0, buy = 0, refreshKey = 0, checkDate = "", doSongAdvice, adviceMode = "engine", theme = "dark" }) {
-  const [conditionSignal, setConditionSignal] = useState(() => readLastSignal());
-  const doSongAdviceKey = buildDoSongAdviceKey(doSongAdvice);
+export default function KhuyenNghiTuVanAI({ refreshKey = 0, checkDate = "", theme = "dark", realtime = false, waitbuy = 0, buy = 0, doSongAdvice = null }) {
+  const [conditionSignal, setConditionSignal] = useState(EMPTY_SIGNAL);
 
   useEffect(() => {
     let cancelled = false;
     const retryTimers = [];
-    const shouldUseConditionAdvice = adviceMode === "buy" || adviceMode === "waitbuy";
+    const retryDelays = realtime ? [0, 350, 900, 1800, 3500, 6500, 10000] : [0, 350, 1000, 2200];
+    const dateKey = String(checkDate || "").slice(0, 10);
+    const realtimeWave = doSongAdvice?.wave || null;
 
-    if (shouldUseConditionAdvice) {
+    if (!dateKey) {
       setConditionSignal(EMPTY_SIGNAL);
+      return () => {
+        cancelled = true;
+        retryTimers.forEach((timer) => window.clearTimeout(timer));
+      };
     }
-    const currentWaitbuy = Number(waitbuy) || 0;
-    const currentBuy = Number(buy) || 0;
-    const retryDelays = [0, 2000, 6000, 12000];
+
+    function sameNumber(a, b) {
+      if (b === undefined || b === null || b === "") return true;
+      return Number(a) === Number(b);
+    }
+
+    function matchesRealtimeCounts(data) {
+      if (!realtime) return true;
+      return sameNumber(data?.cho_mua, realtimeWave?.choMua ?? waitbuy) &&
+        sameNumber(data?.mua, realtimeWave?.mua ?? buy) &&
+        sameNumber(data?.cho_ban, realtimeWave?.choBan) &&
+        sameNumber(data?.ban, realtimeWave?.ban) &&
+        sameNumber(data?.total, realtimeWave?.tong);
+    }
 
     function scheduleLoad(attempt) {
       const delay = retryDelays[attempt] ?? 0;
-      const timer = window.setTimeout(() => loadConditionResponse(attempt), delay);
+      const timer = window.setTimeout(() => loadRecommendation(attempt), delay);
       retryTimers.push(timer);
     }
 
-    async function loadConditionResponse(attempt = 1) {
+    async function loadRecommendation(attempt = 0) {
       try {
-        if (doSongAdvice === null) {
-          if (!cancelled && attempt + 1 < retryDelays.length) scheduleLoad(attempt + 1);
-        }
-        if (shouldUseConditionAdvice) {
-          const candidates = getAdviceSignalCandidates(adviceMode, signalKey || DEFAULT_SIGNAL_KEY, currentBuy);
-          let nextSignal = EMPTY_SIGNAL;
+        const params = new URLSearchParams({ date: dateKey });
+        const res = await fetch(`/thi-truong/api/do-song-recommendation?${params.toString()}`, { cache: "no-store" });
+        const data = res.ok ? await res.json() : null;
+        const nextSignal = normalizeSignal(data || {});
 
-          for (const candidateKey of candidates) {
-            const params = new URLSearchParams({
-              signal_key: candidateKey,
-              waitbuy: String(currentWaitbuy),
-              buy: String(currentBuy),
-              refresh_key: String(refreshKey),
-              _: String(Date.now()),
-            });
-            if (checkDate) params.set("check_date", checkDate);
-
-            const res = await fetch(`/api/condition-signal-latest?${params.toString()}`, {
-              cache: "no-store",
-            });
-            if (!res.ok) continue;
-
-            const data = await res.json();
-            const candidateSignal = {
-              title: String(data?.title || "").trim(),
-              response: String(data?.response || "").trim(),
-              recommendation: String(data?.recommendation || "").trim(),
-            };
-
-            if (hasSignalContent(candidateSignal)) {
-              nextSignal = candidateSignal;
-              break;
-            }
-          }
-
-          if (!cancelled) {
-            if (hasSignalContent(nextSignal)) {
-              cacheLastSignal(nextSignal);
-              setConditionSignal(nextSignal);
-            } else if (attempt + 1 < retryDelays.length) {
-              scheduleLoad(attempt + 1);
-            } else {
-              setConditionSignal(EMPTY_SIGNAL);
-            }
-          }
-          return;
+        if (cancelled) return;
+        if (hasSignalContent(nextSignal)) {
+          setConditionSignal(nextSignal);
+          if (matchesRealtimeCounts(data)) return;
         }
 
-        if (doSongAdvice?.engine) {
-          const res = await fetch("/api/do-song-advice", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            cache: "no-store",
-            body: JSON.stringify({
-              check_date: checkDate || doSongAdvice.check_date || "",
-              signal_keys: doSongAdvice.signal_keys || [],
-              wave: doSongAdvice.wave || {},
-              engine: doSongAdvice.engine || {},
-              raw_engine: doSongAdvice.raw_engine || {},
-              nearest_engine: doSongAdvice.nearest_engine || {},
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const engineSignal = {
-              title: String(data?.title || "").trim(),
-              response: String(data?.response || "").trim(),
-              recommendation: String(data?.recommendation || "").trim(),
-            };
-            if (hasSignalContent(engineSignal)) {
-              if (!cancelled) {
-                cacheLastSignal(engineSignal);
-                setConditionSignal(engineSignal);
-              }
-              return;
-            }
-          }
-          if (!cancelled && attempt + 1 < retryDelays.length) scheduleLoad(attempt + 1);
-          return;
-        }
-
-        const candidates = getAdviceSignalCandidates(adviceMode, signalKey || DEFAULT_SIGNAL_KEY, currentBuy);
-        let nextSignal = EMPTY_SIGNAL;
-
-        for (const candidateKey of candidates) {
-          const params = new URLSearchParams({
-            signal_key: candidateKey,
-            waitbuy: String(currentWaitbuy),
-            buy: String(currentBuy),
-            refresh_key: String(refreshKey),
-            _: String(Date.now()),
-          });
-          if (checkDate) params.set("check_date", checkDate);
-
-          const res = await fetch(`/api/condition-signal-latest?${params.toString()}`, {
-            cache: "no-store",
-          });
-          if (!res.ok) continue;
-
-          const data = await res.json();
-          const candidateSignal = {
-            title: String(data?.title || "").trim(),
-            response: String(data?.response || "").trim(),
-            recommendation: String(data?.recommendation || "").trim(),
-          };
-
-          if (hasSignalContent(candidateSignal)) {
-            nextSignal = candidateSignal;
-            break;
-          }
-        }
-
-        if (!cancelled) {
-          if (hasSignalContent(nextSignal)) {
-            cacheLastSignal(nextSignal);
-            setConditionSignal(nextSignal);
-          } else if (attempt + 1 < retryDelays.length) {
-            scheduleLoad(attempt + 1);
-          }
+        if (attempt + 1 < retryDelays.length) {
+          scheduleLoad(attempt + 1);
+        } else if (!realtime) {
+          setConditionSignal(EMPTY_SIGNAL);
         }
       } catch {
-        if (!cancelled && attempt + 1 < retryDelays.length) {
+        if (cancelled) return;
+        if (attempt + 1 < retryDelays.length) {
           scheduleLoad(attempt + 1);
+        } else if (!realtime) {
+          setConditionSignal(EMPTY_SIGNAL);
         }
       }
     }
 
-    loadConditionResponse(0);
+    scheduleLoad(0);
 
     return () => {
       cancelled = true;
       retryTimers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [signalKey, waitbuy, buy, refreshKey, checkDate, doSongAdvice, doSongAdviceKey, adviceMode]);
+  }, [buy, checkDate, doSongAdvice, realtime, refreshKey, waitbuy]);
 
   const { title, response, recommendation } = conditionSignal;
   const visibleTitle = title || "\u00a0";
@@ -248,36 +110,36 @@ export default function KhuyenNghiTuVanAI({ signalKey = DEFAULT_SIGNAL_KEY, wait
     <div style={{ background: "linear-gradient(0deg, rgba(124,58,237,.12), rgba(124,58,237,.12)), var(--surf, #111520)", border: "1px solid #5B21B6", borderRadius: 16, padding: "16px 17px" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-        <div
-          aria-hidden="true"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: "linear-gradient(135deg,#7C3AED,#4F46E5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-            <circle cx="11" cy="11" r="10" stroke="rgba(255,255,255,.25)" strokeWidth="1" />
-            <circle cx="11" cy="11" r="5.5" fill="white" opacity="0.95" />
-            <line x1="11" y1="5.5" x2="11" y2="2" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="11" y1="16.5" x2="11" y2="20" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="5.5" y1="11" x2="2" y2="11" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="16.5" y1="11" x2="20" y2="11" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="7.1" y1="7.1" x2="4.5" y2="4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="14.9" y1="7.1" x2="17.5" y2="4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="7.1" y1="14.9" x2="4.5" y2="17.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="14.9" y1="14.9" x2="17.5" y2="17.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-            <circle cx="11" cy="11" r="2.5" fill="#7C3AED" />
-          </svg>
-        </div>
-        <span style={{ fontFamily: "'Be Vietnam Pro', Inter, sans-serif", fontSize: 13, fontWeight: 600, lineHeight: 1.3, letterSpacing: ".5px", color: "var(--text-muted, #A0A6B0)", textTransform: "uppercase" }}>
-          Khuy{"\u1ebfn"} ngh{"\u1ecb"} t{"\u1eeb"} AI
-        </span>
+          <div
+            aria-hidden="true"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "linear-gradient(135deg,#7C3AED,#4F46E5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="10" stroke="rgba(255,255,255,.25)" strokeWidth="1" />
+              <circle cx="11" cy="11" r="5.5" fill="white" opacity="0.95" />
+              <line x1="11" y1="5.5" x2="11" y2="2" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+              <line x1="11" y1="16.5" x2="11" y2="20" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+              <line x1="5.5" y1="11" x2="2" y2="11" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+              <line x1="16.5" y1="11" x2="20" y2="11" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+              <line x1="7.1" y1="7.1" x2="4.5" y2="4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="14.9" y1="7.1" x2="17.5" y2="4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="7.1" y1="14.9" x2="4.5" y2="17.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="14.9" y1="14.9" x2="17.5" y2="17.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+              <circle cx="11" cy="11" r="2.5" fill="#7C3AED" />
+            </svg>
+          </div>
+          <span style={{ fontFamily: "'Be Vietnam Pro', Inter, sans-serif", fontSize: 13, fontWeight: 600, lineHeight: 1.3, letterSpacing: ".5px", color: "var(--text-muted, #A0A6B0)", textTransform: "uppercase" }}>
+            Khuyến nghị từ AI
+          </span>
         </div>
         <div
           aria-hidden="true"

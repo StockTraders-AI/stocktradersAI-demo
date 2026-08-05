@@ -15,6 +15,12 @@ const sameDay = (a, b) =>
 const fmt = (d) =>
   `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
+function formatInputDateText(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
 function parseInputDate(value) {
   const text = String(value || "").trim();
   const match = text.match(/^(\d{1,4})[/\-.](\d{1,2})[/\-.](\d{1,4})$/);
@@ -103,10 +109,59 @@ export default function DateTimeTravel({
   const currentRef = useRef(current);
   const popRef = useRef(null);
   const triggerRef = useRef(null);
+  const ignoreNextBlurRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobilePopoverPos, setMobilePopoverPos] = useState(null);
 
   useEffect(() => {
     currentRef.current = current;
   }, [current]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const query = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsMobile(query.matches);
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+  useEffect(() => {
+    if (!open || !isMobile || typeof window === "undefined") {
+      setMobilePopoverPos(null);
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const viewport = window.visualViewport;
+      const viewportWidth = viewport?.width || window.innerWidth;
+      const viewportHeight = viewport?.height || window.innerHeight;
+      const offsetLeft = viewport?.offsetLeft || 0;
+      const offsetTop = viewport?.offsetTop || 0;
+      const width = Math.min(292, viewportWidth - 28);
+      const rect = trigger.getBoundingClientRect();
+      const minLeft = offsetLeft + 14;
+      const maxLeft = offsetLeft + viewportWidth - width - 14;
+      const preferredLeft = rect.left + rect.width / 2 - width / 2;
+      const left = Math.max(minLeft, Math.min(maxLeft, preferredLeft));
+      const top = rect.bottom + 10 + offsetTop;
+      const maxHeight = Math.max(260, Math.min(430, offsetTop + viewportHeight - top - 14));
+      setMobilePopoverPos({ left, top, width, maxHeight });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    window.visualViewport?.addEventListener("resize", updatePosition);
+    window.visualViewport?.addEventListener("scroll", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.visualViewport?.removeEventListener("resize", updatePosition);
+      window.visualViewport?.removeEventListener("scroll", updatePosition);
+    };
+  }, [open, isMobile, editing]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -238,7 +293,7 @@ export default function DateTimeTravel({
   });
 
   return (
-    <div style={st.root}>
+    <div style={isMobile && editing ? { ...st.root, ...st.mobileEditingRoot } : st.root}>
       <button
         type="button"
         onClick={() => stepDay(-1)}
@@ -249,16 +304,19 @@ export default function DateTimeTravel({
         <ChevronLeft size={15} />
       </button>
 
-      <div ref={triggerRef} style={{ ...st.dateButton, color: isToday ? "var(--G, #3DD68C)" : "var(--t1, #D9E4F5)" }}>
+      <div ref={triggerRef} style={{ ...st.dateButton, ...(isMobile && editing ? st.mobileEditingDateButton : null), color: isToday ? "var(--G, #3DD68C)" : "var(--t1, #D9E4F5)" }}>
         <button type="button" onClick={openCalendar} style={st.calendarButton} aria-label="Mở lịch">
           <Calendar size={13} style={{ opacity: 0.72, flexShrink: 0 }} />
         </button>
         {editing ? (
           <input
             ref={inputRef}
+            inputMode="numeric"
+            enterKeyHint="done"
+            autoComplete="off"
             value={inputValue}
             onChange={(event) => {
-              setInputValue(event.target.value);
+              setInputValue(formatInputDateText(event.target.value));
               setInputError(false);
             }}
             onKeyDown={(event) => {
@@ -270,13 +328,22 @@ export default function DateTimeTravel({
               if (event.key === "Escape") cancelInput();
             }}
             onBlur={() => {
-              if (open) return;
               if (inputError) return;
+              if (isMobile && ignoreNextBlurRef.current) {
+                ignoreNextBlurRef.current = false;
+                return;
+              }
               const parsed = parseInputDate(inputValue);
+              if (isMobile) {
+                if (parsed) commitDate(parsed);
+                else cancelInput();
+                return;
+              }
+              if (open) return;
               if (parsed) commitDate(parsed);
               else cancelInput();
             }}
-            style={{ ...st.inlineInput, borderColor: inputError ? "var(--R, #EF4444)" : "transparent" }}
+            style={{ ...st.inlineInput, ...(isMobile ? st.mobileInlineInput : null), borderColor: inputError ? "var(--R, #EF4444)" : "transparent" }}
           />
         ) : (
           <button
@@ -308,7 +375,13 @@ export default function DateTimeTravel({
       </button>
 
       {open && (
-        <div ref={popRef} style={st.popover}>
+        <div
+          ref={popRef}
+          onPointerDownCapture={() => {
+            if (isMobile && editing) ignoreNextBlurRef.current = true;
+          }}
+          style={isMobile ? { ...st.popover, ...st.mobilePopover, ...(mobilePopoverPos || null) } : st.popover}
+        >
           <div style={st.monthHeader}>
             <button
               type="button"
@@ -317,7 +390,7 @@ export default function DateTimeTravel({
             >
               <ChevronLeft size={12} />
             </button>
-            <span style={st.monthTitle}>{MONTHS[calCursor.getMonth()]}, {calCursor.getFullYear()}</span>
+            <span style={isMobile ? { ...st.monthTitle, ...st.mobileMonthTitle } : st.monthTitle}>{MONTHS[calCursor.getMonth()]}, {calCursor.getFullYear()}</span>
             <button
               type="button"
               onClick={() => setCalCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
@@ -329,7 +402,7 @@ export default function DateTimeTravel({
 
           <div style={st.grid}>
             {DOW.map((d) => (
-              <div key={d} style={st.dow}>{d}</div>
+              <div key={d} style={isMobile ? { ...st.dow, ...st.mobileDow } : st.dow}>{d}</div>
             ))}
             {cells.map(({ other, date }, i) => {
               const disabled = date > maxDate || date < minDate;
@@ -340,14 +413,13 @@ export default function DateTimeTravel({
                   key={i}
                   type="button"
                   disabled={disabled}
-                  onClick={() => {
-                    setDraft(date);
-                    setEditing(true);
-                  }}
+                  onClick={() => commitDate(date)}
                   style={{
                     ...st.day,
-                    color: disabled ? "var(--t4, #334155)" : other ? "var(--t3, #53657F)" : "var(--t2, #B6C5DB)",
-                    opacity: disabled ? 0.42 : other ? 0.55 : 1,
+                    color: isMobile
+                      ? (disabled ? "#33435B" : other ? "#4F6684" : "#D7E4F7")
+                      : disabled ? "var(--t4, #334155)" : other ? "var(--t3, #53657F)" : "var(--t2, #B6C5DB)",
+                    opacity: isMobile ? (disabled ? 0.58 : other ? 0.72 : 1) : disabled ? 0.42 : other ? 0.55 : 1,
                     cursor: disabled ? "not-allowed" : "pointer",
                     background: selected ? "var(--G, #3DD68C)" : "transparent",
                     border: today && !selected ? "1px solid var(--G, #3DD68C)" : "1px solid transparent",
@@ -364,8 +436,7 @@ export default function DateTimeTravel({
             <button
               type="button"
               onClick={() => {
-                setDraft(new Date(maxDate));
-                setEditing(true);
+                commitDate(new Date(maxDate));
               }}
               style={{ ...st.footerButton, color: "var(--G, #3DD68C)" }}
             >
@@ -394,6 +465,14 @@ const st = {
     padding: 3,
     fontFamily: '-apple-system,"Inter","Segoe UI",sans-serif',
     verticalAlign: "middle",
+  },
+  mobileEditingRoot: {
+    zIndex: 1500,
+  },
+  mobileEditingDateButton: {
+    position: "relative",
+    zIndex: 1600,
+    background: "var(--elev, rgba(17,21,32,.96))",
   },
   dateButton: {
     display: "inline-flex",
@@ -448,18 +527,41 @@ const st = {
     lineHeight: 1,
     outline: "none",
   },
+  mobileInlineInput: {
+    width: 114,
+    height: 32,
+    boxSizing: "border-box",
+    padding: "0 6px",
+    fontSize: 16,
+    transform: "scale(0.6875)",
+    transformOrigin: "left center",
+    marginRight: -36,
+  },
   popover: {
     position: "absolute",
     left: "50%",
     top: "calc(100% + 8px)",
     transform: "translateX(-50%)",
-    zIndex: 40,
+    zIndex: 1400,
     width: 256,
     borderRadius: 16,
     border: "0.5px solid var(--bdr, #242E42)",
     background: "var(--surf, #0B0F18)",
     padding: 14,
     boxShadow: "0 22px 55px rgba(0,0,0,.18)",
+  },
+  mobilePopover: {
+    position: "fixed",
+    left: 14,
+    top: 120,
+    transform: "none",
+    width: "min(292px, calc(100vw - 28px))",
+    maxHeight: "min(430px, calc(100dvh - 190px))",
+    overflowY: "auto",
+    zIndex: 1300,
+    background: "#121826",
+    border: "1px solid #2B3850",
+    boxShadow: "0 22px 60px rgba(0,0,0,.42)",
   },
   monthHeader: {
     display: "flex",
