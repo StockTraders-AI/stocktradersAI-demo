@@ -15,7 +15,31 @@ npm run dev      # dev server on http://localhost:3000
 | ----------------- | ------------------------------------ |
 | `npm run dev`     | Start the Vite dev server (port 3000)|
 | `npm run build`   | Production build to `dist/`          |
+| `npm run start`   | Serve `dist/` and `/api/auth/*` in production |
 | `npm run preview` | Preview the production build         |
+
+## Production on VPS/nginx
+
+Forgot-password and register OTP routes require the Node server in this repo. Do not serve only `dist/` with nginx or `vite preview`, because `/api/auth/request-otp` will not reach the FPT OTP handler.
+
+```bash
+npm install
+npm run build
+PORT=3000 npm run start
+```
+
+Then proxy nginx to the Node server, or at minimum proxy `/api/` to it:
+
+```nginx
+location /api/ {
+  proxy_pass http://127.0.0.1:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
 
 ## Auth environment
 
