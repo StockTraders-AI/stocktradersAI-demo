@@ -171,7 +171,7 @@ function AuthTopbar({ isMobile }) {
 }
 
 function AuthSidebar() {
-  return <Sidebar curMod="dashboard" onNav={() => {}} />;
+  return <Sidebar curMod="dashboard" onNav={() => {}} showPremium />;
 }
 
 function TextField({ label, placeholder, onFocus, onBlur, groupStyle, ...props }) {
