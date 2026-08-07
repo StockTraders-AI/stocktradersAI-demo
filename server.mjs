@@ -28,6 +28,8 @@ import {
   startStockWaveCurrentSocket as startDoSongStockWaveCurrentSocket,
 } from "./embedded/stocktraders-web/stockWaveCurrentCache.js";
 import {
+  backfillStockWaveHistoryFromApi as backfillDoSongStockWaveHistoryFromApi,
+  invalidateStockWaveHistorySnapshot as invalidateDoSongStockWaveHistorySnapshot,
   handleStockWaveHistory as doSongHandleStockWaveHistory,
   preloadStockWaveHistorySnapshot as preloadDoSongStockWaveHistorySnapshot,
 } from "./embedded/stocktraders-web/stockWaveHistoryCache.js";
@@ -79,7 +81,19 @@ const apiHandlers = new Map([
 initDoSongStockDataDb()
   .then(async () => {
     console.log(`Do-song DB ready at ${DOSONG_DB_PATH}`);
-    const rows = await preloadDoSongStockWaveHistorySnapshot();
+    let rows = await preloadDoSongStockWaveHistorySnapshot();
+
+    if (!rows.length && process.env.STOCK_WAVE_BACKFILL_ON_STARTUP !== "false") {
+      try {
+        const result = await backfillDoSongStockWaveHistoryFromApi();
+        invalidateDoSongStockWaveHistorySnapshot();
+        rows = await preloadDoSongStockWaveHistorySnapshot();
+        console.log(`Do-song history backfilled from API: ${result.allRows.length} rows`);
+      } catch (error) {
+        console.error("Do-song history startup backfill failed", error);
+      }
+    }
+
     console.log(`Do-song history snapshot ready: ${rows.length} rows`);
   })
   .catch((error) => {

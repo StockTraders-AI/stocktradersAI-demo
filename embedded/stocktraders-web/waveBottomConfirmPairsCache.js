@@ -569,7 +569,14 @@ export async function getWaveBottomConfirmPairs(forceRefresh = false) {
     }
   };
 
-  if (forceRefresh) return refreshNow();
+  if (forceRefresh) {
+    const fallbackPayload = await readLatestDiskCache();
+    return refreshNow(
+      fallbackPayload,
+      "stale-db",
+      { refreshed: true },
+    );
+  }
 
   if (cacheKey && memoryCache && memoryCacheKey === cacheKey && memoryCache.cacheVersion === CACHE_VERSION && Array.isArray(memoryCache.rows)) {
     return withSource(memoryCache, "memory");
@@ -597,18 +604,15 @@ export async function getWaveBottomConfirmPairs(forceRefresh = false) {
     });
   }
 
-  return {
-    success: true,
-    cacheVersion: CACHE_VERSION,
-    cacheKey: cacheKey || upstreamCacheKey,
-    cachedAt: new Date().toISOString(),
-    rows: [],
-    source: "db-empty",
-  };
+  return refreshNow();
 }
-export async function handleWaveBottomConfirmPairs(req, res) {
+export async function handleWaveBottomConfirmPairs(req, res, rawUrl) {
+  const url = new URL(rawUrl || req.url, `http://${req.headers.host || "localhost"}`);
+  const refreshParam = String(url.searchParams.get("refresh") || url.searchParams.get("force") || "").toLowerCase();
+  const forceRefresh = refreshParam === "1" || refreshParam === "true" || refreshParam === "yes";
+
   try {
-    sendJson(res, 200, await getWaveBottomConfirmPairs());
+    sendJson(res, 200, await getWaveBottomConfirmPairs(forceRefresh));
   } catch (error) {
     console.error("Wave bottom confirm pairs cache failed", error);
     sendJson(res, 502, { success: false, error: error.message || "Cannot load wave bottom confirm pairs." });

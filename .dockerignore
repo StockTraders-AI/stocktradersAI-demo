@@ -9,3 +9,4 @@ dist
 coverage
 .vscode
 .idea
+embedded/stocktraders-web/.stocktraders-db

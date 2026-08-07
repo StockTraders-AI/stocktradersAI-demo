@@ -483,7 +483,9 @@ function fetchStockWaveTickers(cacheKey = "latest") {
 function fetchWaveBottomConfirmPairs(force = false) {
   if (force) waveBottomConfirmPairsRequest = null;
   if (!waveBottomConfirmPairsRequest) {
-    waveBottomConfirmPairsRequest = fetch(WAVE_BOTTOM_CONFIRM_PAIRS_URL, { method: "POST", cache: "no-store" })
+    const url = new URL(WAVE_BOTTOM_CONFIRM_PAIRS_URL, window.location.origin);
+    if (force) url.searchParams.set("refresh", "1");
+    waveBottomConfirmPairsRequest = fetch(url.toString(), { method: "POST", cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error(`Wave bottom confirm pairs failed: ${response.status}`);
         return response.json();

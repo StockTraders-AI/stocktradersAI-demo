@@ -8,6 +8,7 @@ const STOCK_WAVE_ACCOUNT = process.env.STOCK_WAVE_ACCOUNT || "thao.dtt";
 const HISTORY_REQUEST = { StockWaveRequest: { account: STOCK_WAVE_ACCOUNT } };
 let summaryRowsSnapshot = null;
 let summaryRowsSnapshotPromise = null;
+let historyBackfillPromise = null;
 
 function isValidDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value || "");
@@ -62,33 +63,47 @@ export function invalidateStockWaveHistorySnapshot() {
 }
 
 export async function backfillStockWaveHistoryFromApi() {
-  const response = await fetch(STOCK_WAVE_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(HISTORY_REQUEST),
-  });
-  if (!response.ok) throw new Error(`Stock wave upstream failed: ${response.status}`);
+  if (historyBackfillPromise) return historyBackfillPromise;
 
-  const payload = await response.json();
-  const allRows = sortWaveRows(getWaveRows(payload));
-  const cachedAt = new Date().toISOString();
-  await upsertStockWaveRows(allRows, { cacheKey: "backfill-full", source: "api-backfill", cachedAt });
-  return {
-    success: true,
-    source: "api-backfill",
-    cachedAt,
-    allRows,
-  };
+  historyBackfillPromise = (async () => {
+    const response = await fetch(STOCK_WAVE_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(HISTORY_REQUEST),
+    });
+    if (!response.ok) throw new Error(`Stock wave upstream failed: ${response.status}`);
+
+    const payload = await response.json();
+    const allRows = sortWaveRows(getWaveRows(payload));
+    const cachedAt = new Date().toISOString();
+    await upsertStockWaveRows(allRows, { cacheKey: "backfill-full", source: "api-backfill", cachedAt });
+    return {
+      success: true,
+      source: "api-backfill",
+      cachedAt,
+      allRows,
+    };
+  })().finally(() => {
+    historyBackfillPromise = null;
+  });
+
+  return historyBackfillPromise;
 }
 
-export async function getStockWaveHistory(before) {
+export async function getStockWaveHistory(before, forceRefresh = false) {
   if (!isValidDate(before)) {
     const error = new Error("Missing or invalid before date. Use YYYY-MM-DD.");
     error.statusCode = 400;
     throw error;
   }
 
-  const allRows = await loadSummaryRowsSnapshot();
+  let allRows = await loadSummaryRowsSnapshot();
+  if (forceRefresh || !allRows.length) {
+    await backfillStockWaveHistoryFromApi();
+    invalidateStockWaveHistorySnapshot();
+    allRows = await loadSummaryRowsSnapshot();
+  }
+
   return {
     success: true,
     source: "db",
@@ -110,9 +125,11 @@ export function sendJson(res, status, payload) {
 export async function handleStockWaveHistory(req, res, rawUrl) {
   const url = new URL(rawUrl || req.url, `http://${req.headers.host || "localhost"}`);
   const before = url.searchParams.get("before");
+  const refreshParam = String(url.searchParams.get("refresh") || url.searchParams.get("force") || "").toLowerCase();
+  const forceRefresh = refreshParam === "1" || refreshParam === "true" || refreshParam === "yes";
 
   try {
-    sendJson(res, 200, await getStockWaveHistory(before));
+    sendJson(res, 200, await getStockWaveHistory(before, forceRefresh));
   } catch (error) {
     const status = error.statusCode || 502;
     console.error("Stock wave history DB read failed", error);

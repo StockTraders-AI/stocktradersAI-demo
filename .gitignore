@@ -53,6 +53,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Runtime SQLite data
+embedded/stocktraders-web/.stocktraders-db/
+
 # VS Code settings and logs
 .vscode/
 
