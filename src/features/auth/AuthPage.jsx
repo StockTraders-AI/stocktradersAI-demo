@@ -30,16 +30,51 @@ let turnstileScriptPromise = null;
  * nhập. Khi mở lại: đổi REGISTER_ENABLED = true là đủ — luồng đăng ký cũ
  * (RegisterForm + handleRegister) vẫn còn nguyên bên dưới.
  * ─────────────────────────────────────────────────────────────────────── */
-const REGISTER_ENABLED = false;
+const REGISTER_ENABLED = true;
 const REGISTER_NOTICE = {
   title: "Tính năng đăng ký đang nâng cấp",
   body: "Hiện tại hệ thống chỉ hỗ trợ đăng nhập. Bạn vui lòng dùng tài khoản đã có.",
 };
 const NOTICE_VISIBLE_MS = 3600;
 const NOTICE_EXIT_MS = 300;
+const AUTH_TAB_PATHS = {
+  login: "/dang-nhap",
+  register: "/dang-ky",
+  forgot: "/quen-mat-khau",
+};
+
+const AUTH_PATH_TO_TAB = Object.fromEntries(
+  Object.entries(AUTH_TAB_PATHS).map(([tab, path]) => [normalizeAuthPath(path), tab]),
+);
 
 function normalizeFormText(value) {
   return String(value || "").trim();
+}
+
+function normalizeAuthPath(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "/") return "/";
+  const [pathname] = raw.split(/[?#]/);
+  const withLeadingSlash = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return withLeadingSlash.replace(/\/+$/, "") || "/";
+}
+
+function resolveAuthTab(value) {
+  return AUTH_PATH_TO_TAB[normalizeAuthPath(value)] || null;
+}
+
+function getInitialAuthTab() {
+  if (typeof window === "undefined") return "login";
+  return resolveAuthTab(window.location.pathname) || "login";
+}
+
+function writeAuthPath(tab, { replace = false } = {}) {
+  if (typeof window === "undefined") return;
+  const path = AUTH_TAB_PATHS[tab];
+  if (!path) return;
+  if (normalizeAuthPath(window.location.pathname) === normalizeAuthPath(path)) return;
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method]({ authTab: tab }, "", path);
 }
 
 function readRememberedLoginIdentifier() {
@@ -876,7 +911,7 @@ function NoticeToast({ notice, onDismiss }) {
 
 function AuthCard({ onLogin }) {
   const { t } = useTheme();
-  const [tab, setTab] = useState("login");
+  const [tab, setTab] = useState(getInitialAuthTab);
   const [state, setState] = useState({ loading: false, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
   const [googleLoginRequest, setGoogleLoginRequest] = useState(0);
   const [notice, setNotice] = useState(null);
@@ -885,9 +920,26 @@ function AuthCard({ onLogin }) {
 
   const resetState = () => setState({ loading: false, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
 
-  const openTab = (nextTab) => {
+  useEffect(() => {
+    const handler = () => {
+      const nextTab = resolveAuthTab(window.location.pathname);
+      if (!nextTab) return;
+      if (nextTab === "register" && !REGISTER_ENABLED) {
+        setTab("login");
+        writeAuthPath("login", { replace: true });
+        return;
+      }
+      resetState();
+      setTab(nextTab);
+    };
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
+
+  const openTab = (nextTab, options = {}) => {
     resetState();
     setTab(nextTab);
+    writeAuthPath(nextTab, options);
   };
 
   const dismissNotice = useCallback(() => setNotice(null), []);
@@ -998,7 +1050,9 @@ function AuthCard({ onLogin }) {
     setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
     try {
       await changePassword(payload);
-      setState({ loading: false, error: "", message: "Đổi mật khẩu thành công. Bạn có thể quay lại đăng nhập.", socialMessage: "", socialError: "", accessNotice: null });
+      writeAuthPath("login", { replace: true });
+      setTab("login");
+      setState({ loading: false, error: "", message: "Đổi mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.", socialMessage: "", socialError: "", accessNotice: null });
       return true;
     } catch (error) {
       setState({ loading: false, error: error?.message || "Số điện thoại chưa đăng ký hoặc không thể đổi mật khẩu.", message: "", socialMessage: "", socialError: "", accessNotice: null });
