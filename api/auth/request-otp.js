@@ -72,7 +72,12 @@ export default async function handler(req, res) {
         },
         "Không thể gửi OTP qua SMS.",
       );
-      const reply = assertStocktradersSuccess(data, ["SendSmsOtpReply", "SendSmsOtpRequest"], "Không thể gửi OTP qua SMS.");
+      const reply = assertStocktradersSuccess(
+        data,
+        ["SendSmsOtpReply", "SendSmsOtpRequest"],
+        "Số điện thoại chưa đăng ký hoặc không thể gửi OTP.",
+        { requireCode: true },
+      );
 
       return res.status(200).json({
         channel: "phone",

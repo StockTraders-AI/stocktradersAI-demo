@@ -33,7 +33,12 @@ export default async function handler(req, res) {
       },
       "Không thể đổi mật khẩu.",
     );
-    assertStocktradersSuccess(data, ["UserChangePasswordReply", "UserChangePasswordRequest"], "Không thể đổi mật khẩu.");
+    assertStocktradersSuccess(
+      data,
+      ["UserChangePasswordReply", "UserChangePasswordRequest"],
+      "OTP không đúng, đã hết hạn hoặc số điện thoại chưa đăng ký.",
+      { requireCode: true },
+    );
 
     return res.status(200).json(data);
   } catch (error) {
