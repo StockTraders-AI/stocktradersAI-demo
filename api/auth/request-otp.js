@@ -9,6 +9,7 @@ import {
   getOtpPurpose,
   getRequestIp,
   getSendEmailOtpUrl,
+  getSendSmsOtpUrl,
   methodNotAllowed,
   normalizeEmail,
   normalizePhone,
@@ -61,6 +62,31 @@ export default async function handler(req, res) {
     }
 
     const phone = normalizePhone(body.phoneNumber || body.phone || body.identifier);
+    if (purpose === "change-password") {
+      const data = await postStocktradersJson(
+        getSendSmsOtpUrl(),
+        {
+          SendSmsOtpRequest: {
+            phone_number: phone,
+          },
+        },
+        "Không thể gửi OTP qua SMS.",
+      );
+      const reply = assertStocktradersSuccess(
+        data,
+        ["SendSmsOtpReply", "SendSmsOtpRequest"],
+        "Số điện thoại chưa đăng ký hoặc không thể gửi OTP.",
+        { requireCode: true },
+      );
+
+      return res.status(200).json({
+        channel: "phone",
+        phone,
+        reply,
+        raw: data,
+      });
+    }
+
     assertSmsConfig(config);
     await verifyTurnstileToken({ config, token: body.turnstileToken, remoteIp: ip });
     assertOtpRateLimit({ config, phone, purpose, ip });

@@ -539,20 +539,21 @@ export async function getAccessRights({ account }) {
   };
 }
 
-export async function changePassword({ phoneNumber, password, otpVerificationToken }) {
+export async function changePassword({ phoneNumber, password, otp }) {
   const normalizedPhone = normalizeText(phoneNumber);
+  const normalizedOtp = normalizeText(otp);
 
-  if (!normalizedPhone || !password) {
-    throw new Error("Vui lòng nhập số điện thoại và mật khẩu mới.");
+  if (!normalizedPhone || !password || !normalizedOtp) {
+    throw new Error("Vui lòng nhập số điện thoại, OTP và mật khẩu mới.");
   }
 
   const { data, reply } = await postJson(
     CHANGE_PASSWORD_API_URL,
     {
-      otpVerificationToken,
       UserChangePasswordRequest: {
         phone_number: normalizedPhone,
         password,
+        otp: normalizedOtp,
       },
     },
     REPLY_KEYS.changePassword,

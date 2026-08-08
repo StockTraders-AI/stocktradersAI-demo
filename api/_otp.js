@@ -10,7 +10,8 @@ const DEFAULT_OTP_PHONE_DAILY_LIMIT = 2;
 const DEFAULT_OTP_IP_HOURLY_LIMIT = 20;
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const STOCKTRADERS_REGISTER_URL = "https://stocktraders.vn/service/data/getUserRegister";
-const STOCKTRADERS_CHANGE_PASSWORD_URL = "https://stocktraders.vn/service/api/getUserChangePassword";
+const STOCKTRADERS_CHANGE_PASSWORD_URL = "https://stocktraders.vn/service/data/getUserChangePassword";
+const STOCKTRADERS_SEND_SMS_OTP_URL = "https://stocktraders.vn/service/data/getSendSmsOtp";
 const STOCKTRADERS_SEND_EMAIL_OTP_URL = "https://stocktraders.vn/service/data/getUserSendOtp";
 const STOCKTRADERS_VERIFY_EMAIL_OTP_URL = "https://stocktraders.vn/service/data/getVerifyEmailOtp";
 const otpRateStore = globalThis.__stocktradersOtpRateStore || new Map();
@@ -430,6 +431,10 @@ export function getChangePasswordUrl() {
   return normalizeText(process.env.STOCKTRADERS_CHANGE_PASSWORD_API_URL || STOCKTRADERS_CHANGE_PASSWORD_URL);
 }
 
+export function getSendSmsOtpUrl() {
+  return normalizeText(process.env.STOCKTRADERS_SEND_SMS_OTP_API_URL || STOCKTRADERS_SEND_SMS_OTP_URL);
+}
+
 export function getSendEmailOtpUrl() {
   return normalizeText(process.env.STOCKTRADERS_SEND_EMAIL_OTP_API_URL || STOCKTRADERS_SEND_EMAIL_OTP_URL);
 }
@@ -438,16 +443,46 @@ export function getVerifyEmailOtpUrl() {
   return normalizeText(process.env.STOCKTRADERS_VERIFY_EMAIL_OTP_API_URL || STOCKTRADERS_VERIFY_EMAIL_OTP_URL);
 }
 
-export function assertStocktradersSuccess(data, replyKeys, fallbackMessage) {
+export function assertStocktradersSuccess(data, replyKeys, fallbackMessage, { requireCode = false } = {}) {
   const reply = readStocktradersReply(data, replyKeys);
   const code = findLooseValue(reply, ["codeid", "code", "statuscode"]);
+  if (!code && requireCode) {
+    throw new Error(readStocktradersErrorMessage(reply, fallbackMessage));
+  }
   if (code && String(code).trim() !== "S0000") {
-    throw new Error(
-      findLooseValue(reply, ["message", "messsage", "codename", "description", "error"]) ||
-        fallbackMessage,
-    );
+    throw new Error(readStocktradersErrorMessage(reply, fallbackMessage));
   }
   return reply;
+}
+
+function readStocktradersErrorMessage(reply, fallbackMessage) {
+  const rawMessage = normalizeText(findLooseValue(reply, ["message", "messsage", "codename", "description", "error"]));
+  const normalized = rawMessage.toLowerCase();
+
+  if (
+    normalized.includes("user does not exist") ||
+    normalized.includes("user not exist") ||
+    normalized.includes("user doesn't exist") ||
+    normalized.includes("account does not exist") ||
+    normalized.includes("account not exist") ||
+    normalized.includes("not registered") ||
+    normalized.includes("not found")
+  ) {
+    return "Số điện thoại chưa đăng ký.";
+  }
+
+  if (
+    normalized.includes("otp") &&
+    (normalized.includes("invalid") || normalized.includes("incorrect") || normalized.includes("wrong"))
+  ) {
+    return "Mã OTP không chính xác.";
+  }
+
+  if (normalized.includes("otp") && (normalized.includes("expired") || normalized.includes("timeout"))) {
+    return "Mã OTP đã hết hạn. Vui lòng gửi lại mã.";
+  }
+
+  return rawMessage || fallbackMessage;
 }
 
 function readPositiveInt(value, fallback) {
