@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import changePasswordHandler from "./api/auth/change-password.js";
+import registerHandler from "./api/auth/register.js";
+import requestOtpHandler from "./api/auth/request-otp.js";
+import verifyOtpHandler from "./api/auth/verify-otp.js";
 import branchPath from "./api/branch-path.js";
 import cashflowBranch from "./api/cashflow-branch.js";
 import cashflowTicker from "./api/cashflow-ticker.js";
@@ -11,6 +15,7 @@ import doSongAdvice from "./api/do-song-advice.js";
 import portfolioChat from "./api/portfolio-chat.js";
 import smdt from "./api/smdt.js";
 import smdtTicker from "./api/smdt-ticker.js";
+import smsDlrHandler from "./api/sms/dlr.js";
 import stockNoti from "./api/stock-noti.js";
 import stockSignal from "./api/stock-signal.js";
 import stockWave from "./api/stock-wave.js";
@@ -51,11 +56,17 @@ import {
 } from "./embedded/stocktraders-web/stockDataDb.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
+
 const DIST_DIR = resolve(__dirname, "dist");
 const DOSONG_API_PREFIX = "/thi-truong";
 const PORT = Number(process.env.PORT || 3000);
 
 const apiHandlers = new Map([
+  ["/api/auth/request-otp", requestOtpHandler],
+  ["/api/auth/verify-otp", verifyOtpHandler],
+  ["/api/auth/register", registerHandler],
+  ["/api/auth/change-password", changePasswordHandler],
+  ["/api/sms/dlr", smsDlrHandler],
   ["/api/branch-path", branchPath],
   ["/api/cashflow-branch", cashflowBranch],
   ["/api/cashflow-ticker", cashflowTicker],
@@ -77,18 +88,22 @@ const apiHandlers = new Map([
   ["/api/index-daily-changes", indexDailyChanges],
 ]);
 
-
 initDoSongStockDataDb()
   .then(async () => {
     console.log(`Do-song DB ready at ${DOSONG_DB_PATH}`);
     let rows = await preloadDoSongStockWaveHistorySnapshot();
 
-    if (!rows.length && process.env.STOCK_WAVE_BACKFILL_ON_STARTUP !== "false") {
+    if (
+      !rows.length &&
+      process.env.STOCK_WAVE_BACKFILL_ON_STARTUP !== "false"
+    ) {
       try {
         const result = await backfillDoSongStockWaveHistoryFromApi();
         invalidateDoSongStockWaveHistorySnapshot();
         rows = await preloadDoSongStockWaveHistorySnapshot();
-        console.log(`Do-song history backfilled from API: ${result.allRows.length} rows`);
+        console.log(
+          `Do-song history backfilled from API: ${result.allRows.length} rows`,
+        );
       } catch (error) {
         console.error("Do-song history startup backfill failed", error);
       }
@@ -131,7 +146,6 @@ function attachResponseHelpers(res) {
     res.end(JSON.stringify(data));
   };
 }
-
 
 function stripDoSongApiPrefix(rawUrl = "") {
   return rawUrl.startsWith(DOSONG_API_PREFIX)
@@ -188,7 +202,10 @@ async function handleDoSongApi(req, res, url) {
     await callDoSongApi(doSongHandleWaveBottomConfirmPairs, req, res, rawUrl);
     return true;
   }
-  if (embeddedPath === "/api/stock-noti" || embeddedPath === "/api/stock-noti/stream") {
+  if (
+    embeddedPath === "/api/stock-noti" ||
+    embeddedPath === "/api/stock-noti/stream"
+  ) {
     await callDoSongApi(doSongHandleStockNoti, req, res, rawUrl);
     return true;
   }
@@ -284,8 +301,16 @@ createServer(async (req, res) => {
     req.url || "/",
     `http://${req.headers.host || "localhost"}`,
   );
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+
   if (await handleDoSongApi(req, res, url)) return;
   if (await handleApi(req, res, url)) return;
+  if (url.pathname.startsWith("/api/")) {
+    res.statusCode = 404;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(JSON.stringify({ error: "API route not found" }));
+    return;
+  }
   await handleStatic(req, res, url);
 }).listen(PORT, "0.0.0.0", () => {
   console.log(`StockTraders dashboard listening on port ${PORT}`);

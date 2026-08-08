@@ -9,6 +9,7 @@ CONTAINER_NAME="stocktraders-ai-fe-$ENV-container"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB_HOST_DIR=${STOCKTRADERS_DB_HOST_DIR:-"$SCRIPT_DIR/embedded/stocktraders-web/.stocktraders-db"}
 DB_CONTAINER_PATH=${STOCKTRADERS_DB_CONTAINER_PATH:-"/app/embedded/stocktraders-web/.stocktraders-db"}
+ENV_FILE=${STOCKTRADERS_ENV_FILE:-"$SCRIPT_DIR/.env"}
 
 if [ "$ENV" == "staging" ]; then
     PORT_MAPPING="3000:3000"
@@ -17,6 +18,13 @@ else
 fi
 
 mkdir -p "$DB_HOST_DIR"
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "Environment file not found at $ENV_FILE"
+    echo "Create it on the server or set STOCKTRADERS_ENV_FILE=/path/to/.env"
+    exit 1
+fi
+echo "Loading container environment from $ENV_FILE"
 
 # Pull the Docker image from Docker Hub
 echo "Pulling the Docker image $IMAGE_NAME:$TAG..."
@@ -59,7 +67,9 @@ docker run -d \
     --name "$CONTAINER_NAME" \
     --restart on-failure:2 \
     -p "$PORT_MAPPING" \
+    -e NODE_ENV=production \
     -e STOCKTRADERS_DB_DIR="$DB_CONTAINER_PATH" \
+    --env-file "$ENV_FILE" \
     --mount "type=bind,source=$DB_HOST_DIR,target=$DB_CONTAINER_PATH" \
     "$IMAGE_NAME:$TAG"
 
@@ -70,3 +80,19 @@ else
     echo "Failed to start container. Exiting."
     exit 1
 fi
+
+docker exec "$CONTAINER_NAME" node -e '
+const required = [
+  "FPT_SMS_CLIENT_ID",
+  "FPT_SMS_CLIENT_SECRET",
+  "FPT_SMS_BRANDNAME",
+  "FPT_SMS_OTP_SIGNING_SECRET",
+  "FPT_SMS_OTP_TEMPLATE",
+];
+const missing = required.filter((key) => !String(process.env[key] || "").trim());
+if (missing.length) {
+  console.error(`Container is missing SMS OTP environment variables: ${missing.join(", ")}`);
+  process.exit(1);
+}
+console.log("Container SMS OTP environment is ready.");
+'
