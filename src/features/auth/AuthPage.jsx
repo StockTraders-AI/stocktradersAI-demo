@@ -30,7 +30,7 @@ let turnstileScriptPromise = null;
  * nhập. Khi mở lại: đổi REGISTER_ENABLED = true là đủ — luồng đăng ký cũ
  * (RegisterForm + handleRegister) vẫn còn nguyên bên dưới.
  * ─────────────────────────────────────────────────────────────────────── */
-const REGISTER_ENABLED = true;
+const REGISTER_ENABLED = false;
 const REGISTER_NOTICE = {
   title: "Tính năng đăng ký đang nâng cấp",
   body: "Hiện tại hệ thống chỉ hỗ trợ đăng nhập. Bạn vui lòng dùng tài khoản đã có.",
