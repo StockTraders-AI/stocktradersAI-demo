@@ -10,7 +10,8 @@ const DEFAULT_OTP_PHONE_DAILY_LIMIT = 2;
 const DEFAULT_OTP_IP_HOURLY_LIMIT = 20;
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const STOCKTRADERS_REGISTER_URL = "https://stocktraders.vn/service/data/getUserRegister";
-const STOCKTRADERS_CHANGE_PASSWORD_URL = "https://stocktraders.vn/service/api/getUserChangePassword";
+const STOCKTRADERS_CHANGE_PASSWORD_URL = "https://stocktraders.vn/service/data/getUserChangePassword";
+const STOCKTRADERS_SEND_SMS_OTP_URL = "https://stocktraders.vn/service/data/getSendSmsOtp";
 const STOCKTRADERS_SEND_EMAIL_OTP_URL = "https://stocktraders.vn/service/data/getUserSendOtp";
 const STOCKTRADERS_VERIFY_EMAIL_OTP_URL = "https://stocktraders.vn/service/data/getVerifyEmailOtp";
 const otpRateStore = globalThis.__stocktradersOtpRateStore || new Map();
@@ -428,6 +429,10 @@ export function getRegisterUrl() {
 
 export function getChangePasswordUrl() {
   return normalizeText(process.env.STOCKTRADERS_CHANGE_PASSWORD_API_URL || STOCKTRADERS_CHANGE_PASSWORD_URL);
+}
+
+export function getSendSmsOtpUrl() {
+  return normalizeText(process.env.STOCKTRADERS_SEND_SMS_OTP_API_URL || STOCKTRADERS_SEND_SMS_OTP_URL);
 }
 
 export function getSendEmailOtpUrl() {

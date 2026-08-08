@@ -690,32 +690,21 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
-  const [challengeToken, setChallengeToken] = useState("");
-  const [verificationToken, setVerificationToken] = useState("");
   const [otpRequested, setOtpRequested] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState("");
-  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
   const normalizedPhone = normalizeFormText(phoneNumber);
   const normalizedOtp = normalizeFormText(otp);
-  const otpVerified = Boolean(verificationToken);
-  const currentStep = otpVerified ? "password" : otpRequested ? "otp" : "phone";
+  const canShowPassword = otpRequested && normalizedOtp.length === 6;
   const isBusy = isSubmitting || otpBusy;
-  const canSubmit = currentStep === "phone"
-    ? Boolean(normalizedPhone && (!TURNSTILE_SITE_KEY || turnstileToken))
-    : currentStep === "otp"
-      ? Boolean(normalizedPhone && challengeToken && normalizedOtp.length === 6)
-      : Boolean(normalizedPhone && password);
+  const canSubmit = otpRequested
+    ? Boolean(normalizedPhone && normalizedOtp.length === 6 && password)
+    : Boolean(normalizedPhone);
 
   useEffect(() => {
     setOtp("");
-    setChallengeToken("");
-    setVerificationToken("");
     setOtpRequested(false);
-    setTurnstileToken("");
-    setTurnstileResetKey((key) => key + 1);
     setPassword("");
     setOtpError("");
     setOtpMessage("");
@@ -735,62 +724,30 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
       return;
     }
 
-    if (currentStep === "phone") {
-      if (TURNSTILE_SITE_KEY && !turnstileToken) {
-        setOtpError("Vui lòng xác minh CAPTCHA trước khi gửi OTP.");
-        return;
-      }
-
+    if (!otpRequested) {
       setOtpBusy(true);
       setOtpError("");
       setOtpMessage("");
       try {
-        const result = await requestOtp({
+        await requestOtp({
           phoneNumber: normalizedPhone,
           contactType: "phone",
           purpose: "change-password",
-          turnstileToken,
         });
-        setChallengeToken(result.challengeToken || "");
         setOtpRequested(true);
         setOtp("");
         const sentMessage = `OTP đã gửi về số điện thoại ${normalizedPhone}. Vui lòng nhập mã để xác thực.`;
-        setOtpMessage(result.debugOtp ? `${sentMessage} Mã test: ${result.debugOtp}` : sentMessage);
+        setOtpMessage(sentMessage);
       } catch (err) {
         setOtpError(err?.message || "Không thể gửi OTP.");
       } finally {
         setOtpBusy(false);
-        setTurnstileToken("");
-        setTurnstileResetKey((key) => key + 1);
       }
       return;
     }
 
-    if (currentStep === "otp") {
-      if (normalizedOtp.length !== 6) {
-        setOtpError("Vui lòng nhập mã OTP 6 chữ số.");
-        return;
-      }
-
-      setOtpBusy(true);
-      setOtpError("");
-      setOtpMessage("");
-      try {
-        const result = await verifyOtp({
-          phoneNumber: normalizedPhone,
-          contactType: "phone",
-          purpose: "change-password",
-          otp,
-          challengeToken,
-        });
-        if (!result.verificationToken) throw new Error("Không nhận được phiên xác thực OTP. Vui lòng thử lại.");
-        setVerificationToken(result.verificationToken);
-        setOtpMessage("OTP hợp lệ. Vui lòng đặt mật khẩu mới.");
-      } catch (err) {
-        setOtpError(err?.message || "Không thể xác thực OTP.");
-      } finally {
-        setOtpBusy(false);
-      }
+    if (normalizedOtp.length !== 6) {
+      setOtpError("Vui lòng nhập mã OTP 6 chữ số.");
       return;
     }
 
@@ -804,24 +761,20 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
     const changed = await onSubmit?.({
       phoneNumber: normalizedPhone,
       password,
-      otpVerificationToken: verificationToken,
+      otp: normalizedOtp,
     });
     if (changed !== false) {
       setPhoneNumber("");
       setPassword("");
       setOtp("");
-      setChallengeToken("");
-      setVerificationToken("");
       setOtpRequested(false);
     }
   };
 
   const submitLabel = (() => {
     if (isSubmitting) return "Đang cập nhật...";
-    if (otpBusy && currentStep === "phone") return "Đang gửi OTP...";
-    if (otpBusy && currentStep === "otp") return "Đang xác thực OTP...";
-    if (currentStep === "otp") return "Xác thực OTP";
-    if (currentStep === "password") return "Cập nhật mật khẩu";
+    if (otpBusy) return "Đang gửi OTP...";
+    if (otpRequested) return "Cập nhật mật khẩu";
     return "Gửi OTP";
   })();
 
@@ -848,16 +801,7 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
         disabled={isBusy}
       />
 
-      {currentStep === "phone" && (
-        <TurnstileWidget
-          siteKey={TURNSTILE_SITE_KEY}
-          resetKey={`change-password-${normalizedPhone}-${turnstileResetKey}`}
-          disabled={isBusy}
-          onToken={setTurnstileToken}
-        />
-      )}
-
-      {currentStep === "otp" && (
+      {otpRequested && (
         <TextField
           label="Mã OTP"
           type="text"
@@ -871,7 +815,7 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
         />
       )}
 
-      {currentStep === "password" && (
+      {canShowPassword && (
         <TextField
           label="Mật khẩu mới"
           type="password"
