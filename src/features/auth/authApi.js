@@ -301,9 +301,12 @@ export async function loginUser({ identifier, password }) {
     throw new Error(readMessage(reply) || "Sai tài khoản hoặc mật khẩu.");
   }
 
+  const accessAccount = readAccountCandidate(reply, userName);
+
   return {
     authType: "password",
-    account: userName,
+    account: accessAccount,
+    accessAccount,
     userName,
     reply,
     raw: data,
