@@ -39,7 +39,10 @@ import {
   preloadStockWaveHistorySnapshot as preloadDoSongStockWaveHistorySnapshot,
 } from "./embedded/stocktraders-web/stockWaveHistoryCache.js";
 import { handleStockWaveTickers as doSongHandleStockWaveTickers } from "./embedded/stocktraders-web/stockWaveTickersCache.js";
-import { handleWaveBottomConfirmPairs as doSongHandleWaveBottomConfirmPairs } from "./embedded/stocktraders-web/waveBottomConfirmPairsCache.js";
+import {
+  handleWaveBottomConfirmPairs as doSongHandleWaveBottomConfirmPairs,
+  handleWaveBottomConfirmPairsStream as doSongHandleWaveBottomConfirmPairsStream,
+} from "./embedded/stocktraders-web/waveBottomConfirmPairsCache.js";
 import {
   handleStockNoti as doSongHandleStockNoti,
   startStockNotiSocket as startDoSongStockNotiSocket,
@@ -198,6 +201,12 @@ async function handleDoSongApi(req, res, url) {
     await callDoSongApi(doSongHandleStockWaveTickers, req, res, rawUrl);
     return true;
   }
+
+  if (embeddedPath === "/api/wave-bottom-confirm-pairs/stream") {
+    doSongHandleWaveBottomConfirmPairsStream(req, res);
+    return true;
+  }
+
   if (embeddedPath === "/api/wave-bottom-confirm-pairs") {
     await callDoSongApi(doSongHandleWaveBottomConfirmPairs, req, res, rawUrl);
     return true;

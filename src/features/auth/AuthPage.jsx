@@ -44,7 +44,10 @@ const AUTH_TAB_PATHS = {
 };
 
 const AUTH_PATH_TO_TAB = Object.fromEntries(
-  Object.entries(AUTH_TAB_PATHS).map(([tab, path]) => [normalizeAuthPath(path), tab]),
+  Object.entries(AUTH_TAB_PATHS).map(([tab, path]) => [
+    normalizeAuthPath(path),
+    tab,
+  ]),
 );
 
 function normalizeFormText(value) {
@@ -72,7 +75,8 @@ function writeAuthPath(tab, { replace = false } = {}) {
   if (typeof window === "undefined") return;
   const path = AUTH_TAB_PATHS[tab];
   if (!path) return;
-  if (normalizeAuthPath(window.location.pathname) === normalizeAuthPath(path)) return;
+  if (normalizeAuthPath(window.location.pathname) === normalizeAuthPath(path))
+    return;
   const method = replace ? "replaceState" : "pushState";
   window.history[method]({ authTab: tab }, "", path);
 }
@@ -88,7 +92,10 @@ function readRememberedLoginIdentifier() {
 function rememberLoginIdentifier({ identifier, remember }) {
   try {
     if (remember) {
-      localStorage.setItem(REMEMBERED_LOGIN_IDENTIFIER_KEY, normalizeFormText(identifier));
+      localStorage.setItem(
+        REMEMBERED_LOGIN_IDENTIFIER_KEY,
+        normalizeFormText(identifier),
+      );
       return;
     }
     localStorage.removeItem(REMEMBERED_LOGIN_IDENTIFIER_KEY);
@@ -99,9 +106,11 @@ function rememberLoginIdentifier({ identifier, remember }) {
 
 function resolveContactType(value, explicitType = "") {
   const requestedType = normalizeFormText(explicitType).toLowerCase();
-  if (requestedType === "email" || requestedType === "phone") return requestedType;
+  if (requestedType === "email" || requestedType === "phone")
+    return requestedType;
   const normalizedValue = normalizeFormText(value);
-  const looksLikePhone = /^[+\d().\-\s]+$/.test(normalizedValue) && /\d/.test(normalizedValue);
+  const looksLikePhone =
+    /^[+\d().\-\s]+$/.test(normalizedValue) && /\d/.test(normalizedValue);
   return looksLikePhone ? "phone" : "email";
 }
 
@@ -110,11 +119,14 @@ function isValidEmailFormat(value) {
 }
 
 async function fetchGoogleUserInfo(accessToken) {
-  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetch(
+    "https://www.googleapis.com/oauth2/v3/userinfo",
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error("Không thể lấy thông tin tài khoản Google.");
@@ -141,16 +153,24 @@ function AuthTopbar({ isMobile }) {
   const stamp = `${now.toLocaleDateString("vi-VN")} · ${now.toLocaleTimeString("vi-VN")}`;
 
   return (
-    <header style={{ ...styles.topbar, ...(!isMobile ? styles.topbarDesktop : null) }}>
+    <header
+      style={{ ...styles.topbar, ...(!isMobile ? styles.topbarDesktop : null) }}
+    >
       {isMobile ? (
-        <div style={styles.brandWrap}>
-          <div style={styles.logo}>
-            <i className="ti ti-chart-candle" style={{ color: "#fff", fontSize: 17 }} />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={styles.brandTitle}>StockTraders AI</div>
-            <div style={styles.brandSub}>Đăng nhập để tiếp tục</div>
-          </div>
+        <div style={styles.logo}>
+          <img
+            src={dark ? "/logo-header-dark.png" : "/logo-header-light.svg"}
+            alt="StockTraders — Time To Gain Profit"
+            style={{
+              width: "100%",
+              maxWidth: 190,
+              height: 38,
+              flexShrink: 0,
+              display: "block",
+              objectFit: "contain",
+              objectPosition: "left center",
+            }}
+          />
         </div>
       ) : (
         <div style={{ minWidth: 0, flexShrink: 0 }}>
@@ -166,7 +186,17 @@ function AuthTopbar({ isMobile }) {
               <span style={styles.indexName}>{idx.name}</span>
               <span style={{ ...styles.indexValue, ...mono }}>
                 {idx.val}
-                <span style={{ ...styles.indexPct, color: idx.rawPct == null ? "var(--t3)" : idx.rawPct >= 0 ? t.G : t.R }}>
+                <span
+                  style={{
+                    ...styles.indexPct,
+                    color:
+                      idx.rawPct == null
+                        ? "var(--t3)"
+                        : idx.rawPct >= 0
+                          ? t.G
+                          : t.R,
+                  }}
+                >
                   {idx.pct}
                 </span>
               </span>
@@ -196,10 +226,24 @@ function AuthTopbar({ isMobile }) {
             </div>
           </>
         )}
-        <button type="button" onClick={toggle} title="Đổi Sáng/Tối" style={styles.iconBtn}>
+        <button
+          type="button"
+          onClick={toggle}
+          title="Đổi Sáng/Tối"
+          style={styles.iconBtn}
+        >
           <i className={`ti ${dark ? "ti-sun" : "ti-moon"}`} />
         </button>
-        <div style={{ ...styles.avatar, background: t.Bs, borderColor: t.Bb, color: t.B }}>--</div>
+        <div
+          style={{
+            ...styles.avatar,
+            background: t.Bs,
+            borderColor: t.Bb,
+            color: t.B,
+          }}
+        >
+          --
+        </div>
       </div>
     </header>
   );
@@ -209,7 +253,14 @@ function AuthSidebar() {
   return <Sidebar curMod="dashboard" onNav={() => {}} showPremium />;
 }
 
-function TextField({ label, placeholder, onFocus, onBlur, groupStyle, ...props }) {
+function TextField({
+  label,
+  placeholder,
+  onFocus,
+  onBlur,
+  groupStyle,
+  ...props
+}) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -248,7 +299,9 @@ function SocialButtons({ onSelect, disabled, prefix = "Tiếp tục với" }) {
       style={{ ...styles.socialBtn, ...(disabled ? styles.disabledBtn : null) }}
     >
       <i className={`ti ${provider.icon}`} />
-      <span>{prefix} {provider.label}</span>
+      <span>
+        {prefix} {provider.label}
+      </span>
     </button>
   );
 }
@@ -264,20 +317,24 @@ function DividerText({ children = "hoặc" }) {
 }
 
 function loadTurnstileScript() {
-  if (typeof window === "undefined") return Promise.reject(new Error("Turnstile chỉ chạy trên browser."));
+  if (typeof window === "undefined")
+    return Promise.reject(new Error("Turnstile chỉ chạy trên browser."));
   if (window.turnstile) return Promise.resolve(window.turnstile);
   if (turnstileScriptPromise) return turnstileScriptPromise;
 
   turnstileScriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector("script[data-turnstile-script]");
     if (existing) {
-      existing.addEventListener("load", () => resolve(window.turnstile), { once: true });
+      existing.addEventListener("load", () => resolve(window.turnstile), {
+        once: true,
+      });
       existing.addEventListener("error", reject, { once: true });
       return;
     }
 
     const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.src =
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
     script.async = true;
     script.defer = true;
     script.dataset.turnstileScript = "true";
@@ -330,7 +387,14 @@ function TurnstileWidget({ siteKey, resetKey, disabled, onToken }) {
   return <div ref={containerRef} style={styles.turnstileBox} />;
 }
 
-function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, onVerified }) {
+function OtpControls({
+  identifier,
+  contactType,
+  phoneNumber,
+  purpose,
+  disabled,
+  onVerified,
+}) {
   const [otp, setOtp] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
   const [otpRequested, setOtpRequested] = useState(false);
@@ -342,10 +406,12 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
   const [verified, setVerified] = useState(false);
   const recipient = normalizeFormText(identifier || phoneNumber);
   const resolvedContactType = resolveContactType(recipient, contactType);
-  const targetLabel = resolvedContactType === "email" ? "email" : "số điện thoại";
-  const otpGuideMessage = recipient && !error && !message
-    ? `Bước OTP: nhấn Gửi OTP để nhận mã qua ${targetLabel}.`
-    : "";
+  const targetLabel =
+    resolvedContactType === "email" ? "email" : "số điện thoại";
+  const otpGuideMessage =
+    recipient && !error && !message
+      ? `Bước OTP: nhấn Gửi OTP để nhận mã qua ${targetLabel}.`
+      : "";
 
   useEffect(() => {
     setOtp("");
@@ -380,10 +446,15 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
       setChallengeToken(result.challengeToken || "");
       setOtpRequested(true);
       setOtp("");
-      const sentMessage = resolvedContactType === "email"
-        ? `OTP đã gửi vào email ${recipient}.`
-        : `OTP đã gửi về số điện thoại ${recipient}.`;
-      setMessage(result.debugOtp ? `${sentMessage} Mã test: ${result.debugOtp}` : sentMessage);
+      const sentMessage =
+        resolvedContactType === "email"
+          ? `OTP đã gửi vào email ${recipient}.`
+          : `OTP đã gửi về số điện thoại ${recipient}.`;
+      setMessage(
+        result.debugOtp
+          ? `${sentMessage} Mã test: ${result.debugOtp}`
+          : sentMessage,
+      );
     } catch (err) {
       setError(err?.message || "Không thể gửi OTP.");
     } finally {
@@ -418,7 +489,11 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
   };
 
   const isDisabled = disabled || busy;
-  const canVerify = Boolean(otpRequested && (resolvedContactType === "email" || challengeToken) && otp.trim().length === 6);
+  const canVerify = Boolean(
+    otpRequested &&
+    (resolvedContactType === "email" || challengeToken) &&
+    otp.trim().length === 6,
+  );
   const canSend = Boolean(recipient && (!TURNSTILE_SITE_KEY || turnstileToken));
 
   return (
@@ -439,15 +514,35 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
             maxLength={6}
             placeholder="123456"
             value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            onChange={(e) =>
+              setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+            }
             disabled={isDisabled || verified}
             style={styles.fieldInput}
           />
         </label>
-        <button type="button" onClick={handleSendOtp} disabled={isDisabled || !canSend} style={{ ...styles.otpBtn, ...(isDisabled || !canSend ? styles.disabledBtn : null) }}>
+        <button
+          type="button"
+          onClick={handleSendOtp}
+          disabled={isDisabled || !canSend}
+          style={{
+            ...styles.otpBtn,
+            ...(isDisabled || !canSend ? styles.disabledBtn : null),
+          }}
+        >
           {busy ? "..." : "Gửi OTP"}
         </button>
-        <button type="button" onClick={handleVerifyOtp} disabled={isDisabled || !canVerify || verified} style={{ ...styles.otpBtn, ...(isDisabled || !canVerify || verified ? styles.disabledBtn : null) }}>
+        <button
+          type="button"
+          onClick={handleVerifyOtp}
+          disabled={isDisabled || !canVerify || verified}
+          style={{
+            ...styles.otpBtn,
+            ...(isDisabled || !canVerify || verified
+              ? styles.disabledBtn
+              : null),
+          }}
+        >
           {verified ? "Đã xác thực" : "Xác thực"}
         </button>
       </div>
@@ -458,7 +553,12 @@ function OtpControls({ identifier, contactType, phoneNumber, purpose, disabled, 
   );
 }
 
-function GoogleLoginBridge({ requestKey, onSuccess, onError, onNonOAuthError }) {
+function GoogleLoginBridge({
+  requestKey,
+  onSuccess,
+  onError,
+  onNonOAuthError,
+}) {
   const handledRequestRef = useRef(0);
   const googleLogin = useGoogleLogin({
     scope: "openid email profile",
@@ -482,7 +582,10 @@ function StatusMessage({ type = "notice", children }) {
   if (!children) return null;
   const isError = type === "error";
   return (
-    <div role={isError ? "alert" : "status"} style={isError ? styles.errorBox : styles.noticeBox}>
+    <div
+      role={isError ? "alert" : "status"}
+      style={isError ? styles.errorBox : styles.noticeBox}
+    >
       <i className={`ti ${isError ? "ti-alert-circle" : "ti-info-circle"}`} />
       <span>{children}</span>
     </div>
@@ -499,54 +602,112 @@ function AccessLockedNotice({ notice }) {
         Chưa thuộc diện trải nghiệm Web
       </div>
       <div style={styles.accessLockedBody}>
-        Bạn không thuộc diện được trải nghiệm phiên bản Web đợt này, hiện chỉ dành cho khách đang sử dụng gói Premium.
+        Bạn không thuộc diện được trải nghiệm phiên bản Web đợt này, hiện chỉ
+        dành cho khách đang sử dụng gói Premium.
       </div>
     </div>
   );
 }
 
-function LoginForm({ onSubmit, onForgotPassword, onSocialLogin, isSubmitting, error, message, socialMessage, socialError, accessNotice }) {
+function LoginForm({
+  onSubmit,
+  onForgotPassword,
+  onSocialLogin,
+  isSubmitting,
+  error,
+  message,
+  socialMessage,
+  socialError,
+  accessNotice,
+}) {
   const [identifier, setIdentifier] = useState(readRememberedLoginIdentifier);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      onSubmit?.({ identifier, password, remember });
-    }}>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit?.({ identifier, password, remember });
+      }}
+    >
       <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} />
       <StatusMessage type="error">{socialError}</StatusMessage>
       <StatusMessage>{socialMessage}</StatusMessage>
       <DividerText />
 
-      <TextField label="Email hoặc số điện thoại" type="text" autoComplete="username" placeholder="name@congty.com hoặc 0912345678" value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={isSubmitting} />
-      <TextField label="Mật khẩu" type="password" autoComplete="current-password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
+      <TextField
+        label="Email hoặc số điện thoại"
+        type="text"
+        autoComplete="username"
+        placeholder="name@congty.com hoặc 0912345678"
+        value={identifier}
+        onChange={(e) => setIdentifier(e.target.value)}
+        disabled={isSubmitting}
+      />
+      <TextField
+        label="Mật khẩu"
+        type="password"
+        autoComplete="current-password"
+        placeholder="Nhập mật khẩu"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        disabled={isSubmitting}
+      />
 
       <div style={styles.helperRow}>
         <label style={styles.checkboxLabel}>
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} disabled={isSubmitting} />
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            disabled={isSubmitting}
+          />
           Ghi nhớ đăng nhập
         </label>
-        <button type="button" onClick={onForgotPassword} disabled={isSubmitting} style={styles.linkBtn}>Quên mật khẩu?</button>
+        <button
+          type="button"
+          onClick={onForgotPassword}
+          disabled={isSubmitting}
+          style={styles.linkBtn}
+        >
+          Quên mật khẩu?
+        </button>
       </div>
 
       <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
       <AccessLockedNotice notice={accessNotice} />
 
-      <button type="submit" disabled={isSubmitting} style={{ ...styles.submitBtn, ...(isSubmitting ? styles.disabledBtn : null) }}>
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        style={{
+          ...styles.submitBtn,
+          ...(isSubmitting ? styles.disabledBtn : null),
+        }}
+      >
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
       </button>
       <div style={styles.note}>
         <i className="ti ti-info-circle" style={{ fontSize: 14 }} />
-        10 năm lịch sử dò sóng, SMDT 49 ngành — dữ liệu cập nhật theo từng phiên.
+        10 năm lịch sử dò sóng, SMDT 49 ngành — dữ liệu cập nhật theo từng
+        phiên.
       </div>
     </form>
   );
 }
 
-function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, socialMessage, socialError, accessNotice }) {
+function RegisterForm({
+  onSubmit,
+  onSocialLogin,
+  isSubmitting,
+  error,
+  message,
+  socialMessage,
+  socialError,
+  accessNotice,
+}) {
   const [fullName, setFullName] = useState("");
   const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
@@ -562,12 +723,21 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, s
   const normalizedFullName = normalizeFormText(fullName);
   const normalizedContact = normalizeFormText(contact);
   const targetLabel = contactType === "email" ? "email" : "số điện thoại";
-  const contactFormatError = normalizedContact && contactType === "email" && !isValidEmailFormat(normalizedContact)
-    ? "Email không đúng định dạng."
-    : "";
+  const contactFormatError =
+    normalizedContact &&
+    contactType === "email" &&
+    !isValidEmailFormat(normalizedContact)
+      ? "Email không đúng định dạng."
+      : "";
   const isBusy = isSubmitting || otpBusy;
-  const hasRequiredFields = Boolean(normalizedFullName && normalizedContact && password);
-  const canSubmit = hasRequiredFields && !contactFormatError && (!TURNSTILE_SITE_KEY || otpRequested || turnstileToken) && (!otpRequested || otp.trim().length === 6);
+  const hasRequiredFields = Boolean(
+    normalizedFullName && normalizedContact && password,
+  );
+  const canSubmit =
+    hasRequiredFields &&
+    !contactFormatError &&
+    (!TURNSTILE_SITE_KEY || otpRequested || turnstileToken) &&
+    (!otpRequested || otp.trim().length === 6);
 
   useEffect(() => {
     setOtp("");
@@ -584,7 +754,9 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, s
     if (isBusy) return;
 
     if (!hasRequiredFields) {
-      setOtpError("Vui lòng nhập đầy đủ họ tên, email/số điện thoại và mật khẩu.");
+      setOtpError(
+        "Vui lòng nhập đầy đủ họ tên, email/số điện thoại và mật khẩu.",
+      );
       return;
     }
 
@@ -612,10 +784,15 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, s
         setChallengeToken(result.challengeToken || "");
         setOtpRequested(true);
         setOtp("");
-        const sentMessage = contactType === "email"
-          ? `OTP đã gửi vào email ${normalizedContact}. Vui lòng nhập mã để xác thực.`
-          : `OTP đã gửi về số điện thoại ${normalizedContact}. Vui lòng nhập mã để xác thực.`;
-        setOtpMessage(result.debugOtp ? `${sentMessage} Mã test: ${result.debugOtp}` : sentMessage);
+        const sentMessage =
+          contactType === "email"
+            ? `OTP đã gửi vào email ${normalizedContact}. Vui lòng nhập mã để xác thực.`
+            : `OTP đã gửi về số điện thoại ${normalizedContact}. Vui lòng nhập mã để xác thực.`;
+        setOtpMessage(
+          result.debugOtp
+            ? `${sentMessage} Mã test: ${result.debugOtp}`
+            : sentMessage,
+        );
       } catch (err) {
         setOtpError(err?.message || "Không thể gửi OTP.");
       } finally {
@@ -669,16 +846,47 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, s
 
   return (
     <form onSubmit={handleSubmit}>
-      <SocialButtons onSelect={onSocialLogin} disabled={isSubmitting} prefix="Đăng ký với" />
+      <SocialButtons
+        onSelect={onSocialLogin}
+        disabled={isSubmitting}
+        prefix="Đăng ký với"
+      />
       <StatusMessage type="error">{socialError}</StatusMessage>
       <StatusMessage>{socialMessage}</StatusMessage>
       <AccessLockedNotice notice={accessNotice} />
       <DividerText />
 
       <div style={styles.registerGrid}>
-        <TextField label="Họ và tên" type="text" autoComplete="new-password" placeholder="Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isBusy} groupStyle={styles.compactField} />
-        <TextField label="Email hoặc số điện thoại" type="text" autoComplete="new-password" placeholder="admin@yahoo.com hoặc 0123456789" value={contact} onChange={(e) => setContact(e.target.value)} disabled={isBusy} groupStyle={styles.compactField} />
-        <TextField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tối thiểu 8 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isBusy} groupStyle={styles.compactField} />
+        <TextField
+          label="Họ và tên"
+          type="text"
+          autoComplete="new-password"
+          placeholder="Nguyễn Văn A"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          disabled={isBusy}
+          groupStyle={styles.compactField}
+        />
+        <TextField
+          label="Email hoặc số điện thoại"
+          type="text"
+          autoComplete="new-password"
+          placeholder="admin@yahoo.com hoặc 0123456789"
+          value={contact}
+          onChange={(e) => setContact(e.target.value)}
+          disabled={isBusy}
+          groupStyle={styles.compactField}
+        />
+        <TextField
+          label="Mật khẩu"
+          type="password"
+          autoComplete="new-password"
+          placeholder="Tối thiểu 8 ký tự"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={isBusy}
+          groupStyle={styles.compactField}
+        />
       </div>
 
       {!otpRequested && (
@@ -696,9 +904,13 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, s
           inputMode="numeric"
           pattern="[0-9]*"
           maxLength={6}
-          placeholder={targetLabel === "email" ? "Mã trong email" : "Mã trong tin nhắn"}
+          placeholder={
+            targetLabel === "email" ? "Mã trong email" : "Mã trong tin nhắn"
+          }
           value={otp}
-          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          onChange={(e) =>
+            setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+          }
           disabled={isBusy}
           groupStyle={styles.registerPasswordField}
         />
@@ -710,18 +922,32 @@ function RegisterForm({ onSubmit, onSocialLogin, isSubmitting, error, message, s
       <StatusMessage>{otpMessage}</StatusMessage>
       <StatusMessage>{message}</StatusMessage>
 
-      <button type="submit" disabled={isBusy || !canSubmit} style={{ ...styles.submitBtn, ...(isBusy || !canSubmit ? styles.disabledBtn : null) }}>
+      <button
+        type="submit"
+        disabled={isBusy || !canSubmit}
+        style={{
+          ...styles.submitBtn,
+          ...(isBusy || !canSubmit ? styles.disabledBtn : null),
+        }}
+      >
         {submitLabel}
       </button>
       <div style={styles.note}>
         <i className="ti ti-info-circle" style={{ fontSize: 14 }} />
-        10 năm lịch sử dò sóng, SMDT 49 ngành — đăng ký miễn phí để bắt đầu ngay. Nâng cấp khi cần dữ liệu chuyên sâu không giới hạn.
+        10 năm lịch sử dò sóng, SMDT 49 ngành — đăng ký miễn phí để bắt đầu
+        ngay. Nâng cấp khi cần dữ liệu chuyên sâu không giới hạn.
       </div>
     </form>
   );
 }
 
-function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) {
+function ForgotPasswordForm({
+  onBack,
+  onSubmit,
+  isSubmitting,
+  error,
+  message,
+}) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -816,12 +1042,20 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
   return (
     <form onSubmit={handleSubmit}>
       <div style={styles.formHead}>
-        <button type="button" onClick={onBack} disabled={isBusy} style={styles.backBtn} title="Quay lại">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={isBusy}
+          style={styles.backBtn}
+          title="Quay lại"
+        >
           <i className="ti ti-arrow-left" />
         </button>
         <div>
           <div style={styles.formTitle}>Quên mật khẩu</div>
-          <div style={styles.formSub}>Cập nhật mật khẩu theo số điện thoại.</div>
+          <div style={styles.formSub}>
+            Cập nhật mật khẩu theo số điện thoại.
+          </div>
         </div>
       </div>
       <StatusMessage>{message}</StatusMessage>
@@ -845,7 +1079,9 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
           maxLength={6}
           placeholder="Mã trong tin nhắn"
           value={otp}
-          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          onChange={(e) =>
+            setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+          }
           disabled={isBusy}
         />
       )}
@@ -866,7 +1102,14 @@ function ForgotPasswordForm({ onBack, onSubmit, isSubmitting, error, message }) 
       <StatusMessage type="error">{error}</StatusMessage>
       <StatusMessage>{otpMessage}</StatusMessage>
 
-      <button type="submit" disabled={isBusy || !canSubmit} style={{ ...styles.submitBtn, ...(isBusy || !canSubmit ? styles.disabledBtn : null) }}>
+      <button
+        type="submit"
+        disabled={isBusy || !canSubmit}
+        style={{
+          ...styles.submitBtn,
+          ...(isBusy || !canSubmit ? styles.disabledBtn : null),
+        }}
+      >
         {submitLabel}
       </button>
     </form>
@@ -882,7 +1125,10 @@ function NoticeToast({ notice, onDismiss }) {
     if (!notice) return undefined;
     const raf = requestAnimationFrame(() => setShown(true));
     const hideTimer = setTimeout(() => setShown(false), NOTICE_VISIBLE_MS);
-    const dropTimer = setTimeout(() => onDismiss?.(), NOTICE_VISIBLE_MS + NOTICE_EXIT_MS);
+    const dropTimer = setTimeout(
+      () => onDismiss?.(),
+      NOTICE_VISIBLE_MS + NOTICE_EXIT_MS,
+    );
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(hideTimer);
@@ -894,8 +1140,21 @@ function NoticeToast({ notice, onDismiss }) {
 
   return (
     <div style={styles.toastWrap} aria-live="polite">
-      <div className="auth-toast" role="status" style={{ ...styles.toast, ...(shown ? styles.toastShown : null) }}>
-        <svg style={styles.toastIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <div
+        className="auth-toast"
+        role="status"
+        style={{ ...styles.toast, ...(shown ? styles.toastShown : null) }}
+      >
+        <svg
+          style={styles.toastIcon}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <circle cx="12" cy="12" r="10" />
           <line x1="12" y1="8" x2="12" y2="12" />
           <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -912,13 +1171,28 @@ function NoticeToast({ notice, onDismiss }) {
 function AuthCard({ onLogin }) {
   const { t } = useTheme();
   const [tab, setTab] = useState(getInitialAuthTab);
-  const [state, setState] = useState({ loading: false, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
+  const [state, setState] = useState({
+    loading: false,
+    error: "",
+    message: "",
+    socialMessage: "",
+    socialError: "",
+    accessNotice: null,
+  });
   const [googleLoginRequest, setGoogleLoginRequest] = useState(0);
   const [notice, setNotice] = useState(null);
   const isLogin = tab === "login";
   const isRegister = tab === "register";
 
-  const resetState = () => setState({ loading: false, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
+  const resetState = () =>
+    setState({
+      loading: false,
+      error: "",
+      message: "",
+      socialMessage: "",
+      socialError: "",
+      accessNotice: null,
+    });
 
   useEffect(() => {
     const handler = () => {
@@ -954,7 +1228,8 @@ function AuthCard({ onLogin }) {
   };
 
   const completeLogin = async (session, remember = true) => {
-    const account = session.accessAccount || session.account || session.userName;
+    const account =
+      session.accessAccount || session.account || session.userName;
     const accessRights = await getAccessRights({ account });
     onLogin?.({ ...session, accessRights, remember });
   };
@@ -987,32 +1262,69 @@ function AuthCard({ onLogin }) {
       });
       await completeLogin(session, true);
     } catch (error) {
-      if (error instanceof AccessDeniedError || error?.code === "ACCESS_DENIED") {
+      if (
+        error instanceof AccessDeniedError ||
+        error?.code === "ACCESS_DENIED"
+      ) {
         showAccessNotice(error, error?.account);
         return;
       }
-      setState({ loading: false, error: "", message: "", socialMessage: "", socialError: error?.message || "Không thể đăng nhập Google.", accessNotice: null });
+      setState({
+        loading: false,
+        error: "",
+        message: "",
+        socialMessage: "",
+        socialError: error?.message || "Không thể đăng nhập Google.",
+        accessNotice: null,
+      });
     }
   };
 
   const handleLogin = async (credentials) => {
-    setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
+    setState({
+      loading: true,
+      error: "",
+      message: "",
+      socialMessage: "",
+      socialError: "",
+      accessNotice: null,
+    });
     try {
       const session = await loginUser(credentials);
       rememberLoginIdentifier(credentials);
       await completeLogin(session, credentials.remember);
     } catch (error) {
-      if (error instanceof AccessDeniedError || error?.code === "ACCESS_DENIED") {
+      if (
+        error instanceof AccessDeniedError ||
+        error?.code === "ACCESS_DENIED"
+      ) {
         showAccessNotice(error, credentials.identifier);
         return;
       }
-      setState({ loading: false, error: error?.message || "Không thể đăng nhập. Vui lòng thử lại.", message: "", socialMessage: "", socialError: "", accessNotice: null });
+      setState({
+        loading: false,
+        error: error?.message || "Không thể đăng nhập. Vui lòng thử lại.",
+        message: "",
+        socialMessage: "",
+        socialError: "",
+        accessNotice: null,
+      });
     }
   };
 
   const handleSocialLogin = async () => {
-    const socialMessage = tab === "register" ? "Đang đăng ký bằng Google..." : "Đang kết nối Google...";
-    setState({ loading: true, error: "", message: "", socialMessage, socialError: "", accessNotice: null });
+    const socialMessage =
+      tab === "register"
+        ? "Đang đăng ký bằng Google..."
+        : "Đang kết nối Google...";
+    setState({
+      loading: true,
+      error: "",
+      message: "",
+      socialMessage,
+      socialError: "",
+      accessNotice: null,
+    });
     if (!GOOGLE_CLIENT_ID) {
       setState({
         loading: false,
@@ -1028,40 +1340,82 @@ function AuthCard({ onLogin }) {
   };
 
   const handleRegister = async (payload) => {
-    setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
+    setState({
+      loading: true,
+      error: "",
+      message: "",
+      socialMessage: "",
+      socialError: "",
+      accessNotice: null,
+    });
     try {
       await registerUser(payload);
       setState({
         loading: false,
         error: "",
-        message: "Tạo tài khoản thành công. Vui lòng đăng nhập để kiểm tra quyền truy cập.",
+        message:
+          "Tạo tài khoản thành công. Vui lòng đăng nhập để kiểm tra quyền truy cập.",
         socialMessage: "",
         socialError: "",
         accessNotice: null,
       });
       return true;
     } catch (error) {
-      setState({ loading: false, error: error?.message || "Không thể tạo tài khoản.", message: "", socialMessage: "", socialError: "", accessNotice: null });
+      setState({
+        loading: false,
+        error: error?.message || "Không thể tạo tài khoản.",
+        message: "",
+        socialMessage: "",
+        socialError: "",
+        accessNotice: null,
+      });
       return false;
     }
   };
 
   const handleChangePassword = async (payload) => {
-    setState({ loading: true, error: "", message: "", socialMessage: "", socialError: "", accessNotice: null });
+    setState({
+      loading: true,
+      error: "",
+      message: "",
+      socialMessage: "",
+      socialError: "",
+      accessNotice: null,
+    });
     try {
       await changePassword(payload);
       writeAuthPath("login", { replace: true });
       setTab("login");
-      setState({ loading: false, error: "", message: "Đổi mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.", socialMessage: "", socialError: "", accessNotice: null });
+      setState({
+        loading: false,
+        error: "",
+        message:
+          "Đổi mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.",
+        socialMessage: "",
+        socialError: "",
+        accessNotice: null,
+      });
       return true;
     } catch (error) {
-      setState({ loading: false, error: error?.message || "Số điện thoại chưa đăng ký hoặc không thể đổi mật khẩu.", message: "", socialMessage: "", socialError: "", accessNotice: null });
+      setState({
+        loading: false,
+        error:
+          error?.message ||
+          "Số điện thoại chưa đăng ký hoặc không thể đổi mật khẩu.",
+        message: "",
+        socialMessage: "",
+        socialError: "",
+        accessNotice: null,
+      });
       return false;
     }
   };
 
   return (
-    <section className={isRegister ? "auth-register-card" : undefined} style={{ ...styles.card, ...(isRegister ? styles.registerCard : null) }}>
+    <section
+      className={isRegister ? "auth-register-card" : undefined}
+      style={{ ...styles.card, ...(isRegister ? styles.registerCard : null) }}
+    >
       {GOOGLE_CLIENT_ID && (
         <GoogleLoginBridge
           requestKey={googleLoginRequest}
@@ -1072,7 +1426,10 @@ function AuthCard({ onLogin }) {
               error: "",
               message: "",
               socialMessage: "",
-              socialError: error?.error_description || error?.error || "Không thể đăng nhập Google.",
+              socialError:
+                error?.error_description ||
+                error?.error ||
+                "Không thể đăng nhập Google.",
               accessNotice: null,
             });
           }}
@@ -1082,35 +1439,45 @@ function AuthCard({ onLogin }) {
               error: "",
               message: "",
               socialMessage: "",
-              socialError: "Cửa sổ đăng nhập Google đã bị đóng hoặc bị trình duyệt chặn.",
+              socialError:
+                "Cửa sổ đăng nhập Google đã bị đóng hoặc bị trình duyệt chặn.",
               accessNotice: null,
             });
           }}
         />
       )}
       {tab !== "forgot" && (
-        <div style={styles.tabs} role="tablist" aria-label="Chọn hình thức xác thực">
-        <button
-          type="button"
-          onClick={() => openTab("login")}
-          style={{ ...styles.tab, ...(isLogin ? { background: t.B, color: "#fff" } : null) }}
+        <div
+          style={styles.tabs}
+          role="tablist"
+          aria-label="Chọn hình thức xác thực"
         >
-          Đăng nhập
-        </button>
-        <button
-          type="button"
-          onClick={openRegisterTab}
-          aria-disabled={!REGISTER_ENABLED}
-          title={REGISTER_ENABLED ? undefined : REGISTER_NOTICE.title}
-          style={{
-            ...styles.tab,
-            ...(isRegister ? { background: t.B, color: "#fff" } : null),
-            ...(REGISTER_ENABLED ? null : styles.tabLocked),
-          }}
-        >
-          Đăng ký
-          {!REGISTER_ENABLED && <span style={styles.lockBadge}>Nâng cấp</span>}
-        </button>
+          <button
+            type="button"
+            onClick={() => openTab("login")}
+            style={{
+              ...styles.tab,
+              ...(isLogin ? { background: t.B, color: "#fff" } : null),
+            }}
+          >
+            Đăng nhập
+          </button>
+          <button
+            type="button"
+            onClick={openRegisterTab}
+            aria-disabled={!REGISTER_ENABLED}
+            title={REGISTER_ENABLED ? undefined : REGISTER_NOTICE.title}
+            style={{
+              ...styles.tab,
+              ...(isRegister ? { background: t.B, color: "#fff" } : null),
+              ...(REGISTER_ENABLED ? null : styles.tabLocked),
+            }}
+          >
+            Đăng ký
+            {!REGISTER_ENABLED && (
+              <span style={styles.lockBadge}>Nâng cấp</span>
+            )}
+          </button>
         </div>
       )}
 
@@ -1148,7 +1515,11 @@ function AuthCard({ onLogin }) {
           message={state.message}
         />
       )}
-      <NoticeToast key={notice?.key} notice={notice} onDismiss={dismissNotice} />
+      <NoticeToast
+        key={notice?.key}
+        notice={notice}
+        onDismiss={dismissNotice}
+      />
     </section>
   );
 }
@@ -1174,7 +1545,9 @@ export function AuthPage({ onLogin }) {
       ) : (
         <>
           <AuthSidebar />
-          <main style={{ ...styles.main, gridColumn: 2, padding: "32px 24px 40px" }}>
+          <main
+            style={{ ...styles.main, gridColumn: 2, padding: "32px 24px 40px" }}
+          >
             <AuthCard onLogin={onLogin} />
           </main>
         </>
@@ -1221,27 +1594,54 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "0 20px",
+    padding: "0 20px 0 0",
     gap: 16,
   },
   topbarDesktop: {
     gridColumn: 2,
   },
-  brandWrap: { display: "flex", alignItems: "center", gap: 10, minWidth: 0, flexShrink: 0 },
-  logo: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+  brandWrap: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    background: "linear-gradient(135deg,#7C3AED,#4F46E5)",
+    gap: 10,
+    minWidth: 0,
     flexShrink: 0,
   },
-  brandTitle: { fontSize: 14, fontWeight: 800, color: "var(--t1)", letterSpacing: "-.2px", whiteSpace: "nowrap" },
-  brandSub: { fontSize: 10.5, color: "var(--t3)", marginTop: 1, whiteSpace: "nowrap" },
-  pageTitle: { fontSize: 15, fontWeight: 800, color: "var(--t1)", letterSpacing: "-.2px", whiteSpace: "nowrap" },
-  pageSub: { fontSize: 11, color: "var(--t3)", marginTop: 1, whiteSpace: "nowrap" },
+  logo: {
+    height: 52,
+    display: "flex",
+    alignItems: "center",
+    padding: "0 16px",
+    gap: 10,
+    borderBottom: "0.5px solid var(--bdr)",
+    flexShrink: 0,
+  },
+  brandTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: "var(--t1)",
+    letterSpacing: "-.2px",
+    whiteSpace: "nowrap",
+  },
+  brandSub: {
+    fontSize: 10.5,
+    color: "var(--t3)",
+    marginTop: 1,
+    whiteSpace: "nowrap",
+  },
+  pageTitle: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: "var(--t1)",
+    letterSpacing: "-.2px",
+    whiteSpace: "nowrap",
+  },
+  pageSub: {
+    fontSize: 11,
+    color: "var(--t3)",
+    marginTop: 1,
+    whiteSpace: "nowrap",
+  },
   indexWrap: { display: "flex", gap: 7, minWidth: 0, flex: 1 },
   indexPill: {
     display: "flex",
@@ -1253,12 +1653,36 @@ const styles = {
     padding: "5px 10px",
     minWidth: 0,
   },
-  indexName: { fontSize: 10, color: "var(--t3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em" },
+  indexName: {
+    fontSize: 10,
+    color: "var(--t3)",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: ".04em",
+  },
   indexValue: { fontSize: 13, color: "var(--t1)" },
   indexPct: { fontSize: 10, marginLeft: 5, fontWeight: 700 },
-  topbarActions: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
-  liveStamp: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--t3)", whiteSpace: "nowrap" },
-  liveDot: { width: 6, height: 6, borderRadius: "50%", display: "inline-block", animation: "pulse 2s infinite" },
+  topbarActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  liveStamp: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 11,
+    color: "var(--t3)",
+    whiteSpace: "nowrap",
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: "50%",
+    display: "inline-block",
+    animation: "pulse 2s infinite",
+  },
   iconBtn: {
     width: 32,
     height: 32,
@@ -1272,7 +1696,15 @@ const styles = {
     cursor: "pointer",
     flexShrink: 0,
   },
-  ping: { position: "absolute", top: 5, right: 5, width: 6, height: 6, borderRadius: "50%", border: "1.5px solid var(--surf)" },
+  ping: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: "50%",
+    border: "1.5px solid var(--surf)",
+  },
   avatar: {
     width: 32,
     height: 32,
@@ -1381,7 +1813,7 @@ const styles = {
   lockBadge: {
     fontSize: 9,
     fontWeight: 700,
-    letterSpacing: .3,
+    letterSpacing: 0.3,
     padding: "2px 6px",
     borderRadius: 999,
     background: "var(--Bs)",
@@ -1494,7 +1926,13 @@ const styles = {
   fieldGroup: { display: "block", marginBottom: 14 },
   compactField: { marginBottom: 0 },
   registerPasswordField: { marginBottom: 0 },
-  fieldLabel: { display: "block", marginBottom: 6, color: "var(--t2)", fontSize: 12, fontWeight: 600 },
+  fieldLabel: {
+    display: "block",
+    marginBottom: 6,
+    color: "var(--t2)",
+    fontSize: 12,
+    fontWeight: 600,
+  },
   fieldInput: {
     width: "100%",
     height: 38,
@@ -1571,9 +2009,25 @@ const styles = {
     lineHeight: 1.45,
     marginTop: 4,
   },
-  helperRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 7, fontSize: 11, color: "var(--t3)" },
+  helperRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 7,
+    fontSize: 11,
+    color: "var(--t3)",
+  },
   checkboxLabel: { display: "flex", alignItems: "center", gap: 7, minWidth: 0 },
-  linkBtn: { border: "none", background: "transparent", color: "var(--B)", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
+  linkBtn: {
+    border: "none",
+    background: "transparent",
+    color: "var(--B)",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
   errorBox: {
     display: "flex",
     alignItems: "flex-start",

@@ -4,11 +4,19 @@ import {
   upsertWaveBottomRows,
 } from "./stockDataDb.js";
 
-const WAVE_BOTTOM_PAIRS_URL = process.env.WAVE_BOTTOM_PAIRS_URL || "https://stocktradersai.vn/service/data/getWaveBottomConfirmPairs";
-const VNINDEX_TRADE_URL = process.env.VNINDEX_TRADE_URL || "https://stocktradersai.vn/service/data/getTotalTrade?ticker=VNINDEX";
-const VNINDEX_TRADE_REAL_URL = process.env.VNINDEX_TRADE_REAL_URL || "https://stocktraders.vn/service/data/getTotalTradeReal";
+const WAVE_BOTTOM_PAIRS_URL =
+  process.env.WAVE_BOTTOM_PAIRS_URL ||
+  "https://stocktradersai.vn/service/data/getWaveBottomConfirmPairs";
+const VNINDEX_TRADE_URL =
+  process.env.VNINDEX_TRADE_URL ||
+  "https://stocktradersai.vn/service/data/getTotalTrade?ticker=VNINDEX";
+const VNINDEX_TRADE_REAL_URL =
+  process.env.VNINDEX_TRADE_REAL_URL ||
+  "https://stocktraders.vn/service/data/getTotalTradeReal";
 const CACHE_VERSION = 24;
-const UPSTREAM_TIMEOUT_MS = Number(process.env.WAVE_BOTTOM_UPSTREAM_TIMEOUT_MS || 600000);
+const UPSTREAM_TIMEOUT_MS = Number(
+  process.env.WAVE_BOTTOM_UPSTREAM_TIMEOUT_MS || 600000,
+);
 const ZIGZAG_THRESHOLD = 0.052;
 const MARKET_TIME_ZONE = "Asia/Bangkok";
 const REFRESH_SCHEDULE = [
@@ -16,11 +24,21 @@ const REFRESH_SCHEDULE = [
   { id: "1000", label: "10:00", minutes: 10 * 60 },
 ];
 const PAIRS_REQUEST = { count: 4 };
-const VNINDEX_TRADE_REAL_REQUEST = { TotalTradeRealRequest: { account: "stocktraders2013" } };
+const VNINDEX_TRADE_REAL_REQUEST = {
+  TotalTradeRealRequest: { account: "stocktraders2013" },
+};
 let memoryCache = null;
 let memoryCacheKey = "";
 let pendingRequest = null;
 let pendingRequestKey = "";
+
+let realtimeRecalcQueue = Promise.resolve();
+let runningPeakState = {
+  waveKey: "",
+  high: 0,
+};
+
+const waveBottomRealtimeClients = new Set();
 
 function getMarketNowParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -32,7 +50,9 @@ function getMarketNowParts(date = new Date()) {
     minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(date);
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const lookup = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
   return {
     date: `${lookup.year}-${lookup.month}-${lookup.day}`,
     hour: Number(lookup.hour),
@@ -94,28 +114,28 @@ function normalizeDateKey(value) {
 function getPayloadDate(payload) {
   return normalizeDateKey(
     payload?.date ??
-    payload?.tradingDate ??
-    payload?.ngay ??
-    payload?.tradeDate ??
-    payload?.sourceDate ??
-    payload?.requestedDate ??
-    payload?.data?.date ??
-    payload?.data?.tradingDate ??
-    payload?.data?.ngay ??
-    payload?.data?.tradeDate
+      payload?.tradingDate ??
+      payload?.ngay ??
+      payload?.tradeDate ??
+      payload?.sourceDate ??
+      payload?.requestedDate ??
+      payload?.data?.date ??
+      payload?.data?.tradingDate ??
+      payload?.data?.ngay ??
+      payload?.data?.tradeDate,
   );
 }
 
 function getRowDate(row, fallbackDate = "") {
   return normalizeDateKey(
     row?.date ??
-    row?.tradingDate ??
-    row?.ngay ??
-    row?.tradeDate ??
-    row?.time ??
-    row?.datetime ??
-    row?.createdAt ??
-    fallbackDate
+      row?.tradingDate ??
+      row?.ngay ??
+      row?.tradeDate ??
+      row?.time ??
+      row?.datetime ??
+      row?.createdAt ??
+      fallbackDate,
   );
 }
 
@@ -123,8 +143,7 @@ function hasTradeFields(row) {
   return Boolean(
     row &&
     typeof row === "object" &&
-    (
-      row.high !== undefined ||
+    (row.high !== undefined ||
       row.High !== undefined ||
       row.h !== undefined ||
       row.low !== undefined ||
@@ -136,8 +155,7 @@ function hasTradeFields(row) {
       row.price !== undefined ||
       row.lastPrice !== undefined ||
       row.matchPrice !== undefined ||
-      row.gia !== undefined
-    )
+      row.gia !== undefined),
   );
 }
 
@@ -196,7 +214,11 @@ function toNumber(value) {
 }
 
 function withTimeout(options = {}) {
-  if (typeof AbortSignal === "undefined" || typeof AbortSignal.timeout !== "function") return options;
+  if (
+    typeof AbortSignal === "undefined" ||
+    typeof AbortSignal.timeout !== "function"
+  )
+    return options;
   return { ...options, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) };
 }
 
@@ -214,7 +236,11 @@ async function writeDailyCache(rows, cacheKey = getCacheKey()) {
     cachedAt: new Date().toISOString(),
     rows,
   };
-  await upsertWaveBottomRows(rows, { cacheKey, source: "api", calcVersion: String(CACHE_VERSION) });
+  await upsertWaveBottomRows(rows, {
+    cacheKey,
+    source: "api",
+    calcVersion: String(CACHE_VERSION),
+  });
   return setMemoryCache(payload, cacheKey);
 }
 
@@ -222,25 +248,31 @@ async function readDailyCache(cacheKey) {
   if (!cacheKey) return null;
   const rows = await getWaveBottomRowsFromDb(cacheKey);
   if (!rows?.length) return null;
-  return setMemoryCache({
-    success: true,
-    cacheVersion: CACHE_VERSION,
+  return setMemoryCache(
+    {
+      success: true,
+      cacheVersion: CACHE_VERSION,
+      cacheKey,
+      cachedAt: new Date().toISOString(),
+      rows,
+    },
     cacheKey,
-    cachedAt: new Date().toISOString(),
-    rows,
-  }, cacheKey);
+  );
 }
 
 async function readLatestDiskCache() {
   const rows = await getWaveBottomRowsFromDb();
   if (!rows?.length) return null;
-  return setMemoryCache({
-    success: true,
-    cacheVersion: CACHE_VERSION,
-    cacheKey: getCacheKey(),
-    cachedAt: new Date().toISOString(),
-    rows,
-  }, getCacheKey());
+  return setMemoryCache(
+    {
+      success: true,
+      cacheVersion: CACHE_VERSION,
+      cacheKey: getCacheKey(),
+      cachedAt: new Date().toISOString(),
+      rows,
+    },
+    getCacheKey(),
+  );
 }
 
 async function readLatestLegacyDiskCache() {
@@ -251,12 +283,20 @@ function normalizeTradeRows(payload) {
   const payloadDate = getPayloadDate(payload);
   return getTradeRows(payload)
     .filter((row) => {
-      const ticker = String(row?.ticker || row?.symbol || row?.code || "").toUpperCase();
+      const ticker = String(
+        row?.ticker || row?.symbol || row?.code || "",
+      ).toUpperCase();
       return !ticker || ticker === "VNINDEX";
     })
     .map((row) => {
       const fallbackPrice = toNumber(
-        row?.close ?? row?.Close ?? row?.c ?? row?.price ?? row?.lastPrice ?? row?.matchPrice ?? row?.gia
+        row?.close ??
+          row?.Close ??
+          row?.c ??
+          row?.price ??
+          row?.lastPrice ??
+          row?.matchPrice ??
+          row?.gia,
       );
       return {
         date: getRowDate(row, payloadDate) || getMarketDateKey(),
@@ -269,15 +309,264 @@ function normalizeTradeRows(payload) {
     .map((row, index) => ({ ...row, index }));
 }
 
+function getLatestWaveBottomRow(rows = []) {
+  return (
+    [...rows]
+      .filter((row) => row?.confirm_wave_date)
+      .sort((a, b) =>
+        String(a.confirm_wave_date).localeCompare(String(b.confirm_wave_date)),
+      )
+      .pop() || null
+  );
+}
+
+function collectRealtimeRows(value, tickerHint = "", depth = 0, result = []) {
+  if (!value || depth > 6) {
+    return result;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectRealtimeRows(item, tickerHint, depth + 1, result);
+    }
+
+    return result;
+  }
+
+  if (typeof value !== "object") {
+    return result;
+  }
+
+  const explicitTicker = String(
+    value?.ticker ?? value?.symbol ?? value?.code ?? tickerHint ?? "",
+  ).toUpperCase();
+
+  if (hasTradeFields(value)) {
+    result.push({
+      ticker: explicitTicker,
+      row: value,
+    });
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    if (!child || typeof child !== "object") {
+      continue;
+    }
+
+    const keyUpper = String(key).toUpperCase();
+
+    collectRealtimeRows(
+      child,
+      keyUpper === "VNINDEX" ? "VNINDEX" : tickerHint,
+      depth + 1,
+      result,
+    );
+  }
+
+  return result;
+}
+
+function getRealtimeHigh(payload) {
+  const rows = collectRealtimeRows(payload);
+
+  const highs = rows
+    .filter(({ ticker }) => ticker === "VNINDEX")
+    .map(({ row }) => toNumber(row?.high ?? row?.High ?? row?.h))
+    .filter((high) => high > 0);
+
+  if (!highs.length) {
+    return 0;
+  }
+
+  return Math.max(...highs);
+}
+
+async function recalculateWaveBottomRealtime(realtimePayload) {
+  const incomingHigh = getRealtimeHigh(realtimePayload);
+
+  if (!incomingHigh) return null;
+
+  // Lấy dữ liệu đang lưu DB
+  const oldRows = await getWaveBottomRowsFromDb();
+
+  if (!oldRows?.length) return null;
+
+  const latestOldRow = getLatestWaveBottomRow(oldRows);
+
+  if (!latestOldRow) {
+    return null;
+  }
+
+  // Mỗi chân sóng có 1 key riêng
+  const waveKey = [
+    String(latestOldRow.confirm_wave_date || ""),
+    String(latestOldRow.prepare_bottom_date || ""),
+  ].join("|");
+
+  const dbRunningHigh = toNumber(latestOldRow.zigzag_peak_price);
+
+  // Nếu vừa chuyển sang chân sóng mới
+  // thì bỏ high của chân sóng cũ
+  if (runningPeakState.waveKey !== waveKey) {
+    runningPeakState = {
+      waveKey,
+      high: dbRunningHigh,
+    };
+  }
+
+  const currentRunningHigh = Math.max(runningPeakState.high, dbRunningHigh);
+
+  // Chỉ high mới cao hơn high cao nhất mới tính
+  if (incomingHigh <= currentRunningHigh) {
+    return null;
+  }
+
+  console.log(`[VNINDEX NEW HIGH] ${currentRunningHigh} -> ${incomingHigh}`);
+
+  // Realtime payload chính là dữ liệu real.
+  const [pairsPayload, vnindexPayload] = await Promise.all([
+    fetchPairs(),
+    fetchVnindexTrades(),
+  ]);
+
+  const realtimeVnindexRows = collectRealtimeRows(realtimePayload)
+    .filter(({ ticker }) => ticker === "VNINDEX")
+    .map(({ row }) => ({
+      ticker: "VNINDEX",
+
+      date:
+        getRowDate(row, getPayloadDate(realtimePayload)) || getMarketDateKey(),
+
+      high: toNumber(row?.high ?? row?.High ?? row?.h),
+
+      low:
+        toNumber(row?.low ?? row?.Low ?? row?.l) ||
+        toNumber(row?.high ?? row?.High ?? row?.h),
+    }))
+    .filter((row) => row.high > 0);
+
+  const newRows = buildWaveBottomRows(
+    pairsPayload,
+    vnindexPayload,
+    realtimeVnindexRows,
+  );
+
+  if (!newRows.length) return null;
+
+  const changedRows = [];
+
+  for (const newRow of newRows) {
+    const oldRow = oldRows.find(
+      (row) =>
+        String(row.confirm_wave_date || "") ===
+          String(newRow.confirm_wave_date || "") &&
+        String(row.prepare_bottom_date || "") ===
+          String(newRow.prepare_bottom_date || ""),
+    );
+
+    if (
+      !oldRow ||
+      toNumber(oldRow.zigzag_peak_price) !==
+        toNumber(newRow.zigzag_peak_price) ||
+      toNumber(oldRow.increase_points) !== toNumber(newRow.increase_points) ||
+      toNumber(oldRow.duration_sessions) !==
+        toNumber(newRow.duration_sessions) ||
+      String(oldRow.zigzag_peak_date || "") !==
+        String(newRow.zigzag_peak_date || "")
+    ) {
+      changedRows.push(newRow);
+    }
+  }
+
+  // high mới nhưng kết quả bảng không đổi
+  if (!changedRows.length) {
+    runningPeakState = {
+      waveKey,
+      high: incomingHigh,
+    };
+
+    return null;
+  }
+
+  // GHI DB TRƯỚC
+  await writeDailyCache(newRows, getCacheKey());
+
+  const latestNewRow = getLatestWaveBottomRow(newRows);
+
+  runningPeakState = {
+    waveKey,
+    high: Math.max(incomingHigh, toNumber(latestNewRow?.zigzag_peak_price)),
+  };
+
+  // DB thành công rồi mới báo frontend
+  broadcastWaveBottomRealtime(changedRows);
+
+  return changedRows;
+}
+
+export function queueWaveBottomRealtimeRecalc(payload) {
+  realtimeRecalcQueue = realtimeRecalcQueue
+    .catch(() => {})
+    .then(() => recalculateWaveBottomRealtime(payload))
+    .catch((error) => {
+      console.error("Wave bottom realtime recalc failed", error);
+    });
+
+  return realtimeRecalcQueue;
+}
+
+function writeWaveBottomRealtimeEvent(res, event, payload) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function broadcastWaveBottomRealtime(rows) {
+  const payload = {
+    success: true,
+    rows,
+    updatedAt: new Date().toISOString(),
+  };
+
+  for (const res of waveBottomRealtimeClients) {
+    try {
+      writeWaveBottomRealtimeEvent(res, "wave-bottom-updated", payload);
+    } catch {
+      waveBottomRealtimeClients.delete(res);
+    }
+  }
+}
+
+export function handleWaveBottomConfirmPairsStream(req, res) {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  writeWaveBottomRealtimeEvent(res, "ready", { success: true });
+
+  waveBottomRealtimeClients.add(res);
+
+  req.on("close", () => {
+    waveBottomRealtimeClients.delete(res);
+  });
+}
+
 function mergeTradeRows(...payloads) {
   const rowsByDate = new Map();
   payloads.flatMap(normalizeTradeRows).forEach((row) => {
     const existing = rowsByDate.get(row.date);
-    rowsByDate.set(row.date, existing ? {
-      ...existing,
-      high: Math.max(existing.high, row.high),
-      low: Math.min(existing.low, row.low),
-    } : row);
+    rowsByDate.set(
+      row.date,
+      existing
+        ? {
+            ...existing,
+            high: Math.max(existing.high, row.high),
+            low: Math.min(existing.low, row.low),
+          }
+        : row,
+    );
   });
 
   return Array.from(rowsByDate.values())
@@ -349,7 +638,10 @@ function isLowestThanPreviousSessions(row, rows, sessionCount = 5) {
   if (!row || row.index <= 0) return false;
   const start = Math.max(0, row.index - sessionCount);
   const previousRows = rows.slice(start, row.index);
-  return previousRows.length > 0 && previousRows.every((previous) => row.low <= previous.low);
+  return (
+    previousRows.length > 0 &&
+    previousRows.every((previous) => row.low <= previous.low)
+  );
 }
 
 function findLowestRecentSession(rows, confirmQuote, sessionCount = 5) {
@@ -358,8 +650,8 @@ function findLowestRecentSession(rows, confirmQuote, sessionCount = 5) {
   const recentRows = rows.slice(start, confirmQuote.index + 1);
   if (!recentRows.length) return null;
   const lowest = recentRows.reduce(
-    (candidate, row) => row.low < candidate.low ? row : candidate,
-    recentRows[0]
+    (candidate, row) => (row.low < candidate.low ? row : candidate),
+    recentRows[0],
   );
   return { ...lowest, price: lowest.low, type: "low", isRecentWindowLow: true };
 }
@@ -372,7 +664,12 @@ function findLowPivot(pivots, quoteByDate, rows, pair) {
   if (exactBottom) return exactBottom;
 
   if (isLowestThanPreviousSessions(bottomQuote, rows)) {
-    return { ...bottomQuote, price: bottomQuote.low, type: "low", isTemporary: true };
+    return {
+      ...bottomQuote,
+      price: bottomQuote.low,
+      type: "low",
+      isTemporary: true,
+    };
   }
 
   if (bottomQuote?.index === rows.length - 1) {
@@ -381,7 +678,13 @@ function findLowPivot(pivots, quoteByDate, rows, pair) {
   }
 
   if (!lows.length) {
-    if (bottomQuote) return { ...bottomQuote, price: bottomQuote.low, type: "low", isTemporary: true };
+    if (bottomQuote)
+      return {
+        ...bottomQuote,
+        price: bottomQuote.low,
+        type: "low",
+        isTemporary: true,
+      };
     return null;
   }
 
@@ -392,55 +695,68 @@ function findLowPivot(pivots, quoteByDate, rows, pair) {
   if (bottomQuote) {
     const previous = lows.filter((pivot) => pivot.index <= bottomQuote.index);
     if (previous.length) return previous[previous.length - 1];
-    return { ...bottomQuote, price: bottomQuote.low, type: "low", isTemporary: true };
+    return {
+      ...bottomQuote,
+      price: bottomQuote.low,
+      type: "low",
+      isTemporary: true,
+    };
   }
 
   return lows[0];
 }
 
-function findNextHighPivot(pivots, bottom) {
-  if (!bottom) return null;
-  return pivots.find((pivot) => pivot.type === "high" && pivot.index > bottom.index) || null;
+function findNextHigh(pivots, rows, bottom) {
+  const pivotHigh = findNextHighPivot(pivots, bottom);
+
+  const runningHigh = findRunningHighAfterBottom(rows, bottom);
+
+  if (!pivotHigh) return runningHigh;
+  if (!runningHigh) return pivotHigh;
+
+  return runningHigh.high > pivotHigh.high ? runningHigh : pivotHigh;
 }
 
 function findRunningHighAfterBottom(rows, bottom) {
   if (!bottom) return null;
   const thresholdHigh = bottom.low * (1 + ZIGZAG_THRESHOLD);
   const confirmedRows = rows.filter(
-    (row) => row.index > bottom.index && row.high >= thresholdHigh
+    (row) => row.index > bottom.index && row.high >= thresholdHigh,
   );
   if (!confirmedRows.length) return null;
   const highest = confirmedRows.reduce(
-    (candidate, row) => row.high > candidate.high ? row : candidate,
-    confirmedRows[0]
+    (candidate, row) => (row.high > candidate.high ? row : candidate),
+    confirmedRows[0],
   );
   return { ...highest, price: highest.high, type: "high", isRunningPeak: true };
-}
-
-function findNextHigh(pivots, rows, bottom) {
-  return findNextHighPivot(pivots, bottom) || findRunningHighAfterBottom(rows, bottom);
 }
 
 function findLowestNearbyLow(pivots, bottom) {
   if (!bottom) return null;
   if (bottom.isTemporary) return bottom;
   const nearbyLows = pivots.filter(
-    (pivot) => pivot.type === "low" && Math.abs(pivot.index - bottom.index) <= 1
+    (pivot) =>
+      pivot.type === "low" && Math.abs(pivot.index - bottom.index) <= 1,
   );
   if (!nearbyLows.length) return bottom;
   return nearbyLows.reduce(
-    (lowest, pivot) => toNumber(pivot.price) < toNumber(lowest.price) ? pivot : lowest,
-    bottom
+    (lowest, pivot) =>
+      toNumber(pivot.price) < toNumber(lowest.price) ? pivot : lowest,
+    bottom,
   );
 }
 
 async function fetchPairs() {
-  const response = await fetch(WAVE_BOTTOM_PAIRS_URL, withTimeout({
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(PAIRS_REQUEST),
-  }));
-  if (!response.ok) throw new Error(`Wave bottom pairs upstream failed: ${response.status}`);
+  const response = await fetch(
+    WAVE_BOTTOM_PAIRS_URL,
+    withTimeout({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(PAIRS_REQUEST),
+    }),
+  );
+  if (!response.ok)
+    throw new Error(`Wave bottom pairs upstream failed: ${response.status}`);
   return response.json();
 }
 
@@ -448,16 +764,24 @@ async function fetchVnindexTrades() {
   const baseUrl = VNINDEX_TRADE_URL.split("?")[0];
   const attempts = [
     () => fetch(VNINDEX_TRADE_URL, withTimeout({ method: "POST" })),
-    () => fetch(baseUrl, withTimeout({
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker: "VNINDEX" }),
-    })),
-    () => fetch(baseUrl, withTimeout({
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ ticker: "VNINDEX" }),
-    })),
+    () =>
+      fetch(
+        baseUrl,
+        withTimeout({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticker: "VNINDEX" }),
+        }),
+      ),
+    () =>
+      fetch(
+        baseUrl,
+        withTimeout({
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ ticker: "VNINDEX" }),
+        }),
+      ),
   ];
 
   const statuses = [];
@@ -471,22 +795,34 @@ async function fetchVnindexTrades() {
 }
 
 async function fetchVnindexTradeReal() {
-  const response = await fetch(VNINDEX_TRADE_REAL_URL, withTimeout({
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(VNINDEX_TRADE_REAL_REQUEST),
-  }));
-  if (!response.ok) throw new Error(`VNINDEX trade real upstream failed: ${response.status}`);
+  const response = await fetch(
+    VNINDEX_TRADE_REAL_URL,
+    withTimeout({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(VNINDEX_TRADE_REAL_REQUEST),
+    }),
+  );
+  if (!response.ok)
+    throw new Error(`VNINDEX trade real upstream failed: ${response.status}`);
   return response.json();
 }
 
-function buildWaveBottomRows(pairsPayload, vnindexPayload, vnindexRealPayload = []) {
+function buildWaveBottomRows(
+  pairsPayload,
+  vnindexPayload,
+  vnindexRealPayload = [],
+) {
   const vnindexRows = mergeTradeRows(vnindexPayload, vnindexRealPayload);
   const quoteByDate = buildQuoteLookup(vnindexRows);
   const pivots = buildZigzagPivots(vnindexRows);
   const pairs = getPairs(pairsPayload)
     .slice()
-    .sort((a, b) => rowDateValue(String(a?.confirm_wave_date || "")) - rowDateValue(String(b?.confirm_wave_date || "")));
+    .sort(
+      (a, b) =>
+        rowDateValue(String(a?.confirm_wave_date || "")) -
+        rowDateValue(String(b?.confirm_wave_date || "")),
+    );
 
   return pairs.map((pair) => {
     const confirmDate = String(pair.confirm_wave_date || "");
@@ -535,10 +871,12 @@ function startWaveBottomRefresh(requestKey) {
       return [];
     }),
   ])
-    .then(([pairsPayload, vnindexPayload, vnindexRealPayload]) => writeDailyCache(
-      buildWaveBottomRows(pairsPayload, vnindexPayload, vnindexRealPayload),
-      requestKey,
-    ))
+    .then(([pairsPayload, vnindexPayload, vnindexRealPayload]) =>
+      writeDailyCache(
+        buildWaveBottomRows(pairsPayload, vnindexPayload, vnindexRealPayload),
+        requestKey,
+      ),
+    )
     .finally(() => {
       if (pendingRequestKey === requestKey) {
         pendingRequest = null;
@@ -552,7 +890,11 @@ export async function getWaveBottomConfirmPairs(forceRefresh = false) {
   const { date: cacheDate, cacheKey, nextRefresh } = getRefreshState();
   const upstreamCacheKey = cacheKey || `${cacheDate}-pre0915`;
 
-  const refreshNow = async (fallbackPayload = null, fallbackSource = "stale-db", fallbackExtra = {}) => {
+  const refreshNow = async (
+    fallbackPayload = null,
+    fallbackSource = "stale-db",
+    fallbackExtra = {},
+  ) => {
     try {
       const payload = await startWaveBottomRefresh(upstreamCacheKey);
       return withSource(payload, "upstream");
@@ -561,7 +903,8 @@ export async function getWaveBottomConfirmPairs(forceRefresh = false) {
       if (fallbackPayload) {
         return withSource(fallbackPayload, fallbackSource, {
           stale: true,
-          warning: error?.message || "Cannot refresh wave bottom confirm pairs.",
+          warning:
+            error?.message || "Cannot refresh wave bottom confirm pairs.",
           ...fallbackExtra,
         });
       }
@@ -571,14 +914,16 @@ export async function getWaveBottomConfirmPairs(forceRefresh = false) {
 
   if (forceRefresh) {
     const fallbackPayload = await readLatestDiskCache();
-    return refreshNow(
-      fallbackPayload,
-      "stale-db",
-      { refreshed: true },
-    );
+    return refreshNow(fallbackPayload, "stale-db", { refreshed: true });
   }
 
-  if (cacheKey && memoryCache && memoryCacheKey === cacheKey && memoryCache.cacheVersion === CACHE_VERSION && Array.isArray(memoryCache.rows)) {
+  if (
+    cacheKey &&
+    memoryCache &&
+    memoryCacheKey === cacheKey &&
+    memoryCache.cacheVersion === CACHE_VERSION &&
+    Array.isArray(memoryCache.rows)
+  ) {
     return withSource(memoryCache, "memory");
   }
 
@@ -607,14 +952,23 @@ export async function getWaveBottomConfirmPairs(forceRefresh = false) {
   return refreshNow();
 }
 export async function handleWaveBottomConfirmPairs(req, res, rawUrl) {
-  const url = new URL(rawUrl || req.url, `http://${req.headers.host || "localhost"}`);
-  const refreshParam = String(url.searchParams.get("refresh") || url.searchParams.get("force") || "").toLowerCase();
-  const forceRefresh = refreshParam === "1" || refreshParam === "true" || refreshParam === "yes";
+  const url = new URL(
+    rawUrl || req.url,
+    `http://${req.headers.host || "localhost"}`,
+  );
+  const refreshParam = String(
+    url.searchParams.get("refresh") || url.searchParams.get("force") || "",
+  ).toLowerCase();
+  const forceRefresh =
+    refreshParam === "1" || refreshParam === "true" || refreshParam === "yes";
 
   try {
     sendJson(res, 200, await getWaveBottomConfirmPairs(forceRefresh));
   } catch (error) {
     console.error("Wave bottom confirm pairs cache failed", error);
-    sendJson(res, 502, { success: false, error: error.message || "Cannot load wave bottom confirm pairs." });
+    sendJson(res, 502, {
+      success: false,
+      error: error.message || "Cannot load wave bottom confirm pairs.",
+    });
   }
 }
