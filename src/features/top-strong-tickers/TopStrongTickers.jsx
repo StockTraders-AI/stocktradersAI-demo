@@ -363,7 +363,7 @@ function OverviewPanel({ rows, filteredRows, counts }) {
           Ghi chú
         </div>
         <div style={{ background: "var(--Bs)", border: "0.5px solid var(--Bb)", borderRadius: 8, padding: "9px 11px", color: "var(--t3)", fontSize: 11, lineHeight: 1.6 }}>
-          Vừa mạnh: mới vượt ngưỡng 70/100 hoặc tăng tốc mạnh. Duy trì: SMDT mã vẫn trên 70. Tiềm năng: dưới 70 nhưng đang cải thiện hoặc được dòng tiền/ngành ủng hộ.
+          Vừa mạnh: mới vượt ngưỡng 70%/100% hoặc tăng tốc mạnh. Duy trì: SMDT mã vẫn trên 70%. Tiềm năng: dưới 70% nhưng đang cải thiện hoặc được dòng tiền/ngành ủng hộ.
         </div>
       </Card>
     </div>
