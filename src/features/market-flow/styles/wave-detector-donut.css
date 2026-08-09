@@ -1,0 +1,223 @@
+/* Dùng chung các biến này với bảng SMDT của bạn để đồng bộ style.
+   Nếu đã khai báo :root ở file global thì bỏ khối :root bên dưới. */
+:root {
+  --card: #131722;
+  --card-inner: #181d2a;
+  --border: #232a3b;
+  --text: #e6e9f0;
+  --muted: #8a93a8;
+  --accent: #a78bfa;
+  --sk-base: #1b2130;
+  --sk-shine: #2a3348;
+}
+
+.wtds-card {
+  width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  font-family: "Be Vietnam Pro", sans-serif;
+  color: var(--text);
+}
+
+.wtds-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.wtds-head h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.wtds-head a {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.wtds-confidence {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wtds-confidence-val {
+  font-weight: 600;
+  color: var(--text);
+}
+.wtds-confidence-sk {
+  width: 34px;
+  height: 14px;
+}
+
+/* ============ SKELETON base ============ */
+@keyframes wtds-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.wtds-sk {
+  background: linear-gradient(
+    90deg,
+    var(--sk-base) 25%,
+    var(--sk-shine) 50%,
+    var(--sk-base) 75%
+  );
+  background-size: 800px 100%;
+  animation: wtds-shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wtds-sk {
+    animation: none;
+    background: var(--sk-base);
+  }
+}
+.wtds-sk-pill {
+  border-radius: 999px;
+  display: inline-block;
+}
+
+/* ============ DONUT ============ */
+.wtds-donut-wrap {
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 18px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wtds-donut-sk {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  position: relative;
+}
+.wtds-donut-sk::after {
+  content: "";
+  position: absolute;
+  inset: 28px;
+  border-radius: 50%;
+  background: var(--card);
+}
+.wtds-donut-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.wtds-donut-stroke-sk {
+  animation: wtds-loading-ring 1.4s ease-in-out infinite;
+}
+@keyframes wtds-loading-ring {
+  0%, 100% { opacity: .72; }
+  50% { opacity: 1; }
+}
+.wtds-center-value-sk {
+  width: 46px;
+  height: 30px;
+}
+
+.wtds-donut-real {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.wtds-donut-real::after {
+  content: "";
+  position: absolute;
+  width: 164px;
+  height: 164px;
+  border-radius: 50%;
+  background: var(--card);
+}
+.wtds-center-value {
+  position: absolute;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 32px;
+  font-weight: 700;
+  z-index: 2;
+}
+
+.wtds-error {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 0 12px;
+}
+.wtds-error button {
+  margin-top: 10px;
+  background: #20263a;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 7px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ============ Legend ============ */
+.wtds-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.wtds-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wtds-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ============ Loading hint (căn trái, đồng bộ SMDT) ============ */
+.wtds-loading-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.wtds-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: wtds-spin 0.8s linear infinite;
+}
+@keyframes wtds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.wtds-muted {
+  color: var(--muted);
+}

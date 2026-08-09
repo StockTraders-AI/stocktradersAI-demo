@@ -142,74 +142,149 @@ export function Sidebar({ curMod, onNav, compact, showPremium = false }) {
           flexShrink: 0,
         }}
       >
-        <div
+        <img
+          src={dark ? "/logo-header-dark.png" : "/logo-header-light.svg"}
+          alt="StockTraders — Time To Gain Profit"
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: 8,
+            width: "100%",
+            maxWidth: 190,
+            height: 38,
             flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "linear-gradient(135deg,#7C3AED,#4F46E5)",
+            display: "block",
+            objectFit: "contain",
+            objectPosition: "left center",
           }}
-        >
-          <i
-            className="ti ti-chart-candle"
-            style={{ color: "#fff", fontSize: 16 }}
-          />
-        </div>
-        <span
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            color: "var(--t1)",
-            letterSpacing: "-.2px",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          StockTraders AI
-        </span>
+        />
       </div>
 
-      <nav className="st-sidebar-nav" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "10px 0 12px", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+      <nav
+        className="st-sidebar-nav"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          padding: "10px 0 12px",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+      >
         {item("dashboard", "ti-layout-grid", "Dashboard")}
         {item("dong-tien-tt", "ti-chart-line", "Thị trường")}
 
-        {item(null, "ti-briefcase", "Ngành", { onClick: () => setNganhOpen((o) => !o), isParent: true, isOpen: nganhOpen, subIds: NGANH_IDS })}
-        <div style={{ maxHeight: nganhOpen ? 360 : 0, overflow: "hidden", transition: "max-height .25s ease" }}>
+        {item(null, "ti-briefcase", "Ngành", {
+          onClick: () => setNganhOpen((o) => !o),
+          isParent: true,
+          isOpen: nganhOpen,
+          subIds: NGANH_IDS,
+        })}
+        <div
+          style={{
+            maxHeight: nganhOpen ? 360 : 0,
+            overflow: "hidden",
+            transition: "max-height .25s ease",
+          }}
+        >
           {sub("dong-tien-nganh", "ti-trending-up", "Dòng tiền ngành")}
           {sub("smdt-nganh", "ti-table", "SMDT ngành")}
           {sub("lo-trinh-dan-song", "ti-route", "Lộ trình dẫn sóng")}
         </div>
 
-        {item(null, "ti-building-store", "Cổ phiếu", { onClick: () => setCpOpen((o) => !o), isParent: true, isOpen: cpOpen, subIds: CP_IDS })}
-        <div style={{ maxHeight: cpOpen ? 360 : 0, overflow: "hidden", transition: "max-height .25s ease" }}>
+        {item(null, "ti-building-store", "Cổ phiếu", {
+          onClick: () => setCpOpen((o) => !o),
+          isParent: true,
+          isOpen: cpOpen,
+          subIds: CP_IDS,
+        })}
+        <div
+          style={{
+            maxHeight: cpOpen ? 360 : 0,
+            overflow: "hidden",
+            transition: "max-height .25s ease",
+          }}
+        >
           {sub("dong-tien-cp", "ti-trending-up", "Dòng tiền cổ phiếu")}
           {sub("smdt-ma", "ti-table-column", "SMDT cổ phiếu")}
           {sub("top-ma-manh", "ti-award", "Top mã mạnh")}
         </div>
 
-        {item(null, "ti-briefcase", "Danh mục", { onClick: () => setPortfolioOpen((o) => !o), isParent: true, isOpen: portfolioOpen, subIds: PORTFOLIO_IDS })}
-        <div style={{ maxHeight: portfolioOpen ? 160 : 0, overflow: "hidden", transition: "max-height .25s ease" }}>
+        {item(null, "ti-briefcase", "Danh mục", {
+          onClick: () => setPortfolioOpen((o) => !o),
+          isParent: true,
+          isOpen: portfolioOpen,
+          subIds: PORTFOLIO_IDS,
+        })}
+        <div
+          style={{
+            maxHeight: portfolioOpen ? 160 : 0,
+            overflow: "hidden",
+            transition: "max-height .25s ease",
+          }}
+        >
           {sub("portfolio-analysis", "ti-sparkles", "Phân tích danh mục")}
         </div>
 
-        {item("do-song", "ti-wave-sine", "Dò sóng thị trường")}
+        {/* {item("do-song", "ti-wave-sine", "Dò sóng thị trường")} */}
 
-        {item(null, "ti-chart-bar", "Báo cáo")}
-        {item(null, "ti-book", "Kiến thức")}
-        {item(null, "ti-settings", "Cài đặt")}
+        {/* {item(null, "ti-chart-bar", "Báo cáo")} */}
+        {/* {item(null, "ti-book", "Kiến thức")} */}
+        {/* {item(null, "ti-settings", "Cài đặt")} */}
       </nav>
 
       {showPremium && (
-        <div style={{ flexShrink: 0, padding: 12, borderTop: "0.5px solid var(--bdr)" }}>
-          <div style={{ background: dark ? "linear-gradient(135deg,#2D1B69,#1A0E40)" : t.Bs, border: `0.5px solid ${t.Bb}`, borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 9, fontWeight: 800, color: t.B, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 4 }}>⭐ Premium</div>
-            <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.5, marginBottom: 10 }}>Mở khóa toàn bộ tính năng &amp; dữ liệu lịch sử</div>
-            <button style={{ width: "100%", background: t.B, border: "none", borderRadius: 7, padding: 7, fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit" }}>
+        <div
+          style={{
+            flexShrink: 0,
+            padding: 12,
+            borderTop: "0.5px solid var(--bdr)",
+          }}
+        >
+          <div
+            style={{
+              background: dark
+                ? "linear-gradient(135deg,#2D1B69,#1A0E40)"
+                : t.Bs,
+              border: `0.5px solid ${t.Bb}`,
+              borderRadius: 10,
+              padding: 12,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                color: t.B,
+                textTransform: "uppercase",
+                letterSpacing: ".1em",
+                marginBottom: 4,
+              }}
+            >
+              ⭐ Premium
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--t2)",
+                lineHeight: 1.5,
+                marginBottom: 10,
+              }}
+            >
+              Mở khóa toàn bộ tính năng &amp; dữ liệu lịch sử
+            </div>
+            <button
+              style={{
+                width: "100%",
+                background: t.B,
+                border: "none",
+                borderRadius: 7,
+                padding: 7,
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#fff",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
               Nâng cấp ngay →
             </button>
           </div>

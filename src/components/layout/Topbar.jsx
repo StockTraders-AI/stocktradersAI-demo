@@ -29,17 +29,21 @@ function readSessionName(session) {
 
 function readInitials(session) {
   const source = readSessionName(session);
-  const parts = String(source)
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = String(source).trim().split(/\s+/).filter(Boolean);
 
   if (!parts.length) return "NA";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, tradingDateControl }) {
+export function Topbar({
+  mod,
+  isMobile,
+  onMenuToggle,
+  session,
+  onLogout,
+  tradingDateControl,
+}) {
   const { t, dark, toggle } = useTheme();
   const { indices } = useMarketIndices();
   const now = useClock();
@@ -90,33 +94,118 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, trading
         transition: "background .2s",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}
+      >
         {isMobile && (
           <button onClick={onMenuToggle} aria-label="Mở menu" style={iconBtn}>
             <i className="ti ti-menu-2" style={{ fontSize: 18 }} />
           </button>
         )}
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--t1)", letterSpacing: "-.2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{mod?.title}</div>
-          {!isMobile && <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>{mod?.sub}</div>}
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 800,
+              color: "var(--t1)",
+              letterSpacing: "-.2px",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {mod?.title}
+          </div>
+          {!isMobile && (
+            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>
+              {mod?.sub}
+            </div>
+          )}
         </div>
         {!isMobile && (
           <div style={{ display: "flex", gap: 7 }}>
             {indices.map((idx) => (
-              <div key={idx.name} title={idx.live ? "Dữ liệu từ getIndexDailyChanges" : "Chưa có dữ liệu index trong getIndexDailyChanges"} style={{ display: "flex", alignItems: "baseline", gap: 4, background: "var(--elev)", border: "0.5px solid var(--bdr)", borderRadius: 7, padding: "5px 10px" }}>
-                <span style={{ fontSize: 10, color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em" }}>{idx.name}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)", ...mono }}>{idx.val}</span>
-                <span style={{ fontSize: 10, color: idx.rawPct == null ? "var(--t3)" : idx.rawPct >= 0 ? t.G : t.R, fontWeight: 600 }}>{idx.pct}</span>
+              <div
+                key={idx.name}
+                title={
+                  idx.live
+                    ? "Dữ liệu từ getIndexDailyChanges"
+                    : "Chưa có dữ liệu index trong getIndexDailyChanges"
+                }
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 4,
+                  background: "var(--elev)",
+                  border: "0.5px solid var(--bdr)",
+                  borderRadius: 7,
+                  padding: "5px 10px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: "var(--t3)",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: ".04em",
+                  }}
+                >
+                  {idx.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "var(--t1)",
+                    ...mono,
+                  }}
+                >
+                  {idx.val}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color:
+                      idx.rawPct == null
+                        ? "var(--t3)"
+                        : idx.rawPct >= 0
+                          ? t.G
+                          : t.R,
+                    fontWeight: 600,
+                  }}
+                >
+                  {idx.pct}
+                </span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}
+      >
         {!isMobile && (
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--t3)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.G, display: "inline-block", animation: "pulse 2s infinite" }} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 11,
+              color: "var(--t3)",
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: t.G,
+                display: "inline-block",
+                animation: "pulse 2s infinite",
+              }}
+            />
             {clockStamp}
           </div>
         )}
@@ -126,7 +215,9 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, trading
         {!isMobile && (
           <div
             onClick={() => {
-              window.dispatchEvent(new CustomEvent("st-nav", { detail: "dashboard" }));
+              window.dispatchEvent(
+                new CustomEvent("st-nav", { detail: "dashboard" }),
+              );
               setTimeout(() => {
                 const el = document.getElementById("signal-log-card");
                 if (el) {
@@ -138,7 +229,18 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, trading
             style={{ ...iconBtn, position: "relative" }}
           >
             <i className="ti ti-bell" style={{ fontSize: 15 }} />
-            <span style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, background: t.R, borderRadius: "50%", border: "1.5px solid var(--surf)" }} />
+            <span
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                width: 6,
+                height: 6,
+                background: t.R,
+                borderRadius: "50%",
+                border: "1.5px solid var(--surf)",
+              }}
+            />
           </div>
         )}
         {!isMobile && (
@@ -147,9 +249,15 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, trading
           </div>
         )}
         <div onClick={toggle} title="Đổi Sáng/Tối" style={iconBtn}>
-          <i className={`ti ${dark ? "ti-sun" : "ti-moon"}`} style={{ fontSize: 15 }} />
+          <i
+            className={`ti ${dark ? "ti-sun" : "ti-moon"}`}
+            style={{ fontSize: 15 }}
+          />
         </div>
-        <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+        <div
+          ref={accountMenuRef}
+          style={{ position: "relative", flexShrink: 0 }}
+        >
           <button
             type="button"
             onClick={() => setAccountOpen((open) => !open)}
@@ -176,21 +284,48 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, trading
           {accountOpen && (
             <div role="menu" style={accountMenu}>
               <div style={accountHeader}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: "var(--t1)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   {displayName}
                 </div>
                 <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
                   PREMIUM
                 </div>
               </div>
-              <button type="button" role="menuitem" onClick={handleLogout} style={logoutBtn}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleLogout}
+                style={logoutBtn}
+              >
                 <i className="ti ti-logout" style={{ fontSize: 15 }} />
                 Đăng xuất
               </button>
             </div>
           )}
         </div>
-        {!isMobile && <div style={{ fontSize: 9, background: t.P, color: "#fff", borderRadius: 4, padding: "2px 6px", fontWeight: 700 }}>PREMIUM</div>}
+        {!isMobile && (
+          <div
+            style={{
+              fontSize: 9,
+              background: t.P,
+              color: "#fff",
+              borderRadius: 4,
+              padding: "2px 6px",
+              fontWeight: 700,
+            }}
+          >
+            PREMIUM
+          </div>
+        )}
       </div>
     </header>
   );
@@ -198,13 +333,18 @@ export function Topbar({ mod, isMobile, onMenuToggle, session, onLogout, trading
 
 function TopbarDateControl({ control }) {
   const availableValues = useMemo(() => {
-    return [...new Set((control.dates || []).map(toDateInputValue).filter(Boolean))].sort();
+    return [
+      ...new Set((control.dates || []).map(toDateInputValue).filter(Boolean)),
+    ].sort();
   }, [control.dates]);
   const minDate = availableValues[0] || undefined;
   const maxDate = availableValues[availableValues.length - 1] || undefined;
 
   return (
-    <div style={{ ...iconBtn, position: "relative" }} title="Lùi ngày / Chọn phiên giao dịch">
+    <div
+      style={{ ...iconBtn, position: "relative" }}
+      title="Lùi ngày / Chọn phiên giao dịch"
+    >
       <i className="ti ti-calendar" style={{ fontSize: 15 }} />
       <input
         type="date"
@@ -237,8 +377,17 @@ function TopbarDateControl({ control }) {
 }
 
 const iconBtn = {
-  width: 32, height: 32, borderRadius: 8, background: "var(--elev)", border: "0.5px solid var(--bdr)",
-  display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", cursor: "pointer", flexShrink: 0,
+  width: 32,
+  height: 32,
+  borderRadius: 8,
+  background: "var(--elev)",
+  border: "0.5px solid var(--bdr)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "var(--t3)",
+  cursor: "pointer",
+  flexShrink: 0,
 };
 
 const accountMenu = {

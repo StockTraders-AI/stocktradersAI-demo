@@ -10,19 +10,14 @@ import requestOtpHandler from "./api/auth/request-otp.js";
 import socialLoginHandler from "./api/auth/social-login.js";
 import verifyOtpHandler from "./api/auth/verify-otp.js";
 import smsDlrHandler from "./api/sms/dlr.js";
-import { requireAuth } from "./api/_auth.js";
-import { enforceRateLimit } from "./api/_ratelimit.js";
-import {
-  additionalData,
-  encodeSecureEnvelope,
-  isSecurePayloadEnabled,
-  readHeader,
-  requestPathname,
-  verifyRequestSignature,
-} from "./api/_secure.js";
+import conditionSignalLatestHandler from "./api/condition-signal-latest.js";
+import doSongAdviceHandler from "./api/do-song-advice.js";
+import stockNotiHandler from "./api/stock-noti.js";
+import stockWaveCurrentHandler from "./api/stock-wave-current.js";
+import stockWaveHistoryHandler from "./api/stock-wave-history.js";
+import stockWaveTickersHandler from "./api/stock-wave-tickers.js";
+import waveBottomConfirmPairsHandler from "./api/wave-bottom-confirm-pairs.js";
 import portfolioChatHandler from "./api/portfolio-chat.js";
-import smdtBranchCrossHandler from "./api/smdt-branch-cross.js";
-import smdtTickerCrossHandler from "./api/smdt-ticker-cross.js";
 
 const serverEnv = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 for (const [key, value] of Object.entries(serverEnv)) {
@@ -95,9 +90,14 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/auth/data-key", dataKeyHandler],
   ["/api/auth/logout", logoutHandler],
   ["/api/sms/dlr", smsDlrHandler],
+  ["/api/condition-signal-latest", conditionSignalLatestHandler],
+  ["/api/do-song-advice", doSongAdviceHandler],
+  ["/api/stock-noti", stockNotiHandler],
+  ["/api/stock-wave-current", stockWaveCurrentHandler],
+  ["/api/stock-wave-history", stockWaveHistoryHandler],
+  ["/api/stock-wave-tickers", stockWaveTickersHandler],
+  ["/api/wave-bottom-confirm-pairs", waveBottomConfirmPairsHandler],
   ["/api/portfolio-chat", portfolioChatHandler],
-  ["/api/smdt-branch-cross", smdtBranchCrossHandler],
-  ["/api/smdt-ticker-cross", smdtTickerCrossHandler],
 ]);
 
 function normalizeMarketTicker(value) {

@@ -84,31 +84,38 @@ async function refreshCache() {
   return refreshPromise;
 }
 
-async function handler(req, res) {
-  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
-  if (!requireAuth(req, res)) return;
-
-  const now = Date.now();
-  const limit = parseLimit(req.query.limit);
-  const isStale = !serverCache || now - lastFetched > CACHE_DURATION;
+export async function getStockWaveData() {
+  const isStale = !serverCache || Date.now() - lastFetched > CACHE_DURATION;
 
   if (!serverCache) {
-    try {
-      await refreshCache();
-    } catch (error) {
-      return res.status(502).json({
-        error: "Failed to load data from source",
-        details: error.message,
-      });
-    }
+    await refreshCache();
   } else if (isStale) {
     refreshCache();
   }
 
+  return serverCache;
+}
+
+export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  const limit = parseLimit(req.query.limit);
+
   try {
-    return res.status(200).json(sliceReply(serverCache, limit));
+    const data = await getStockWaveData();
+    return res.status(200).json(sliceReply(data, limit));
   } catch (error) {
-    return res.status(500).json({ error: "Failed to process sliced data", details: error.message });
+    return res.status(502).json({
+      error: "Failed to load data from source",
+      details: error.message,
+    });
   }
 }
 
