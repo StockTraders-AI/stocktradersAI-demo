@@ -1,8 +1,6 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
 import { withSecureData } from "./_secure.js";
 
-const DEFAULT_PORTFOLIO_CHAT_URL = "http://112.213.91.235:8000/api/portfolio-chat";
-
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -24,8 +22,13 @@ async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
+    const portfolioChatUrl = normalizeText(process.env.PORTFOLIO_CHAT_API_URL);
+    if (!portfolioChatUrl) {
+      return res.status(500).json({ error: "Missing PORTFOLIO_CHAT_API_URL" });
+    }
+
     const response = await fetch(
-      normalizeText(process.env.PORTFOLIO_CHAT_API_URL || DEFAULT_PORTFOLIO_CHAT_URL),
+      portfolioChatUrl,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
