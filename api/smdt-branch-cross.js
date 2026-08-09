@@ -1,9 +1,10 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
 
 const API_ACCOUNT = "thao.dtt";
 const SOURCE_URL = "https://stocktraders.vn/service/data/getSMDTBranchCross";
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (setSameOriginCors(req, res, "POST, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -23,3 +24,5 @@ export default async function handler(req, res) {
     return res.status(502).json({ error: "Failed to load data from source", details: error.message });
   }
 }
+
+export default withSecureData(handler, { methods: "POST, OPTIONS" });

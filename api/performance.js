@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
 
 const CACHE_DURATION = 30 * 1000;
 const SOURCE_URL = "https://stocktradersai.vn/service/data/getPerformance";
@@ -42,7 +43,7 @@ async function fetchPerformanceFromSource(branchPath, date) {
   return data;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
@@ -92,3 +93,5 @@ export default async function handler(req, res) {
 
   return res.status(200).json(serverCache.get(cacheKey)?.data || cached.data);
 }
+
+export default withSecureData(handler, { methods: "GET, OPTIONS" });

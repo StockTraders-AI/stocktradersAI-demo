@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
 
 let serverCache = null;
 let lastFetched = 0;
@@ -31,7 +32,7 @@ async function fetchBranchPathFromSource() {
   return data;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
@@ -81,3 +82,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Failed to process data", details: error.message });
   }
 }
+
+export default withSecureData(handler, { methods: "GET, OPTIONS" });

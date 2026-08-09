@@ -15,7 +15,7 @@ function base64UrlDecode(value) {
   return Buffer.from(value, "base64url").toString("utf8");
 }
 
-function getSessionSecret() {
+export function getSessionSecret() {
   const secret = normalizeText(
     process.env.AUTH_SESSION_SECRET ||
       process.env.SESSION_SECRET ||
@@ -82,8 +82,17 @@ export function readAuthSession(req) {
   return verifySessionToken(readCookie(req, SESSION_COOKIE_NAME));
 }
 
+/* Định danh phiên dùng làm info cho HKDF khi suy ra khoá mã hoá dữ liệu. Session
+ * phát hành trước khi có `sid` vẫn dùng được nhờ fallback về account. */
+export function getSessionId(session) {
+  return normalizeText(session?.sid) || normalizeText(session?.account);
+}
+
 export function setAuthSessionCookie(res, payload, ttlSeconds = DEFAULT_SESSION_TTL_SECONDS) {
-  const token = createSessionToken(payload, ttlSeconds);
+  const token = createSessionToken(
+    { sid: crypto.randomBytes(16).toString("base64url"), ...payload },
+    ttlSeconds,
+  );
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   res.setHeader(
     "Set-Cookie",

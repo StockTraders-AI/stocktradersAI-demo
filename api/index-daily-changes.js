@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
 
 let serverCache = null;
 let lastFetched = 0;
@@ -44,7 +45,7 @@ async function refreshCache() {
   return refreshPromise;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
@@ -72,3 +73,5 @@ export default async function handler(req, res) {
     },
   });
 }
+
+export default withSecureData(handler, { methods: "GET, OPTIONS" });

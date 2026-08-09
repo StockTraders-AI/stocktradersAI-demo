@@ -1,3 +1,5 @@
+import { clearSecureSession } from "../../data/secureClient";
+
 const LOGIN_API_URL = "/api/auth/login";
 const SOCIAL_API_URL = "/api/auth/social-login";
 const ACCESS_RIGHTS_API_URL = "/api/auth/access-rights";
@@ -554,6 +556,8 @@ export async function logoutUser() {
     });
   } catch {
     // Client-side logout should still clear local state if the network is unavailable.
+  } finally {
+    clearSecureSession();
   }
 }
 

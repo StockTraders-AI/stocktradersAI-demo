@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
 
 const API_ACCOUNT = "thao.dtt";
 const SOURCE_URL = "https://stocktraders.vn/service/data/getStockNoti";
@@ -42,7 +43,7 @@ async function fetchStockNotiFromSource(date) {
   return data;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
@@ -88,3 +89,5 @@ export default async function handler(req, res) {
 
   return res.status(200).json(cacheByDate.get(date)?.data || cached.data);
 }
+
+export default withSecureData(handler, { methods: "GET, OPTIONS" });

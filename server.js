@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import changePasswordHandler from "./api/auth/change-password.js";
 import accessRightsHandler from "./api/auth/access-rights.js";
+import dataKeyHandler from "./api/auth/data-key.js";
 import loginHandler from "./api/auth/login.js";
 import logoutHandler from "./api/auth/logout.js";
 import registerHandler from "./api/auth/register.js";
@@ -46,6 +47,7 @@ const apiHandlers = new Map([
   ["/api/auth/login", loginHandler],
   ["/api/auth/social-login", socialLoginHandler],
   ["/api/auth/access-rights", accessRightsHandler],
+  ["/api/auth/data-key", dataKeyHandler],
   ["/api/auth/logout", logoutHandler],
   ["/api/sms/dlr", smsDlrHandler],
   ["/api/branch-path", branchPathHandler],

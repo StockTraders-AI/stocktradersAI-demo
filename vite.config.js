@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import changePasswordHandler from "./api/auth/change-password.js";
 import accessRightsHandler from "./api/auth/access-rights.js";
+import dataKeyHandler from "./api/auth/data-key.js";
 import loginHandler from "./api/auth/login.js";
 import logoutHandler from "./api/auth/logout.js";
 import registerHandler from "./api/auth/register.js";
@@ -10,6 +11,15 @@ import socialLoginHandler from "./api/auth/social-login.js";
 import verifyOtpHandler from "./api/auth/verify-otp.js";
 import smsDlrHandler from "./api/sms/dlr.js";
 import { requireAuth } from "./api/_auth.js";
+import { enforceRateLimit } from "./api/_ratelimit.js";
+import {
+  additionalData,
+  encodeSecureEnvelope,
+  isSecurePayloadEnabled,
+  readHeader,
+  requestPathname,
+  verifyRequestSignature,
+} from "./api/_secure.js";
 import portfolioChatHandler from "./api/portfolio-chat.js";
 import smdtBranchCrossHandler from "./api/smdt-branch-cross.js";
 import smdtTickerCrossHandler from "./api/smdt-ticker-cross.js";
@@ -82,6 +92,7 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/auth/login", loginHandler],
   ["/api/auth/social-login", socialLoginHandler],
   ["/api/auth/access-rights", accessRightsHandler],
+  ["/api/auth/data-key", dataKeyHandler],
   ["/api/auth/logout", logoutHandler],
   ["/api/sms/dlr", smsDlrHandler],
   ["/api/portfolio-chat", portfolioChatHandler],
@@ -446,6 +457,51 @@ function attachLocalApiResponseHelpers(res) {
   return res;
 }
 
+/* Dev server tự viết lại logic proxy inline và trả JSON bằng res.end(JSON.stringify(...))
+ * ở gần 40 chỗ, nên thay vì sửa từng chỗ ta chặn ngay ở res.end. Bản production
+ * (api/*.js) dùng applySecureResponse trong _secure.js cho cùng mục đích. */
+function applyDevSecureResponse(req, res, session) {
+  if (!isSecurePayloadEnabled()) return true;
+
+  const epoch = verifyRequestSignature(req, session);
+  if (epoch == null) {
+    res.statusCode = 401;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(
+      JSON.stringify({
+        error: "Chữ ký request không hợp lệ hoặc đã hết hạn.",
+        code: "SIGNATURE_INVALID",
+      }),
+    );
+    return false;
+  }
+
+  const gzip = readHeader(req, "x-st-z") === "gzip";
+  const aad = additionalData(req.method, requestPathname(req));
+  const originalEnd = res.end.bind(res);
+
+  res.end = (chunk, ...rest) => {
+    if (typeof chunk !== "string" || res.headersSent || Number(res.statusCode) >= 300) {
+      return originalEnd(chunk, ...rest);
+    }
+
+    let body;
+    try {
+      body = encodeSecureEnvelope(session, epoch, aad, JSON.parse(chunk), { gzip });
+    } catch {
+      // Không phải JSON (ví dụ Vite trả HTML fallback) → để nguyên.
+      return originalEnd(chunk, ...rest);
+    }
+
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Length", String(body.length));
+    res.setHeader("X-St-Secure", "1");
+    return originalEnd(body);
+  };
+
+  return true;
+}
+
 async function handleLocalApiRoute(req, res, reqUrl) {
   const host = req.headers.host || "localhost:3000";
   const parsedUrl = new URL(reqUrl, `http://${host}`);
@@ -471,7 +527,10 @@ function smdtDevPlugin() {
 
         if (reqUrl.startsWith("/api/")) {
           attachLocalApiResponseHelpers(res);
-          if (!requireAuth(req, res)) return;
+          const session = requireAuth(req, res);
+          if (!session) return;
+          if (!enforceRateLimit(req, res, session)) return;
+          if (!applyDevSecureResponse(req, res, session)) return;
         }
 
         if (reqUrl.startsWith("/api/smdt-ticker")) {
