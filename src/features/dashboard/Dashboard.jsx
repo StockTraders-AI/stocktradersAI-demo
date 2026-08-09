@@ -14,6 +14,7 @@ import { useRealtimeStockSignalFeed, useStockSignal } from "../../data/useStockS
 import { useRealtimeStockNotiFeed, useStockNoti } from "../../data/useStockNoti";
 import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave";
 import { useTotalTrade } from "../../data/useTotalTrade";
+import { secureFetchJson } from "../../data/secureClient";
 import { Card, Clink, LiveFooter, Loading, Pagination } from "../../components/ui";
 import { PORTFOLIO_MAX_CODES, loadSavedPortfolio, parsePortfolioCodes, savePortfolioState } from "../portfolio-analysis/portfolioState";
 import { evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "../portfolio-analysis/stock4KeyEvaluator";
@@ -29,7 +30,7 @@ const TOP_LIMIT = 40;
 const PAGE_SIZE = 8;
 const SMDT_PREVIEW_PAGE_SIZE = 10;
 const SIGNAL_PORTFOLIO_PAGE_SIZE = 5;
-const PORTFOLIO_CHAT_API_URL = import.meta.env.VITE_PORTFOLIO_CHAT_API_URL || (import.meta.env.DEV ? "http://112.213.91.235:8000/api/portfolio-chat" : "/api/portfolio-chat");
+const PORTFOLIO_CHAT_API_URL = "/api/portfolio-chat";
 const TOP_STATUS_META = {
   vm: { label: "Vừa mạnh", color: "var(--G)", icon: "ti-star-filled" },
   dt: { label: "Duy trì", color: "var(--B)", icon: "ti-circle-filled" },
@@ -702,7 +703,7 @@ function answerTicker(answer, ticker) {
 }
 
 async function requestPortfolioChatPosition({ question, userId, conversationId, position }) {
-  const response = await fetch(PORTFOLIO_CHAT_API_URL, {
+  const data = await secureFetchJson(PORTFOLIO_CHAT_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -712,8 +713,6 @@ async function requestPortfolioChatPosition({ question, userId, conversationId, 
       portfolio: { position },
     }),
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
   const answer = typeof data?.answer === "string" ? data.answer.trim() : "";
   return { answer, position, conversationId: data?.conversation_id };
 }
@@ -791,7 +790,7 @@ function PortfolioBox({ rows, asOfDate }) {
     setMsgs((prev) => [...prev, { role: "user", text: question }, { role: "typing", text: "Đang phân tích dữ liệu danh mục..." }]);
 
     try {
-      if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu VITE_PORTFOLIO_CHAT_API_URL");
+      if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu cấu hình API portfolio chat");
       if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
       const apiQuestion = portfolioChatApiQuestion(question);
       const tickerSelectionQuestion = isPortfolioTickerSelectionQuestion(apiQuestion);

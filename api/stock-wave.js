@@ -1,3 +1,6 @@
+import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
+
 let serverCache = null;
 let lastFetched = 0;
 let refreshPromise = null;
@@ -115,3 +118,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
+export default withSecureData(handler, { methods: "GET, OPTIONS" });

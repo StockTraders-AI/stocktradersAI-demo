@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
-import { useMarketIndices } from "../../data/useMarketIndices";
 import { Sidebar } from "../../components/layout/Sidebar";
 import { mono } from "../../styles/tokens";
 import { useTheme } from "../../theme";
@@ -17,6 +16,11 @@ import {
 
 const SOCIAL_PROVIDERS = [
   { id: "2", key: "google", icon: "ti-brand-google", label: "Google" },
+];
+const AUTH_INDICES = [
+  { name: "VNINDEX", val: "--", pct: "--", rawPct: null },
+  { name: "HNX", val: "--", pct: "--", rawPct: null },
+  { name: "UPCOM", val: "--", pct: "--", rawPct: null },
 ];
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
@@ -148,7 +152,7 @@ function useClock() {
 
 function AuthTopbar({ isMobile }) {
   const { t, dark, toggle } = useTheme();
-  const { indices } = useMarketIndices();
+  const indices = AUTH_INDICES;
   const now = useClock();
   const stamp = `${now.toLocaleDateString("vi-VN")} · ${now.toLocaleTimeString("vi-VN")}`;
 

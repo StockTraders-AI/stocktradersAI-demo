@@ -1,3 +1,6 @@
+import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
+
 const API_ACCOUNT = "thao.dtt";
 const SOURCE_URL = "https://stocktraders.vn/service/data/getStockNoti";
 const CACHE_DURATION = 15 * 1000;
@@ -59,7 +62,7 @@ export default async function handler(req, res) {
   const now = Date.now();
   const cached = cacheByDate.get(date);
   const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
-  if (wantsFresh) res.setHeader("Cache-Control", "no-store, max-age=0");
+  if (wantsFresh) res.setHeader("Cache-Control", "private, no-store, max-age=0");
 
   if (!cached || wantsFresh || now - cached.lastFetched > CACHE_DURATION) {
     try {
@@ -104,3 +107,5 @@ export default async function handler(req, res) {
 
   return res.status(200).json(cacheByDate.get(date)?.data || cached.data);
 }
+
+export default withSecureData(handler, { methods: "GET, OPTIONS" });

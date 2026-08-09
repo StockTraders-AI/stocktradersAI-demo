@@ -1,3 +1,6 @@
+import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { withSecureData } from "./_secure.js";
+
 const CACHE_DURATION = 30 * 1000;
 const SOURCE_URL = "https://stocktradersai.vn/service/data/getPerformance";
 
@@ -40,15 +43,9 @@ async function fetchPerformanceFromSource(branchPath, date) {
   return data;
 }
 
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=30, stale-while-revalidate=120");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+async function handler(req, res) {
+  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (!requireAuth(req, res)) return;
 
   const branchPath = readBranchPath(req);
   if (!branchPath) {
@@ -96,3 +93,5 @@ export default async function handler(req, res) {
 
   return res.status(200).json(serverCache.get(cacheKey)?.data || cached.data);
 }
+
+export default withSecureData(handler, { methods: "GET, OPTIONS" });
