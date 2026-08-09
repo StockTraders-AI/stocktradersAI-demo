@@ -29,7 +29,7 @@ const TOP_LIMIT = 40;
 const PAGE_SIZE = 8;
 const SMDT_PREVIEW_PAGE_SIZE = 10;
 const SIGNAL_PORTFOLIO_PAGE_SIZE = 5;
-const PORTFOLIO_CHAT_API_URL = import.meta.env.VITE_PORTFOLIO_CHAT_API_URL || (import.meta.env.DEV ? "http://112.213.91.235:8000/api/portfolio-chat" : "/api/portfolio-chat");
+const PORTFOLIO_CHAT_API_URL = "/api/portfolio-chat";
 const TOP_STATUS_META = {
   vm: { label: "Vừa mạnh", color: "var(--G)", icon: "ti-star-filled" },
   dt: { label: "Duy trì", color: "var(--B)", icon: "ti-circle-filled" },
@@ -791,7 +791,7 @@ function PortfolioBox({ rows, asOfDate }) {
     setMsgs((prev) => [...prev, { role: "user", text: question }, { role: "typing", text: "Đang phân tích dữ liệu danh mục..." }]);
 
     try {
-      if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu VITE_PORTFOLIO_CHAT_API_URL");
+      if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu cấu hình API portfolio chat");
       if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
       const apiQuestion = portfolioChatApiQuestion(question);
       const tickerSelectionQuestion = isPortfolioTickerSelectionQuestion(apiQuestion);

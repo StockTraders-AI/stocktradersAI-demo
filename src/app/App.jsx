@@ -3,6 +3,7 @@ import { ThemeProvider } from "../theme";
 import { DesktopDashboard } from "../components/layout/DesktopDashboard";
 import { MobileDashboard } from "../components/layout/MobileDashboard";
 import { AuthPage } from "../features/auth/AuthPage";
+import { logoutUser } from "../features/auth/authApi";
 
 const LEGACY_AUTH_SESSION_KEY = "st-auth-demo-session";
 const AUTH_USER_KEY = "st-auth-user-session";
@@ -44,6 +45,7 @@ export default function App() {
   };
 
   const logout = () => {
+    logoutUser();
     try {
       localStorage.removeItem(LEGACY_AUTH_SESSION_KEY);
       localStorage.removeItem(AUTH_USER_KEY);

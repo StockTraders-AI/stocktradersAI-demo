@@ -1,3 +1,5 @@
+import { requireAuth, setSameOriginCors } from "./_auth.js";
+
 let serverCache = null;
 let lastFetched = 0;
 let refreshPromise = null;
@@ -61,14 +63,8 @@ function sliceReply(data, limit) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (!requireAuth(req, res)) return;
 
   const now = Date.now();
   const limit = parseLimit(req.query.limit);

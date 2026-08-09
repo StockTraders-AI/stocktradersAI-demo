@@ -1,4 +1,9 @@
+import { requireAuth, setSameOriginCors } from "./_auth.js";
+
 export default async function handler(req, res) {
+  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (!requireAuth(req, res)) return;
+
   try {
     const response = await fetch(
       "https://stocktraders.vn/service/data/getStockWave",

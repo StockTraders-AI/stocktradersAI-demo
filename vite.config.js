@@ -1,10 +1,18 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import changePasswordHandler from "./api/auth/change-password.js";
+import accessRightsHandler from "./api/auth/access-rights.js";
+import loginHandler from "./api/auth/login.js";
+import logoutHandler from "./api/auth/logout.js";
 import registerHandler from "./api/auth/register.js";
 import requestOtpHandler from "./api/auth/request-otp.js";
+import socialLoginHandler from "./api/auth/social-login.js";
 import verifyOtpHandler from "./api/auth/verify-otp.js";
 import smsDlrHandler from "./api/sms/dlr.js";
+import { requireAuth } from "./api/_auth.js";
+import portfolioChatHandler from "./api/portfolio-chat.js";
+import smdtBranchCrossHandler from "./api/smdt-branch-cross.js";
+import smdtTickerCrossHandler from "./api/smdt-ticker-cross.js";
 
 const serverEnv = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 for (const [key, value] of Object.entries(serverEnv)) {
@@ -71,7 +79,14 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/auth/verify-otp", verifyOtpHandler],
   ["/api/auth/register", registerHandler],
   ["/api/auth/change-password", changePasswordHandler],
+  ["/api/auth/login", loginHandler],
+  ["/api/auth/social-login", socialLoginHandler],
+  ["/api/auth/access-rights", accessRightsHandler],
+  ["/api/auth/logout", logoutHandler],
   ["/api/sms/dlr", smsDlrHandler],
+  ["/api/portfolio-chat", portfolioChatHandler],
+  ["/api/smdt-branch-cross", smdtBranchCrossHandler],
+  ["/api/smdt-ticker-cross", smdtTickerCrossHandler],
 ]);
 
 function normalizeMarketTicker(value) {
@@ -452,6 +467,11 @@ function smdtDevPlugin() {
         const reqUrl = req.url || "";
         if (await handleLocalApiRoute(req, res, reqUrl)) {
           return;
+        }
+
+        if (reqUrl.startsWith("/api/")) {
+          attachLocalApiResponseHelpers(res);
+          if (!requireAuth(req, res)) return;
         }
 
         if (reqUrl.startsWith("/api/smdt-ticker")) {
@@ -1233,20 +1253,6 @@ export default defineConfig({
     open: true,
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
-    },
-    proxy: {
-      // Proxy SMDT API to avoid CORS during local dev
-      "/service": {
-        target: "https://stocktraders.vn",
-        changeOrigin: true,
-        secure: true,
-      },
-      "/stocktraders-api": {
-        target: "https://stocktraders.vn",
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/stocktraders-api/, ""),
-      },
     },
   },
   preview: {

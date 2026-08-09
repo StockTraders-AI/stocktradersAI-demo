@@ -21,6 +21,8 @@ npm run dev      # dev server on http://localhost:3000
 ## Production on VPS/nginx
 
 Forgot-password and register OTP routes require the Node server in this repo. Do not serve only `dist/` with nginx or `vite preview`, because `/api/auth/request-otp` will not reach the FPT OTP handler.
+Protected data routes require a server-side auth session cookie. Set `AUTH_SESSION_SECRET` in production so `/api/*` data endpoints can verify signed sessions.
+Server-only upstream URLs, such as `PORTFOLIO_CHAT_API_URL`, should be configured without the `VITE_` prefix so they are not exposed in the browser bundle.
 
 ```bash
 npm install
@@ -65,6 +67,7 @@ Then add the production domain before deployment.
 Register and forgot-password flows use serverless APIs under `/api/auth/*` so FPT credentials are never exposed to the browser.
 
 ```bash
+AUTH_SESSION_SECRET=long-random-session-secret
 FPT_SMS_BASE_URL=http://sandbox.sms.fpt.net
 FPT_SMS_CLIENT_ID=your-fpt-client-id
 FPT_SMS_CLIENT_SECRET=your-fpt-client-secret

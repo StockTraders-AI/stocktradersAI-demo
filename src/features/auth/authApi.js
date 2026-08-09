@@ -1,6 +1,7 @@
-const LOGIN_API_URL = import.meta.env.VITE_LOGIN_API_URL || "/service/data/getUserLogin";
-const SOCIAL_API_URL = import.meta.env.VITE_SOCIAL_LOGIN_API_URL || "/service/data/getStockSocial";
-const ACCESS_RIGHTS_API_URL = import.meta.env.VITE_ACCESS_RIGHTS_API_URL || "/service/data/getAccessRights";
+const LOGIN_API_URL = "/api/auth/login";
+const SOCIAL_API_URL = "/api/auth/social-login";
+const ACCESS_RIGHTS_API_URL = "/api/auth/access-rights";
+const LOGOUT_API_URL = "/api/auth/logout";
 const REGISTER_API_URL = "/api/auth/register";
 const CHANGE_PASSWORD_API_URL = "/api/auth/change-password";
 const REQUEST_OTP_API_URL = "/api/auth/request-otp";
@@ -52,6 +53,7 @@ function readMessage(reply) {
 async function postJson(url, payload, replyKeys, fallbackMessage, { allowApiError = false } = {}) {
   const response = await fetch(url, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -274,6 +276,7 @@ export async function loginUser({ identifier, password }) {
     {
       UserLoginRequest: {
         user_name: userName,
+        ...(userName.includes("@") ? { email: userName } : {}),
         password,
       },
     },
@@ -540,6 +543,18 @@ export async function getAccessRights({ account }) {
     reply,
     raw: data,
   };
+}
+
+export async function logoutUser() {
+  try {
+    await fetch(LOGOUT_API_URL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    // Client-side logout should still clear local state if the network is unavailable.
+  }
 }
 
 export async function changePassword({ phoneNumber, password, otp }) {

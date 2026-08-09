@@ -6,8 +6,8 @@ import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, 
 import { CORE_BRANCHES } from "./useSMDT";
 
 const ACCOUNT = "thao.dtt";
-const BRANCH_CROSS_API = "/service/data/getSMDTBranchCross";
-const TICKER_CROSS_API = "/service/data/getSMDTTickerCross";
+const BRANCH_CROSS_API = "/api/smdt-branch-cross";
+const TICKER_CROSS_API = "/api/smdt-ticker-cross";
 const BRANCH_CACHE_KEY = "smdt_branch_cross_data_cache";
 const TICKER_CACHE_KEY = "smdt_ticker_cross_data_cache";
 const CACHE_SCHEMA_VERSION = 1;

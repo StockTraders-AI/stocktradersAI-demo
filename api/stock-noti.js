@@ -1,3 +1,5 @@
+import { requireAuth, setSameOriginCors } from "./_auth.js";
+
 const API_ACCOUNT = "thao.dtt";
 const SOURCE_URL = "https://stocktraders.vn/service/data/getStockNoti";
 const CACHE_DURATION = 15 * 1000;
@@ -41,12 +43,8 @@ async function fetchStockNotiFromSource(date) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
-
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (!requireAuth(req, res)) return;
 
   const date = toDateInputValue(String(req.query.date || ""));
   if (!date) return res.status(400).json({ error: "Missing date" });
@@ -54,7 +52,7 @@ export default async function handler(req, res) {
   const now = Date.now();
   const cached = cacheByDate.get(date);
   const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
-  if (wantsFresh) res.setHeader("Cache-Control", "no-store, max-age=0");
+  if (wantsFresh) res.setHeader("Cache-Control", "private, no-store, max-age=0");
 
   if (!cached || wantsFresh || now - cached.lastFetched > CACHE_DURATION) {
     try {

@@ -1,3 +1,5 @@
+import { requireAuth, setSameOriginCors } from "./_auth.js";
+
 let serverCache = null;
 let lastFetched = 0;
 let refreshPromise = null;
@@ -54,16 +56,12 @@ async function refreshCache() {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
-
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (!requireAuth(req, res)) return;
 
   const now = Date.now();
   const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
-  if (wantsFresh) res.setHeader("Cache-Control", "no-store, max-age=0");
+  if (wantsFresh) res.setHeader("Cache-Control", "private, no-store, max-age=0");
 
   if (!serverCache || wantsFresh || now - lastFetched > CACHE_DURATION) {
     try {
