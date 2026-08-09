@@ -694,6 +694,46 @@ function isPortfolioTickerSelectionQuestion(question) {
   return q.includes("đúng sóng") || q.includes("dung song") || q.includes("đúng ngành") || q.includes("dung nganh");
 }
 
+function isRightWaveRightIndustryQuestion(question) {
+  const q = normalizeIndustryName(question);
+  const asksRightWave = q.includes("đúng sóng") || q.includes("dung song");
+  const asksIndustry = q.includes("đúng ngành") || q.includes("dung nganh") || q.includes("ngành") || q.includes("nganh");
+  return asksRightWave && asksIndustry;
+}
+
+function portfolioSortValue(value) {
+  return Number.isFinite(value) ? value : -Infinity;
+}
+
+function portfolioQuestionCat(question) {
+  const q = normalizeIndustryName(question);
+  const hasTickerAsk = q.includes("mã nào") || q.includes("ma nao") || q.includes("mã") || q.includes("ma");
+  if (!hasTickerAsk) return null;
+
+  const asksRightWave = q.includes("đúng sóng") || q.includes("dung song");
+  const asksWrongWave = q.includes("sai sóng") || q.includes("sai song");
+  const asksRightIndustry = q.includes("đúng ngành") || q.includes("dung nganh");
+  const asksWrongIndustry = q.includes("sai ngành") || q.includes("sai nganh");
+
+  if (asksRightWave && asksRightIndustry) return "dd";
+  if (asksRightWave && asksWrongIndustry) return "ds";
+  if (asksRightIndustry && asksWrongWave) return "sd";
+  if (asksWrongWave && asksWrongIndustry) return "ss";
+  return null;
+}
+
+function answerPortfolioCatTickers(rows, cat) {
+  if (!rows.length) {
+    return "Chưa có mã hợp lệ trong Phân tích danh mục.";
+  }
+
+  const matchedRows = rows
+    .filter((row) => row.cat === cat)
+    .sort((a, b) => portfolioSortValue(b.smdt) - portfolioSortValue(a.smdt) || a.ticker.localeCompare(b.ticker));
+
+  return matchedRows.length ? matchedRows.map((row) => row.ticker).join(", ") : `Không có mã ${String(PORTFOLIO_CAT_LABELS[cat] || "").toLowerCase()}.`;
+}
+
 function answerTicker(answer, ticker) {
   const normalizedTicker = String(ticker || "").trim().toUpperCase();
   const normalizedAnswer = String(answer || "").trim().toUpperCase();
@@ -790,6 +830,13 @@ function PortfolioBox({ rows, asOfDate }) {
     setMsgs((prev) => [...prev, { role: "user", text: question }, { role: "typing", text: "Đang phân tích dữ liệu danh mục..." }]);
 
     try {
+      const portfolioCat = portfolioQuestionCat(question) || (isRightWaveRightIndustryQuestion(question) ? "dd" : null);
+      if (portfolioCat) {
+        const answer = answerPortfolioCatTickers(foundAnalyzed, portfolioCat);
+        setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: answer }]);
+        return;
+      }
+
       if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu cấu hình API portfolio chat");
       if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
       const apiQuestion = portfolioChatApiQuestion(question);
@@ -828,7 +875,7 @@ function PortfolioBox({ rows, asOfDate }) {
     } finally {
       setChatLoading(false);
     }
-  }, [chatLoading, conversationId, portfolioPositions]);
+  }, [chatLoading, conversationId, foundAnalyzed, portfolioPositions]);
   const askPortfolioMsg = useCallback((text) => {
     sendPortfolioMsg(text, true);
   }, [sendPortfolioMsg]);

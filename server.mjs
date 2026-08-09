@@ -1,11 +1,17 @@
 import { createServer } from "node:http";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import changePasswordHandler from "./api/auth/change-password.js";
+import accessRightsHandler from "./api/auth/access-rights.js";
+import dataKeyHandler from "./api/auth/data-key.js";
+import loginHandler from "./api/auth/login.js";
+import logoutHandler from "./api/auth/logout.js";
 import registerHandler from "./api/auth/register.js";
 import requestOtpHandler from "./api/auth/request-otp.js";
+import socialLoginHandler from "./api/auth/social-login.js";
 import verifyOtpHandler from "./api/auth/verify-otp.js";
 import branchPath from "./api/branch-path.js";
 import cashflowBranch from "./api/cashflow-branch.js";
@@ -14,7 +20,9 @@ import conditionSignalLatest from "./api/condition-signal-latest.js";
 import doSongAdvice from "./api/do-song-advice.js";
 import portfolioChat from "./api/portfolio-chat.js";
 import smdt from "./api/smdt.js";
+import smdtBranchCross from "./api/smdt-branch-cross.js";
 import smdtTicker from "./api/smdt-ticker.js";
+import smdtTickerCross from "./api/smdt-ticker-cross.js";
 import smsDlrHandler from "./api/sms/dlr.js";
 import stockNoti from "./api/stock-noti.js";
 import stockSignal from "./api/stock-signal.js";
@@ -60,15 +68,23 @@ import {
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
+loadEnvFiles([".env", ".env.local"]);
+
 const DIST_DIR = resolve(__dirname, "dist");
 const DOSONG_API_PREFIX = "/thi-truong";
 const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || "0.0.0.0";
 
 const apiHandlers = new Map([
   ["/api/auth/request-otp", requestOtpHandler],
   ["/api/auth/verify-otp", verifyOtpHandler],
   ["/api/auth/register", registerHandler],
   ["/api/auth/change-password", changePasswordHandler],
+  ["/api/auth/login", loginHandler],
+  ["/api/auth/social-login", socialLoginHandler],
+  ["/api/auth/access-rights", accessRightsHandler],
+  ["/api/auth/data-key", dataKeyHandler],
+  ["/api/auth/logout", logoutHandler],
   ["/api/sms/dlr", smsDlrHandler],
   ["/api/branch-path", branchPath],
   ["/api/cashflow-branch", cashflowBranch],
@@ -76,6 +92,8 @@ const apiHandlers = new Map([
   ["/api/condition-signal-latest", conditionSignalLatest],
   ["/api/do-song-advice", doSongAdvice],
   ["/api/portfolio-chat", portfolioChat],
+  ["/api/smdt-branch-cross", smdtBranchCross],
+  ["/api/smdt-ticker-cross", smdtTickerCross],
   ["/api/smdt", smdt],
   ["/api/smdt-ticker", smdtTicker],
   ["/api/stock-noti", stockNoti],
@@ -135,6 +153,28 @@ const mimeTypes = {
   ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
+
+function loadEnvFiles(fileNames) {
+  for (const fileName of fileNames) {
+    const filePath = join(__dirname, fileName);
+    if (!existsSync(filePath)) continue;
+
+    const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const separatorIndex = trimmed.indexOf("=");
+      if (separatorIndex <= 0) continue;
+
+      const key = trimmed.slice(0, separatorIndex).trim();
+      const rawValue = trimmed.slice(separatorIndex + 1).trim();
+      if (!key || process.env[key] != null) continue;
+
+      process.env[key] = rawValue.replace(/^(['"])(.*)\1$/, "$2");
+    }
+  }
+}
 
 function attachResponseHelpers(res) {
   res.status = (code) => {
@@ -242,7 +282,8 @@ async function handleDoSongApi(req, res, url) {
 }
 
 async function handleApi(req, res, url) {
-  const handler = apiHandlers.get(url.pathname);
+  const normalizedPath = url.pathname.replace(/\/+$/, "") || "/";
+  const handler = apiHandlers.get(normalizedPath);
   if (!handler) return false;
 
   attachResponseHelpers(res);
@@ -251,7 +292,7 @@ async function handleApi(req, res, url) {
   try {
     await handler(req, res);
   } catch (error) {
-    console.error(`API error ${url.pathname}:`, error);
+    console.error(`API error ${normalizedPath}:`, error);
     if (!res.headersSent) {
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -269,13 +310,23 @@ async function handleApi(req, res, url) {
   return true;
 }
 
-async function sendFile(res, filePath) {
+async function sendFile(req, res, filePath, { fallback = false } = {}) {
   const body = await readFile(filePath);
   res.statusCode = 200;
   res.setHeader(
     "Content-Type",
     mimeTypes[extname(filePath).toLowerCase()] || "application/octet-stream",
   );
+  res.setHeader(
+    "Cache-Control",
+    fallback || extname(filePath).toLowerCase() === ".html"
+      ? "no-cache"
+      : "public, max-age=31536000, immutable",
+  );
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
   res.end(body);
 }
 
@@ -299,9 +350,15 @@ async function handleStatic(req, res, url) {
   }
 
   try {
-    await sendFile(res, filePath);
+    await sendFile(req, res, filePath);
   } catch {
-    await sendFile(res, join(DIST_DIR, "index.html"));
+    const fallbackPath = join(DIST_DIR, "index.html");
+    if (!existsSync(fallbackPath)) {
+      res.statusCode = 503;
+      res.end("Build output not found. Run npm run build first.");
+      return;
+    }
+    await sendFile(req, res, fallbackPath, { fallback: true });
   }
 }
 
@@ -321,6 +378,6 @@ createServer(async (req, res) => {
     return;
   }
   await handleStatic(req, res, url);
-}).listen(PORT, "0.0.0.0", () => {
-  console.log(`StockTraders dashboard listening on port ${PORT}`);
+}).listen(PORT, HOST, () => {
+  console.log(`StockTraders dashboard listening on http://${HOST}:${PORT}`);
 });
