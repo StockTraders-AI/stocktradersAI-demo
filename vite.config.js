@@ -1,5 +1,15 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { requireAuth } from "./api/_auth.js";
+import { enforceRateLimit } from "./api/_ratelimit.js";
+import {
+  additionalData,
+  encodeSecureEnvelope,
+  isSecurePayloadEnabled,
+  readHeader,
+  requestPathname,
+  verifyRequestSignature,
+} from "./api/_secure.js";
 import changePasswordHandler from "./api/auth/change-password.js";
 import accessRightsHandler from "./api/auth/access-rights.js";
 import dataKeyHandler from "./api/auth/data-key.js";
@@ -12,6 +22,8 @@ import verifyOtpHandler from "./api/auth/verify-otp.js";
 import smsDlrHandler from "./api/sms/dlr.js";
 import conditionSignalLatestHandler from "./api/condition-signal-latest.js";
 import doSongAdviceHandler from "./api/do-song-advice.js";
+import smdtBranchCrossHandler from "./api/smdt-branch-cross.js";
+import smdtTickerCrossHandler from "./api/smdt-ticker-cross.js";
 import stockNotiHandler from "./api/stock-noti.js";
 import stockWaveCurrentHandler from "./api/stock-wave-current.js";
 import stockWaveHistoryHandler from "./api/stock-wave-history.js";
@@ -92,6 +104,8 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/sms/dlr", smsDlrHandler],
   ["/api/condition-signal-latest", conditionSignalLatestHandler],
   ["/api/do-song-advice", doSongAdviceHandler],
+  ["/api/smdt-branch-cross", smdtBranchCrossHandler],
+  ["/api/smdt-ticker-cross", smdtTickerCrossHandler],
   ["/api/stock-noti", stockNotiHandler],
   ["/api/stock-wave-current", stockWaveCurrentHandler],
   ["/api/stock-wave-history", stockWaveHistoryHandler],
