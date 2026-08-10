@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, removeDataCache, writeDataCache } from "./cacheStorage";
-import { fetchJsonWithClientCache } from "./requestCache";
+import { fetchDataPostWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { pickTimeField } from "../app/dateUtils";
 
@@ -30,17 +30,15 @@ export function tickerContentToSig(content) {
 
 let globalCache = null;
 
-function getApiUrl(limit, { fresh = false, bust = false } = {}) {
-  const params = new URLSearchParams();
+function snapshotParams(limit, { fresh = false } = {}) {
+  const params = {};
   if (limit === FULL_LIMIT) {
-    params.set("limit", FULL_LIMIT);
+    params.limit = FULL_LIMIT;
   } else if (Number.isFinite(limit) && limit > 0) {
-    params.set("limit", String(limit));
+    params.limit = limit;
   }
-  if (fresh) params.set("fresh", "1");
-  if (bust) params.set("_", String(Date.now()));
-  const query = params.toString();
-  return query ? `${API_BASE_URL}?${query}` : API_BASE_URL;
+  if (fresh) params.fresh = true;
+  return params;
 }
 
 function getReply(data) {
@@ -286,8 +284,9 @@ export function useCashFlowTicker() {
       if (!background) setStatus((s) => (s === "ready" ? "ready" : "loading"));
       const startedAt = Date.now();
       try {
-        const apiUrl = getApiUrl(limit, { fresh, bust: force || fresh });
-        const json = await fetchJsonWithClientCache(apiUrl, { force: force || fresh });
+        const json = await fetchDataPostWithClientCache(API_BASE_URL, snapshotParams(limit, { fresh }), {
+          force: force || fresh,
+        });
         const code = getReply(json)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { fetchJsonWithClientCache } from "./requestCache";
+import { fetchDataPostWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { pickTimeField } from "../app/dateUtils";
 
@@ -24,12 +24,14 @@ const STOCK_WAVE_REPLY_KEYS = ["StockWaveReply", "StockWaveRequest"];
 
 let globalCache = null;
 
-function applyLimitParam(params, limit) {
+function snapshotParams(limit) {
+  const params = {};
   if (limit === FULL_LIMIT) {
-    params.set("limit", FULL_LIMIT);
+    params.limit = FULL_LIMIT;
   } else if (Number.isFinite(limit) && limit > 0) {
-    params.set("limit", String(limit));
+    params.limit = limit;
   }
+  return params;
 }
 
 function toNumber(value, fallback = 0) {
@@ -204,11 +206,7 @@ export function useStockWave() {
 
       const startedAt = Date.now();
       try {
-        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi refresh thủ công.
-        const params = new URLSearchParams();
-        applyLimitParam(params, limit);
-        if (bust) params.set("_", String(startedAt));
-        const json = await fetchJsonWithClientCache(`${API_BASE_URL}?${params.toString()}`, { force: bust || force });
+        const json = await fetchDataPostWithClientCache(API_BASE_URL, snapshotParams(limit), { force: bust || force });
         const code = getStockWaveReply(json)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 

@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { readRequestParams } from "./_request.js";
 import { withSecureData } from "./_secure.js";
 
 const CACHE_DURATION = 30 * 1000;
@@ -6,14 +7,14 @@ const SOURCE_URL = "https://stocktradersai.vn/service/data/getPerformance";
 
 const serverCache = new Map();
 
-function readBranchPath(req) {
-  const raw = req.query?.branch_path;
+function readBranchPath(params) {
+  const raw = params?.branch_path;
   const value = Array.isArray(raw) ? raw[0] : raw;
   return String(value || "").trim();
 }
 
-function readDate(req) {
-  const raw = req.query?.date;
+function readDate(params) {
+  const raw = params?.date;
   const value = Array.isArray(raw) ? raw[0] : raw;
   return String(value || "").trim();
 }
@@ -44,16 +45,17 @@ async function fetchPerformanceFromSource(branchPath, date) {
 }
 
 async function handler(req, res) {
-  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (setSameOriginCors(req, res, "GET, POST, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
-  const branchPath = readBranchPath(req);
+  const params = await readRequestParams(req);
+  const branchPath = readBranchPath(params);
   if (!branchPath) {
     return res.status(400).json({ error: "Missing branch_path" });
   }
 
   const now = Date.now();
-  const date = readDate(req);
+  const date = readDate(params);
   const cacheKey = `${branchPath}:${date || "latest"}`;
   const cached = serverCache.get(cacheKey);
 
@@ -94,4 +96,4 @@ async function handler(req, res) {
   return res.status(200).json(serverCache.get(cacheKey)?.data || cached.data);
 }
 
-export default withSecureData(handler, { methods: "GET, OPTIONS" });
+export default withSecureData(handler, { methods: "GET, POST, OPTIONS" });

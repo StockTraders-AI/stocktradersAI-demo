@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { readRequestParams } from "./_request.js";
 import { withSecureData } from "./_secure.js";
 
 let serverCache = null;
@@ -98,7 +99,7 @@ export async function getStockWaveData() {
 
 async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cache-Control", "public, max-age=0, s-maxage=15, stale-while-revalidate=120");
 
@@ -106,7 +107,8 @@ async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const limit = parseLimit(req.query.limit);
+  const params = await readRequestParams(req);
+  const limit = parseLimit(params.limit);
 
   try {
     const data = await getStockWaveData();
@@ -119,4 +121,4 @@ async function handler(req, res) {
   }
 }
 
-export default withSecureData(handler, { methods: "GET, OPTIONS" });
+export default withSecureData(handler, { methods: "GET, POST, OPTIONS" });

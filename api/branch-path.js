@@ -33,7 +33,7 @@ async function fetchBranchPathFromSource() {
 }
 
 async function handler(req, res) {
-  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (setSameOriginCors(req, res, "GET, POST, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
   const now = Date.now();
@@ -83,4 +83,4 @@ async function handler(req, res) {
   }
 }
 
-export default withSecureData(handler, { methods: "GET, OPTIONS" });
+export default withSecureData(handler, { methods: "GET, POST, OPTIONS" });

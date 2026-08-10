@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { fetchJsonWithClientCache } from "./requestCache";
+import { fetchDataPostWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, shouldRunClientRefresh } from "./realtimeUrl";
 
 const API_URL = "/api/index-daily-changes";
@@ -130,9 +130,10 @@ export function useMarketIndices() {
         setState((current) => ({ ...current, status: current.status === "ready" ? "ready" : "loading" }));
       }
       try {
-        // URL ổn định (không cache-buster) để hit được edge cache của CDN; chỉ bust khi force refresh.
-        const url = force ? `${API_URL}?fresh=1&_=${Date.now()}` : API_URL;
-        const json = await fetchJsonWithClientCache(url, { force, ttlMs: 30_000 });
+        const json = await fetchDataPostWithClientCache(API_URL, force ? { fresh: true } : {}, {
+          force,
+          ttlMs: 30_000,
+        });
         const code = json?.IndexDailyChangesReply?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
 

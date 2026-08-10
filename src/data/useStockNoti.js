@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
-import { fetchJsonWithClientCache } from "./requestCache";
+import { fetchDataPostWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { formatTimeOfDay, pickTimeField, toDateInputValue } from "../app/dateUtils";
 
@@ -195,12 +195,11 @@ export function useStockNoti(date) {
     const request = (async () => {
       setStatus((current) => (current === "ready" && !force ? "ready" : "loading"));
       try {
-        const params = new URLSearchParams({ date: dateValue });
-        if (force) {
-          params.set("fresh", "1");
-          params.set("_", String(Date.now()));
-        }
-        const json = await fetchJsonWithClientCache(`${API_URL}?${params.toString()}`, { force });
+        const json = await fetchDataPostWithClientCache(
+          API_URL,
+          { date: dateValue, ...(force ? { fresh: true } : {}) },
+          { force }
+        );
         const code = getReply(json)?.codeReply?.codeID;
         if (code && code !== "S0000") throw new Error(`API ${code}`);
         setRows(normalize(json, dateValue));

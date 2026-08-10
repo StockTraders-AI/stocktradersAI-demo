@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { isTruthyParam, readRequestParams } from "./_request.js";
 import { withSecureData } from "./_secure.js";
 
 const API_ACCOUNT = "thao.dtt";
@@ -47,7 +48,7 @@ async function fetchStockNotiFromSource(date) {
 
 async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader(
     "Cache-Control",
@@ -56,12 +57,13 @@ async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const date = toDateInputValue(String(req.query.date || ""));
+  const params = await readRequestParams(req);
+  const date = toDateInputValue(String(params.date || ""));
   if (!date) return res.status(400).json({ error: "Missing date" });
 
   const now = Date.now();
   const cached = cacheByDate.get(date);
-  const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
+  const wantsFresh = isTruthyParam(params.fresh);
   if (wantsFresh) res.setHeader("Cache-Control", "private, no-store, max-age=0");
 
   if (!cached || wantsFresh || now - cached.lastFetched > CACHE_DURATION) {
@@ -108,4 +110,4 @@ async function handler(req, res) {
   return res.status(200).json(cacheByDate.get(date)?.data || cached.data);
 }
 
-export default withSecureData(handler, { methods: "GET, OPTIONS" });
+export default withSecureData(handler, { methods: "GET, POST, OPTIONS" });

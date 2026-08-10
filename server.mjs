@@ -17,6 +17,7 @@ import branchPath from "./api/branch-path.js";
 import cashflowBranch from "./api/cashflow-branch.js";
 import cashflowTicker from "./api/cashflow-ticker.js";
 import conditionSignalLatest from "./api/condition-signal-latest.js";
+import dataHandler from "./api/data.js";
 import doSongAdvice from "./api/do-song-advice.js";
 import portfolioChat from "./api/portfolio-chat.js";
 import smdt from "./api/smdt.js";
@@ -90,6 +91,7 @@ const apiHandlers = new Map([
   ["/api/cashflow-branch", cashflowBranch],
   ["/api/cashflow-ticker", cashflowTicker],
   ["/api/condition-signal-latest", conditionSignalLatest],
+  ["/api/data", dataHandler],
   ["/api/do-song-advice", doSongAdvice],
   ["/api/portfolio-chat", portfolioChat],
   ["/api/smdt-branch-cross", smdtBranchCross],

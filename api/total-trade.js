@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { isTruthyParam, readRequestParams } from "./_request.js";
 import { withSecureData } from "./_secure.js";
 
 let serverCache = null;
@@ -53,11 +54,12 @@ async function refreshCache() {
 }
 
 async function handler(req, res) {
-  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (setSameOriginCors(req, res, "GET, POST, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
   const now = Date.now();
-  const wantsFresh = req.query.fresh === "1" || req.query.fresh === "true";
+  const params = await readRequestParams(req);
+  const wantsFresh = isTruthyParam(params.fresh);
   if (wantsFresh) res.setHeader("Cache-Control", "private, no-store, max-age=0");
 
   if (!serverCache || wantsFresh || now - lastFetched > CACHE_DURATION) {
@@ -77,4 +79,4 @@ async function handler(req, res) {
   });
 }
 
-export default withSecureData(handler, { methods: "GET, OPTIONS" });
+export default withSecureData(handler, { methods: "GET, POST, OPTIONS" });

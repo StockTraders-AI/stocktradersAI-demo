@@ -1,4 +1,5 @@
 import { requireAuth, setSameOriginCors } from "./_auth.js";
+import { readRequestParams } from "./_request.js";
 import { withSecureData } from "./_secure.js";
 
 // Global memory cache in Serverless Function
@@ -15,11 +16,12 @@ function parseLimit(value) {
 }
 
 async function handler(req, res) {
-  if (setSameOriginCors(req, res, "GET, OPTIONS")) return;
+  if (setSameOriginCors(req, res, "GET, POST, OPTIONS")) return;
   if (!requireAuth(req, res)) return;
 
   const now = Date.now();
-  const limit = parseLimit(req.query.limit);
+  const params = await readRequestParams(req);
+  const limit = parseLimit(params.limit);
 
   async function refreshCache() {
     if (refreshPromise) return refreshPromise;
@@ -91,4 +93,4 @@ async function handler(req, res) {
   }
 }
 
-export default withSecureData(handler, { methods: "GET, OPTIONS" });
+export default withSecureData(handler, { methods: "GET, POST, OPTIONS" });

@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { requireAuth } from "./api/_auth.js";
+import { isTruthyParam, readRequestParams } from "./api/_request.js";
 import { enforceRateLimit } from "./api/_ratelimit.js";
 import {
   additionalData,
@@ -21,6 +22,7 @@ import socialLoginHandler from "./api/auth/social-login.js";
 import verifyOtpHandler from "./api/auth/verify-otp.js";
 import smsDlrHandler from "./api/sms/dlr.js";
 import conditionSignalLatestHandler from "./api/condition-signal-latest.js";
+import dataHandler from "./api/data.js";
 import doSongAdviceHandler from "./api/do-song-advice.js";
 import smdtBranchCrossHandler from "./api/smdt-branch-cross.js";
 import smdtTickerCrossHandler from "./api/smdt-ticker-cross.js";
@@ -103,6 +105,7 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/auth/logout", logoutHandler],
   ["/api/sms/dlr", smsDlrHandler],
   ["/api/condition-signal-latest", conditionSignalLatestHandler],
+  ["/api/data", dataHandler],
   ["/api/do-song-advice", doSongAdviceHandler],
   ["/api/smdt-branch-cross", smdtBranchCrossHandler],
   ["/api/smdt-ticker-cross", smdtTickerCrossHandler],
@@ -452,6 +455,11 @@ function parseOptionalLimit(value) {
   return Number.isFinite(limit) && limit > 0 ? limit : 150;
 }
 
+async function readLocalRequestParams(req, parsedUrl) {
+  req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+  return readRequestParams(req);
+}
+
 function attachLocalApiResponseHelpers(res) {
   if (!res.status) {
     res.status = (statusCode) => {
@@ -550,7 +558,8 @@ function smdtDevPlugin() {
         if (reqUrl.startsWith("/api/smdt-ticker")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const limit = parseOptionalLimit(params.limit);
 
           const now = Date.now();
           if (
@@ -618,7 +627,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/smdt")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const limit = parseOptionalLimit(params.limit);
 
           const now = Date.now();
           if (!devCache || now - devLastFetched > CACHE_DURATION) {
@@ -678,7 +688,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/stock-wave")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const limit = parseOptionalLimit(params.limit);
 
           const now = Date.now();
           const isStale =
@@ -731,7 +742,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/cashflow-branch")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const limit = parseOptionalLimit(params.limit);
 
           const now = Date.now();
           if (
@@ -791,9 +803,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/index-daily-changes")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const wantsFresh =
-            parsedUrl.searchParams.get("fresh") === "1" ||
-            parsedUrl.searchParams.get("fresh") === "true";
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const wantsFresh = isTruthyParam(params.fresh);
           const now = Date.now();
 
           try {
@@ -825,9 +836,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/total-trade-real")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const wantsFresh =
-            parsedUrl.searchParams.get("fresh") === "1" ||
-            parsedUrl.searchParams.get("fresh") === "true";
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const wantsFresh = isTruthyParam(params.fresh);
           const now = Date.now();
 
           try {
@@ -864,9 +874,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/total-trade")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const wantsFresh =
-            parsedUrl.searchParams.get("fresh") === "1" ||
-            parsedUrl.searchParams.get("fresh") === "true";
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const wantsFresh = isTruthyParam(params.fresh);
           const now = Date.now();
 
           try {
@@ -909,8 +918,9 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/cashflow-ticker")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const wantsFresh = parsedUrl.searchParams.get("fresh") === "1" || parsedUrl.searchParams.get("fresh") === "true";
-          const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const wantsFresh = isTruthyParam(params.fresh);
+          const limit = parseOptionalLimit(params.limit);
 
           const now = Date.now();
           // Khi thiếu snapshot hoặc danh sách mã, nạp song song để first paint nhanh nhất.
@@ -978,7 +988,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/smdt-ticker")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const limit = parseOptionalLimit(params.limit);
 
           const now = Date.now();
           if (
@@ -1047,7 +1058,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/smdt-ticker")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const limit = parseOptionalLimit(parsedUrl.searchParams.get("limit"));
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const limit = parseOptionalLimit(params.limit);
 
           const now = Date.now();
           if (
@@ -1115,7 +1127,8 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/stock-noti")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const date = String(parsedUrl.searchParams.get("date") || "").trim().slice(0, 10);
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const date = String(params.date || "").trim().slice(0, 10);
           if (!date) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
@@ -1204,8 +1217,9 @@ function smdtDevPlugin() {
         } else if (reqUrl.startsWith("/api/performance")) {
           const host = req.headers.host || "localhost:3000";
           const parsedUrl = new URL(reqUrl, `http://${host}`);
-          const branchPath = String(parsedUrl.searchParams.get("branch_path") || "").trim();
-          const date = String(parsedUrl.searchParams.get("date") || "").trim();
+          const params = await readLocalRequestParams(req, parsedUrl);
+          const branchPath = String(params.branch_path || "").trim();
+          const date = String(params.date || "").trim();
           if (!branchPath) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");

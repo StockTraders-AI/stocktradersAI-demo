@@ -194,15 +194,16 @@ async function readResponse(url, method, response) {
 /* Thay thế fetch(...).json() cho mọi endpoint dữ liệu.
  * Ném lỗi khi HTTP không thành công, giống hành vi cũ ở requestCache. */
 export async function secureFetchJson(url, options = {}) {
-  const method = String(options.method || "GET").toUpperCase();
+  const { secureUrl = url, ...fetchOptions } = options;
+  const method = String(fetchOptions.method || "GET").toUpperCase();
 
   const run = async () => {
-    const signature = await signHeaders(url, method);
+    const signature = await signHeaders(secureUrl, method);
     return fetch(url, {
       cache: "no-store",
       credentials: "same-origin",
-      ...options,
-      headers: { ...(options.headers || {}), ...(signature || {}) },
+      ...fetchOptions,
+      headers: { ...(fetchOptions.headers || {}), ...(signature || {}) },
     });
   };
 
@@ -220,20 +221,21 @@ export async function secureFetchJson(url, options = {}) {
     throw error;
   }
 
-  return readResponse(url, method, response);
+  return readResponse(secureUrl, method, response);
 }
 
 /* Dùng khi caller cần tự xử lý mã lỗi HTTP thay vì nhận Error. */
 export async function secureFetchRaw(url, options = {}) {
-  const method = String(options.method || "GET").toUpperCase();
+  const { secureUrl = url, ...fetchOptions } = options;
+  const method = String(fetchOptions.method || "GET").toUpperCase();
 
   const run = async () => {
-    const signature = await signHeaders(url, method);
+    const signature = await signHeaders(secureUrl, method);
     return fetch(url, {
       cache: "no-store",
       credentials: "same-origin",
-      ...options,
-      headers: { ...(options.headers || {}), ...(signature || {}) },
+      ...fetchOptions,
+      headers: { ...(fetchOptions.headers || {}), ...(signature || {}) },
     });
   };
 
@@ -243,7 +245,7 @@ export async function secureFetchRaw(url, options = {}) {
     response = await run();
   }
 
-  return { response, readJson: () => readResponse(url, method, response) };
+  return { response, readJson: () => readResponse(secureUrl, method, response) };
 }
 
 /* Gọi khi đăng xuất để khoá không còn nằm trong bộ nhớ. */

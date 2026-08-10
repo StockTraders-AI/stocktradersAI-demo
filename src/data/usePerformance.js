@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { fetchJsonWithClientCache } from "./requestCache";
+import { fetchDataPostWithClientCache } from "./requestCache";
 
 const API_URL = "/api/performance";
 const CACHE_KEY_PREFIX = "performance_by_branch_path";
@@ -96,10 +96,11 @@ export function usePerformance(branchPath, date) {
     const request = (async () => {
       setStatus((current) => (current === "ready" ? "ready" : "loading"));
       try {
-        const params = new URLSearchParams({ branch_path: branchPath });
-        if (date) params.set("date", date);
-        const url = `${API_URL}?${params.toString()}`;
-        const json = await fetchJsonWithClientCache(force ? `${url}&_=${Date.now()}` : url, { force, ttlMs: 30_000 });
+        const json = await fetchDataPostWithClientCache(
+          API_URL,
+          { branch_path: branchPath, ...(date ? { date } : {}) },
+          { force, ttlMs: 30_000 }
+        );
         const normalized = normalize(json);
         const now = new Date();
         if (latestKeyRef.current === requestKey) {
