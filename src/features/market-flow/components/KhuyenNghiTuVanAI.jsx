@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fetchDataPostWithClientCache } from "../../../data/requestCache";
 
 const EMPTY_SIGNAL = { title: "", response: "", recommendation: "" };
 
@@ -11,6 +12,49 @@ function normalizeSignal(data) {
     title: String(data?.title || "").trim(),
     response: String(data?.response || data?.body || "").trim(),
     recommendation: String(data?.recommendation || data?.action || "").trim(),
+  };
+}
+
+function buildFallbackSignal(doSongAdvice, { waitbuy = 0, buy = 0 } = {}) {
+  const wave = doSongAdvice?.wave || {};
+  const engine = doSongAdvice?.engine || {};
+  const state = String(engine?.maTrangThai || "").toLowerCase();
+  const phase = String(engine?.pha || "").trim();
+  const choMua = Number(wave.choMua ?? waitbuy) || 0;
+  const mua = Number(wave.mua ?? buy) || 0;
+  const choBan = Number(wave.choBan) || 0;
+  const ban = Number(wave.ban) || 0;
+
+  if (!doSongAdvice && !choMua && !mua && !choBan && !ban) return EMPTY_SIGNAL;
+
+  if (state === "s7" || state === "s6" || ban > mua + choMua) {
+    return {
+      title: "Thị trường đang nghiêng về phòng thủ.",
+      response: `Áp lực bán/chờ bán đang nổi bật với ${ban + choBan} mã, trong khi mua/chờ mua có ${mua + choMua} mã.`,
+      recommendation: "Ưu tiên hạ rủi ro, giữ tỷ trọng tiền mặt cao và chỉ giữ các mã còn tín hiệu mạnh.",
+    };
+  }
+
+  if (state === "s4" || state === "buy" || mua > ban + choBan) {
+    return {
+      title: "Sóng tăng đang có tín hiệu duy trì.",
+      response: `Nhóm mua/chờ mua ghi nhận ${mua + choMua} mã, cao hơn áp lực bán/chờ bán ${ban + choBan} mã.`,
+      recommendation: "Có thể giữ tỷ trọng ở mã khỏe, ưu tiên nhóm dẫn sóng và tránh mua đuổi khi giá đã tăng nhanh.",
+    };
+  }
+
+  if (state === "s1" || state === "waitbuy" || choMua > choBan) {
+    return {
+      title: "Dòng tiền chờ mua đang nhen nhóm.",
+      response: `Chờ mua có ${choMua} mã, mua có ${mua} mã; thị trường đang trong vùng cần thêm xác nhận.`,
+      recommendation: "Chuẩn bị danh mục theo dõi, giải ngân thăm dò nhỏ nếu mã riêng lẻ xác nhận tốt.",
+    };
+  }
+
+  return {
+    title: phase ? `Thị trường đang ở pha ${phase.toLowerCase()}.` : "Thị trường chưa có ưu thế rõ ràng.",
+    response: `Tương quan hiện tại: chờ mua ${choMua}, mua ${mua}, chờ bán ${choBan}, bán ${ban}.`,
+    recommendation: "Giữ trạng thái quan sát, ưu tiên quản trị vị thế và chờ tín hiệu rõ hơn.",
   };
 }
 
@@ -30,6 +74,11 @@ export default function KhuyenNghiTuVanAI({ refreshKey = 0, checkDate = "", them
         cancelled = true;
         retryTimers.forEach((timer) => window.clearTimeout(timer));
       };
+    }
+
+    const initialFallbackSignal = buildFallbackSignal(doSongAdvice, { waitbuy, buy });
+    if (hasSignalContent(initialFallbackSignal)) {
+      setConditionSignal(initialFallbackSignal);
     }
 
     function sameNumber(a, b) {
@@ -54,10 +103,13 @@ export default function KhuyenNghiTuVanAI({ refreshKey = 0, checkDate = "", them
 
     async function loadRecommendation(attempt = 0) {
       try {
-        const params = new URLSearchParams({ date: dateKey });
-        const res = await fetch(`/thi-truong/api/do-song-recommendation?${params.toString()}`, { cache: "no-store" });
-        const data = res.ok ? await res.json() : null;
+        const data = await fetchDataPostWithClientCache(
+          "/thi-truong/api/do-song-recommendation",
+          { date: dateKey },
+          { force: true },
+        ).catch(() => null);
         const nextSignal = normalizeSignal(data || {});
+        const fallbackSignal = buildFallbackSignal(doSongAdvice, { waitbuy, buy });
 
         if (cancelled) return;
         if (hasSignalContent(nextSignal)) {
@@ -67,15 +119,15 @@ export default function KhuyenNghiTuVanAI({ refreshKey = 0, checkDate = "", them
 
         if (attempt + 1 < retryDelays.length) {
           scheduleLoad(attempt + 1);
-        } else if (!realtime) {
-          setConditionSignal(EMPTY_SIGNAL);
+        } else {
+          setConditionSignal(fallbackSignal);
         }
       } catch {
         if (cancelled) return;
         if (attempt + 1 < retryDelays.length) {
           scheduleLoad(attempt + 1);
-        } else if (!realtime) {
-          setConditionSignal(EMPTY_SIGNAL);
+        } else {
+          setConditionSignal(buildFallbackSignal(doSongAdvice, { waitbuy, buy }));
         }
       }
     }

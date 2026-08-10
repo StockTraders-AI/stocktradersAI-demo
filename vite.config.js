@@ -32,6 +32,7 @@ import stockWaveHistoryHandler from "./api/stock-wave-history.js";
 import stockWaveTickersHandler from "./api/stock-wave-tickers.js";
 import waveBottomConfirmPairsHandler from "./api/wave-bottom-confirm-pairs.js";
 import portfolioChatHandler from "./api/portfolio-chat.js";
+import liveHandler from "./api/live.js";
 
 const serverEnv = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 for (const [key, value] of Object.entries(serverEnv)) {
@@ -115,6 +116,7 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/stock-wave-tickers", stockWaveTickersHandler],
   ["/api/wave-bottom-confirm-pairs", waveBottomConfirmPairsHandler],
   ["/api/portfolio-chat", portfolioChatHandler],
+  ["/api/live", liveHandler],
 ]);
 
 function normalizeMarketTicker(value) {

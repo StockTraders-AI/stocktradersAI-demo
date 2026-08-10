@@ -13,6 +13,7 @@ import {
   normalizeStockNotiRows,
   pickStockNotiRowsForDate,
 } from "./NhatKyTinHieu/helpers.js";
+import { fetchDataPostWithClientCache } from "../../../data/requestCache";
 import { danhGiaDoSong } from "../utils/doSongEngine.js";
 // ─────────────────────────────────────────────────────────────
 // TOKENS
@@ -95,14 +96,11 @@ const WAVE_BOTTOM_CONFIRM_PAIRS_URL =
   import.meta.env.VITE_WAVE_BOTTOM_CONFIRM_PAIRS_URL ||
   "/thi-truong/api/wave-bottom-confirm-pairs";
 const STOCK_NOTI_STREAM_URL =
-  import.meta.env.VITE_STOCK_NOTI_STREAM_URL ||
-  "/thi-truong/api/stock-noti/stream";
+  "/api/live?c=2";
 const STOCK_WAVE_CURRENT_STREAM_URL =
-  import.meta.env.VITE_STOCK_WAVE_CURRENT_STREAM_URL ||
-  "/thi-truong/api/stock-wave-current/stream";
+  "/api/live?c=1";
 const WAVE_BOTTOM_CONFIRM_PAIRS_STREAM_URL =
-  import.meta.env.VITE_WAVE_BOTTOM_CONFIRM_PAIRS_STREAM_URL ||
-  "/thi-truong/api/wave-bottom-confirm-pairs/stream";
+  "/api/live?c=3";
 const WAVE_CHANNEL = "wave";
 const STOCK_NOTI_CHANNEL = "stock-noti";
 const EMPTY_WAVE = {
@@ -546,11 +544,8 @@ function getSocketStockNotiData(payload) {
 }
 
 function fetchStockWaveCurrent() {
-  return fetch(STOCK_WAVE_CURRENT_URL)
-    .then((response) => {
-      if (!response.ok) return null;
-      return response.json();
-    })
+  return fetchDataPostWithClientCache(STOCK_WAVE_CURRENT_URL, {}, { force: true })
+    .catch(() => null)
     .then((payload) => {
       if (!payload) return null;
       return {
@@ -564,24 +559,14 @@ const stockWaveHistoryRequests = new Map();
 const stockWaveTickerRequests = new Map();
 let waveBottomConfirmPairsRequest = null;
 
-function getHistoryUrl(referenceDate, force = false) {
-  const url = new URL(STOCK_WAVE_HISTORY_URL, window.location.origin);
-  url.searchParams.set("before", referenceDate);
-  if (force) url.searchParams.set("refresh", "1");
-  return url.toString();
-}
-
 function fetchStockWaveHistory(referenceDate, force = false) {
   if (force) stockWaveHistoryRequests.delete(referenceDate);
   if (!stockWaveHistoryRequests.has(referenceDate)) {
-    const request = fetch(getHistoryUrl(referenceDate, force), {
-      cache: "no-store",
-    })
-      .then((response) => {
-        if (!response.ok)
-          throw new Error(`Stock wave history failed: ${response.status}`);
-        return response.json();
-      })
+    const request = fetchDataPostWithClientCache(
+      STOCK_WAVE_HISTORY_URL,
+      { before: referenceDate, ...(force ? { refresh: true } : {}) },
+      { force },
+    )
       .then((payload) => {
         const allRows = normalizeWavePayload(payload.allRows ?? payload);
         return {
@@ -600,20 +585,12 @@ function fetchStockWaveHistory(referenceDate, force = false) {
   return stockWaveHistoryRequests.get(referenceDate);
 }
 
-function getTickersUrl(dateKey = "") {
-  const url = new URL(STOCK_WAVE_TICKERS_URL, window.location.origin);
-  if (dateKey && dateKey !== "latest") url.searchParams.set("date", dateKey);
-  return url.toString();
-}
-
 function fetchStockWaveTickers(cacheKey = "latest") {
   if (!stockWaveTickerRequests.has(cacheKey)) {
-    const request = fetch(getTickersUrl(cacheKey))
-      .then((response) => {
-        if (!response.ok)
-          throw new Error(`Stock wave tickers failed: ${response.status}`);
-        return response.json();
-      })
+    const request = fetchDataPostWithClientCache(
+      STOCK_WAVE_TICKERS_URL,
+      cacheKey && cacheKey !== "latest" ? { date: cacheKey } : {},
+    )
       .then((payload) => normalizeWavePayload(payload)[0] || null)
       .catch((error) => {
         stockWaveTickerRequests.delete(cacheKey);
@@ -628,19 +605,11 @@ function fetchStockWaveTickers(cacheKey = "latest") {
 function fetchWaveBottomConfirmPairs(force = false) {
   if (force) waveBottomConfirmPairsRequest = null;
   if (!waveBottomConfirmPairsRequest) {
-    const url = new URL(WAVE_BOTTOM_CONFIRM_PAIRS_URL, window.location.origin);
-    if (force) url.searchParams.set("refresh", "1");
-    waveBottomConfirmPairsRequest = fetch(url.toString(), {
-      method: "POST",
-      cache: "no-store",
-    })
-      .then((response) => {
-        if (!response.ok)
-          throw new Error(
-            `Wave bottom confirm pairs failed: ${response.status}`,
-          );
-        return response.json();
-      })
+    waveBottomConfirmPairsRequest = fetchDataPostWithClientCache(
+      WAVE_BOTTOM_CONFIRM_PAIRS_URL,
+      force ? { refresh: true } : {},
+      { force },
+    )
       .then((payload) => (Array.isArray(payload?.rows) ? payload.rows : []))
       .catch((error) => {
         waveBottomConfirmPairsRequest = null;

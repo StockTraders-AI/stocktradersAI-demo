@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { readDataCache, writeDataCache } from "./cacheStorage";
-import { fetchJsonWithClientCache } from "./requestCache";
+import { fetchDataPostWithClientCache } from "./requestCache";
 import { REALTIME_RECONNECT_EVENT, emitRealtimeReconnected, resolveRealtimeUrl, shouldRunClientRefresh } from "./realtimeUrl";
 import { CORE_BRANCHES } from "./useSMDT";
 
@@ -144,14 +144,7 @@ function hasCrossData(data) {
 }
 
 async function postJson(url, body, force = false) {
-  return fetchJsonWithClientCache(url, {
-    force,
-    options: {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  });
+  return fetchDataPostWithClientCache(url, body, { force });
 }
 
 function fetchBranchCross(force = false) {

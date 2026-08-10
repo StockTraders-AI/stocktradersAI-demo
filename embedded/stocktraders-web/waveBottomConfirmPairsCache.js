@@ -706,6 +706,15 @@ function findLowPivot(pivots, quoteByDate, rows, pair) {
   return lows[0];
 }
 
+function findNextHighPivot(pivots, bottom) {
+  if (!bottom) return null;
+  return (
+    pivots.find(
+      (pivot) => pivot.type === "high" && pivot.index > bottom.index,
+    ) || null
+  );
+}
+
 function findNextHigh(pivots, rows, bottom) {
   const pivotHigh = findNextHighPivot(pivots, bottom);
 

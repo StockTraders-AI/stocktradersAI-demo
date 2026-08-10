@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchDataPostWithClientCache } from "../../../data/requestCache";
 
 const PORTFOLIO_CHAT_URL = import.meta.env.VITE_PORTFOLIO_CHAT_URL || "/thi-truong/api/portfolio-chat";
 const USER_ID = "u1";
@@ -87,13 +88,11 @@ export default function TuVanAiCard() {
 
 
   const fetchReply = useCallback(async (q) => {
-    const res = await fetch(PORTFOLIO_CHAT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q, user_id: USER_ID, conversation_id: conversationId }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `API loi ${res.status}`);
+    const data = await fetchDataPostWithClientCache(
+      PORTFOLIO_CHAT_URL,
+      { question: q, user_id: USER_ID, conversation_id: conversationId },
+      { force: true },
+    );
     if (data.conversation_id) setConversationId(data.conversation_id);
     return typeof data.answer === "string" ? data.answer : "";
   }, [conversationId]);

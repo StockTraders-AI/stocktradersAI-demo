@@ -36,6 +36,7 @@ import totalTradeReal from "./api/total-trade-real.js";
 import waveBottomConfirmPairs from "./api/wave-bottom-confirm-pairs.js";
 import performance from "./api/performance.js";
 import indexDailyChanges from "./api/index-daily-changes.js";
+import liveHandler from "./api/live.js";
 import {
   handleStockWaveCurrent as doSongHandleStockWaveCurrent,
   handleStockWaveCurrentStream as doSongHandleStockWaveCurrentStream,
@@ -109,6 +110,7 @@ const apiHandlers = new Map([
   ["/api/wave-bottom-confirm-pairs", waveBottomConfirmPairs],
   ["/api/performance", performance],
   ["/api/index-daily-changes", indexDailyChanges],
+  ["/api/live", liveHandler],
 ]);
 
 initDoSongStockDataDb()

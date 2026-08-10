@@ -1,3 +1,5 @@
+import { fetchDataPostWithClientCache } from "../../../../data/requestCache";
+
 export const NHAT_KY_TABS = [
   ["all", "Tất cả"],
   ["thi_truong", "Thị trường"],
@@ -162,10 +164,6 @@ export function getStockNotiUrl(dateKey, endpoint = "/thi-truong/api/stock-noti"
 }
 
 export function fetchStockNoti(dateKey, { endpoint = "/thi-truong/api/stock-noti" } = {}) {
-  return fetch(getStockNotiUrl(dateKey, endpoint))
-    .then((response) => {
-      if (!response.ok) throw new Error(`Stock notification failed: ${response.status}`);
-      return response.json();
-    })
+  return fetchDataPostWithClientCache(endpoint, dateKey ? { date: dateKey } : {}, { force: true })
     .then((payload) => normalizeStockNotiRows(payload));
 }

@@ -14,7 +14,7 @@ import { useRealtimeStockSignalFeed, useStockSignal } from "../../data/useStockS
 import { useRealtimeStockNotiFeed, useStockNoti } from "../../data/useStockNoti";
 import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave";
 import { useTotalTrade } from "../../data/useTotalTrade";
-import { secureFetchJson } from "../../data/secureClient";
+import { fetchDataPostWithClientCache } from "../../data/requestCache";
 import { Card, Clink, LiveFooter, Loading, Pagination } from "../../components/ui";
 import { PORTFOLIO_MAX_CODES, loadSavedPortfolio, parsePortfolioCodes, savePortfolioState } from "../portfolio-analysis/portfolioState";
 import { evaluateFourKey, fallbackEvalKey, scorePortfolio4Key, seriesFromMatrix } from "../portfolio-analysis/stock4KeyEvaluator";
@@ -743,15 +743,11 @@ function answerTicker(answer, ticker) {
 }
 
 async function requestPortfolioChatPosition({ question, userId, conversationId, position }) {
-  const data = await secureFetchJson(PORTFOLIO_CHAT_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      question,
-      user_id: userId,
-      conversation_id: conversationId,
-      portfolio: { position },
-    }),
+  const data = await fetchDataPostWithClientCache(PORTFOLIO_CHAT_API_URL, {
+    question,
+    user_id: userId,
+    conversation_id: conversationId,
+    portfolio: { position },
   });
   const answer = typeof data?.answer === "string" ? data.answer.trim() : "";
   return { answer, position, conversationId: data?.conversation_id };
