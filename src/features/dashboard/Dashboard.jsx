@@ -694,6 +694,18 @@ function isPortfolioTickerSelectionQuestion(question) {
   return q.includes("đúng sóng") || q.includes("dung song") || q.includes("đúng ngành") || q.includes("dung nganh");
 }
 
+function isFourKeyQuestion(question) {
+  const q = normalizeIndustryName(question);
+  return q.includes("đúng sóng")
+    || q.includes("dung song")
+    || q.includes("sai sóng")
+    || q.includes("sai song")
+    || q.includes("đúng ngành")
+    || q.includes("dung nganh")
+    || q.includes("sai ngành")
+    || q.includes("sai nganh");
+}
+
 function isRightWaveRightIndustryQuestion(question) {
   const q = normalizeIndustryName(question);
   const asksRightWave = q.includes("đúng sóng") || q.includes("dung song");
@@ -742,13 +754,14 @@ function answerTicker(answer, ticker) {
   return answerTickers.length === 1 && answerTickers[0] === normalizedTicker ? normalizedTicker : "";
 }
 
-async function requestPortfolioChatPosition({ question, userId, conversationId, position }) {
-  const data = await fetchDataPostWithClientCache(PORTFOLIO_CHAT_API_URL, {
+async function requestPortfolioChat({ question, userId, conversationId, position = null }) {
+  const body = {
     question,
     user_id: userId,
     conversation_id: conversationId,
-    portfolio: { position },
-  });
+  };
+  if (position) body.portfolio = { position };
+  const data = await fetchDataPostWithClientCache(PORTFOLIO_CHAT_API_URL, body);
   const answer = typeof data?.answer === "string" ? data.answer.trim() : "";
   return { answer, position, conversationId: data?.conversation_id };
 }
@@ -833,13 +846,26 @@ function PortfolioBox({ rows, asOfDate }) {
         return;
       }
 
-      if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu cấu hình API portfolio chat");
-      if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
       const apiQuestion = portfolioChatApiQuestion(question);
+      if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu cấu hình API portfolio chat");
+
+      if (!isFourKeyQuestion(apiQuestion)) {
+        const reply = await requestPortfolioChat({
+          question: apiQuestion,
+          userId: "u1",
+          conversationId,
+        });
+        if (!reply.answer) throw new Error("API không trả về answer");
+        if (reply.conversationId) setConversationId(reply.conversationId);
+        setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: reply.answer }]);
+        return;
+      }
+
+      if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
       const tickerSelectionQuestion = isPortfolioTickerSelectionQuestion(apiQuestion);
       const replies = await Promise.allSettled(
         portfolioPositions.map((position) =>
-          requestPortfolioChatPosition({
+          requestPortfolioChat({
             question: apiQuestion,
             userId: "u1",
             conversationId: `${conversationId}-${position.ticker}`,

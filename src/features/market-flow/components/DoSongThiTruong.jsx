@@ -85,16 +85,16 @@ let T = DARK_T;
 // ─────────────────────────────────────────────────────────────
 const STOCK_WAVE_CURRENT_URL =
   import.meta.env.VITE_STOCK_WAVE_CURRENT_URL ||
-  "/thi-truong/api/stock-wave-current";
+  "/api/market/stock-wave-current";
 const STOCK_WAVE_HISTORY_URL =
   import.meta.env.VITE_STOCK_WAVE_HISTORY_URL ||
-  "/thi-truong/api/stock-wave-history";
+  "/api/market/stock-wave-history";
 const STOCK_WAVE_TICKERS_URL =
   import.meta.env.VITE_STOCK_WAVE_TICKERS_URL ||
-  "/thi-truong/api/stock-wave-tickers";
+  "/api/market/stock-wave-tickers";
 const WAVE_BOTTOM_CONFIRM_PAIRS_URL =
   import.meta.env.VITE_WAVE_BOTTOM_CONFIRM_PAIRS_URL ||
-  "/thi-truong/api/wave-bottom-confirm-pairs";
+  "/api/market/wave-bottom-confirm-pairs";
 const STOCK_NOTI_STREAM_URL =
   "/api/live?c=2";
 const STOCK_WAVE_CURRENT_STREAM_URL =

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDataPostWithClientCache } from "../../../data/requestCache";
 
-const PORTFOLIO_CHAT_URL = import.meta.env.VITE_PORTFOLIO_CHAT_URL || "/thi-truong/api/portfolio-chat";
+const PORTFOLIO_CHAT_URL = import.meta.env.VITE_PORTFOLIO_CHAT_URL || "/api/market/portfolio-chat";
 const USER_ID = "u1";
 const DEFAULT_CONVERSATION_ID = "portfolio-test-1";
 

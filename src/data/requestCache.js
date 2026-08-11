@@ -25,13 +25,15 @@ const DATA_ROUTE_BY_PATH = new Map([
   ["/api/total-trade", { code: "r20", securePath: "/api/total-trade" }],
   ["/api/total-trade-real", { code: "r21", securePath: "/api/total-trade-real" }],
   ["/api/wave-bottom-confirm-pairs", { code: "r22", securePath: "/api/wave-bottom-confirm-pairs" }],
-  ["/thi-truong/api/do-song-recommendation", { code: "r06", securePath: "/api/do-song-recommendation" }],
-  ["/thi-truong/api/portfolio-chat", { code: "r09", securePath: "/api/portfolio-chat" }],
-  ["/thi-truong/api/stock-noti", { code: "r34", securePath: "/api/stock-noti" }],
-  ["/thi-truong/api/stock-wave-current", { code: "r31", securePath: "/api/stock-wave-current" }],
-  ["/thi-truong/api/stock-wave-history", { code: "r32", securePath: "/api/stock-wave-history" }],
-  ["/thi-truong/api/stock-wave-tickers", { code: "r33", securePath: "/api/stock-wave-tickers" }],
-  ["/thi-truong/api/wave-bottom-confirm-pairs", { code: "r35", securePath: "/api/wave-bottom-confirm-pairs" }],
+  ["/api/market/condition-signal-latest", { code: "r04", securePath: "/api/condition-signal-latest" }],
+  ["/api/market/do-song-advice", { code: "r05", securePath: "/api/do-song-advice" }],
+  ["/api/market/do-song-recommendation", { code: "r06", securePath: "/api/do-song-recommendation" }],
+  ["/api/market/portfolio-chat", { code: "r09", securePath: "/api/portfolio-chat" }],
+  ["/api/market/stock-noti", { code: "r34", securePath: "/api/stock-noti" }],
+  ["/api/market/stock-wave-current", { code: "r31", securePath: "/api/stock-wave-current" }],
+  ["/api/market/stock-wave-history", { code: "r32", securePath: "/api/stock-wave-history" }],
+  ["/api/market/stock-wave-tickers", { code: "r33", securePath: "/api/stock-wave-tickers" }],
+  ["/api/market/wave-bottom-confirm-pairs", { code: "r35", securePath: "/api/wave-bottom-confirm-pairs" }],
 ]);
 
 const responseCache = new Map();

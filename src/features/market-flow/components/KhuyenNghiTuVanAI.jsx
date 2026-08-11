@@ -104,7 +104,7 @@ export default function KhuyenNghiTuVanAI({ refreshKey = 0, checkDate = "", them
     async function loadRecommendation(attempt = 0) {
       try {
         const data = await fetchDataPostWithClientCache(
-          "/thi-truong/api/do-song-recommendation",
+          "/api/market/do-song-recommendation",
           { date: dateKey },
           { force: true },
         ).catch(() => null);

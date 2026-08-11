@@ -53,14 +53,19 @@ export async function handlePortfolioChat(req, res, rawUrl) {
       return true;
     }
 
+    const upstreamBody = {
+      question,
+      user_id: body.user_id || "u1",
+      conversation_id: body.conversation_id || "portfolio-test-1",
+    };
+    if (body.portfolio && typeof body.portfolio === "object") {
+      upstreamBody.portfolio = body.portfolio;
+    }
+
     const response = await fetch(PORTFOLIO_CHAT_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question,
-        user_id: body.user_id || "u1",
-        conversation_id: body.conversation_id || "portfolio-test-1",
-      }),
+      body: JSON.stringify(upstreamBody),
     });
 
     const payload = await response.json().catch(() => ({}));

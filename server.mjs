@@ -37,6 +37,15 @@ import waveBottomConfirmPairs from "./api/wave-bottom-confirm-pairs.js";
 import performance from "./api/performance.js";
 import indexDailyChanges from "./api/index-daily-changes.js";
 import liveHandler from "./api/live.js";
+import marketConditionSignalLatest from "./api/market/condition-signal-latest.js";
+import marketDoSongAdvice from "./api/market/do-song-advice.js";
+import marketDoSongRecommendation from "./api/market/do-song-recommendation.js";
+import marketPortfolioChat from "./api/market/portfolio-chat.js";
+import marketStockNoti from "./api/market/stock-noti.js";
+import marketStockWaveCurrent from "./api/market/stock-wave-current.js";
+import marketStockWaveHistory from "./api/market/stock-wave-history.js";
+import marketStockWaveTickers from "./api/market/stock-wave-tickers.js";
+import marketWaveBottomConfirmPairs from "./api/market/wave-bottom-confirm-pairs.js";
 import {
   handleStockWaveCurrent as doSongHandleStockWaveCurrent,
   handleStockWaveCurrentStream as doSongHandleStockWaveCurrentStream,
@@ -111,6 +120,15 @@ const apiHandlers = new Map([
   ["/api/performance", performance],
   ["/api/index-daily-changes", indexDailyChanges],
   ["/api/live", liveHandler],
+  ["/api/market/condition-signal-latest", marketConditionSignalLatest],
+  ["/api/market/do-song-advice", marketDoSongAdvice],
+  ["/api/market/do-song-recommendation", marketDoSongRecommendation],
+  ["/api/market/portfolio-chat", marketPortfolioChat],
+  ["/api/market/stock-noti", marketStockNoti],
+  ["/api/market/stock-wave-current", marketStockWaveCurrent],
+  ["/api/market/stock-wave-history", marketStockWaveHistory],
+  ["/api/market/stock-wave-tickers", marketStockWaveTickers],
+  ["/api/market/wave-bottom-confirm-pairs", marketWaveBottomConfirmPairs],
 ]);
 
 initDoSongStockDataDb()

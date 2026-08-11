@@ -157,13 +157,13 @@ export function normalizeStockNotiRows(payload) {
     .sort((a, b) => String(b.sortKey || b.id).localeCompare(String(a.sortKey || a.id)));
 }
 
-export function getStockNotiUrl(dateKey, endpoint = "/thi-truong/api/stock-noti") {
+export function getStockNotiUrl(dateKey, endpoint = "/api/market/stock-noti") {
   const url = new URL(endpoint, window.location.origin);
   if (dateKey) url.searchParams.set("date", dateKey);
   return url.toString();
 }
 
-export function fetchStockNoti(dateKey, { endpoint = "/thi-truong/api/stock-noti" } = {}) {
+export function fetchStockNoti(dateKey, { endpoint = "/api/market/stock-noti" } = {}) {
   return fetchDataPostWithClientCache(endpoint, dateKey ? { date: dateKey } : {}, { force: true })
     .then((payload) => normalizeStockNotiRows(payload));
 }

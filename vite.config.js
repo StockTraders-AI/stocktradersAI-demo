@@ -33,6 +33,15 @@ import stockWaveTickersHandler from "./api/stock-wave-tickers.js";
 import waveBottomConfirmPairsHandler from "./api/wave-bottom-confirm-pairs.js";
 import portfolioChatHandler from "./api/portfolio-chat.js";
 import liveHandler from "./api/live.js";
+import marketConditionSignalLatestHandler from "./api/market/condition-signal-latest.js";
+import marketDoSongAdviceHandler from "./api/market/do-song-advice.js";
+import marketDoSongRecommendationHandler from "./api/market/do-song-recommendation.js";
+import marketPortfolioChatHandler from "./api/market/portfolio-chat.js";
+import marketStockNotiHandler from "./api/market/stock-noti.js";
+import marketStockWaveCurrentHandler from "./api/market/stock-wave-current.js";
+import marketStockWaveHistoryHandler from "./api/market/stock-wave-history.js";
+import marketStockWaveTickersHandler from "./api/market/stock-wave-tickers.js";
+import marketWaveBottomConfirmPairsHandler from "./api/market/wave-bottom-confirm-pairs.js";
 
 const serverEnv = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 for (const [key, value] of Object.entries(serverEnv)) {
@@ -117,6 +126,15 @@ const LOCAL_API_HANDLERS = new Map([
   ["/api/wave-bottom-confirm-pairs", waveBottomConfirmPairsHandler],
   ["/api/portfolio-chat", portfolioChatHandler],
   ["/api/live", liveHandler],
+  ["/api/market/condition-signal-latest", marketConditionSignalLatestHandler],
+  ["/api/market/do-song-advice", marketDoSongAdviceHandler],
+  ["/api/market/do-song-recommendation", marketDoSongRecommendationHandler],
+  ["/api/market/portfolio-chat", marketPortfolioChatHandler],
+  ["/api/market/stock-noti", marketStockNotiHandler],
+  ["/api/market/stock-wave-current", marketStockWaveCurrentHandler],
+  ["/api/market/stock-wave-history", marketStockWaveHistoryHandler],
+  ["/api/market/stock-wave-tickers", marketStockWaveTickersHandler],
+  ["/api/market/wave-bottom-confirm-pairs", marketWaveBottomConfirmPairsHandler],
 ]);
 
 function normalizeMarketTicker(value) {

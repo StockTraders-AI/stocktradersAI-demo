@@ -7,6 +7,7 @@ import indexDailyChangesHandler from "./index-daily-changes.js";
 import performanceHandler from "./performance.js";
 import portfolioChatHandler from "./portfolio-chat.js";
 import { readJsonBody } from "./_request.js";
+import { withSecureData } from "./_secure.js";
 import smdtHandler from "./smdt.js";
 import smdtBranchCrossHandler from "./smdt-branch-cross.js";
 import smdtTickerHandler from "./smdt-ticker.js";
@@ -53,16 +54,87 @@ function doSongStockNotiDataHandler(req, res) {
   });
 }
 
+function conditionSignalLatestGetHandler(req, res) {
+  const method = req.method;
+  req.method = "GET";
+  return Promise.resolve(conditionSignalLatestHandler(req, res)).finally(() => {
+    req.method = method;
+  });
+}
+
+function createCaptureResponse() {
+  const headers = new Map();
+  const chunks = [];
+  let jsonPayload;
+
+  return {
+    statusCode: 200,
+    headersSent: false,
+    writableEnded: false,
+    setHeader(name, value) {
+      headers.set(String(name).toLowerCase(), value);
+      return this;
+    },
+    getHeader(name) {
+      return headers.get(String(name).toLowerCase());
+    },
+    writeHead(statusCode, nextHeaders = {}) {
+      this.statusCode = statusCode;
+      for (const [name, value] of Object.entries(nextHeaders)) {
+        this.setHeader(name, value);
+      }
+      this.headersSent = true;
+      return this;
+    },
+    status(statusCode) {
+      this.statusCode = statusCode;
+      return this;
+    },
+    json(payload) {
+      jsonPayload = payload;
+      this.writableEnded = true;
+      return this;
+    },
+    write(chunk) {
+      if (chunk != null) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      return true;
+    },
+    end(chunk) {
+      if (chunk != null) this.write(chunk);
+      this.writableEnded = true;
+      return this;
+    },
+    payload() {
+      if (jsonPayload !== undefined) return jsonPayload;
+      const raw = Buffer.concat(chunks).toString("utf8");
+      return raw.trim() ? JSON.parse(raw) : null;
+    },
+  };
+}
+
+function secureCaptured(handler) {
+  return withSecureData(async (req, res) => {
+    const capture = createCaptureResponse();
+    const handled = await handler(req, capture);
+
+    if (!capture.writableEnded && handled === false) {
+      return res.status(404).json({ error: "Data route not found" });
+    }
+
+    return res.status(capture.statusCode || 200).json(capture.payload());
+  }, { methods: "POST, OPTIONS" });
+}
+
 const ROUTES = new Map([
   ["branch-path", { path: "/api/branch-path", handler: branchPathHandler }],
   ["cashflow-branch", { path: "/api/cashflow-branch", handler: cashflowBranchHandler }],
   ["cashflow-ticker", { path: "/api/cashflow-ticker", handler: cashflowTickerHandler }],
-  ["condition-signal-latest", { path: "/api/condition-signal-latest", handler: conditionSignalLatestHandler }],
-  ["do-song-advice", { path: "/api/do-song-advice", handler: doSongAdviceHandler }],
-  ["do-song-recommendation", { path: "/api/do-song-recommendation", handler: doSongRecommendationHandler }],
+  ["condition-signal-latest", { path: "/api/condition-signal-latest", handler: secureCaptured(conditionSignalLatestGetHandler) }],
+  ["do-song-advice", { path: "/api/do-song-advice", handler: secureCaptured(doSongAdviceHandler) }],
+  ["do-song-recommendation", { path: "/api/do-song-recommendation", handler: secureCaptured(doSongRecommendationHandler) }],
   ["index-daily-changes", { path: "/api/index-daily-changes", handler: indexDailyChangesHandler }],
   ["performance", { path: "/api/performance", handler: performanceHandler }],
-  ["portfolio-chat", { path: "/api/portfolio-chat", handler: portfolioChatHandler }],
+  ["portfolio-chat", { path: "/api/portfolio-chat", handler: secureCaptured(portfolioChatHandler) }],
   ["smdt", { path: "/api/smdt", handler: smdtHandler }],
   ["smdt-branch-cross", { path: "/api/smdt-branch-cross", handler: smdtBranchCrossHandler }],
   ["smdt-ticker", { path: "/api/smdt-ticker", handler: smdtTickerHandler }],
@@ -72,15 +144,15 @@ const ROUTES = new Map([
   ["stock-wave", { path: "/api/stock-wave", handler: stockWaveHandler }],
   ["stock-wave-current", { path: "/api/stock-wave-current", handler: stockWaveCurrentHandler }],
   ["stock-wave-history", { path: "/api/stock-wave-history", handler: stockWaveHistoryHandler }],
-  ["stock-wave-tickers", { path: "/api/stock-wave-tickers", handler: stockWaveTickersHandler }],
+  ["stock-wave-tickers", { path: "/api/stock-wave-tickers", handler: secureCaptured(stockWaveTickersHandler) }],
   ["total-trade", { path: "/api/total-trade", handler: totalTradeHandler }],
   ["total-trade-real", { path: "/api/total-trade-real", handler: totalTradeRealHandler }],
-  ["wave-bottom-confirm-pairs", { path: "/api/wave-bottom-confirm-pairs", handler: waveBottomConfirmPairsHandler }],
-  ["market-stock-wave-current", { path: "/api/stock-wave-current", handler: doSongStockWaveCurrentHandler }],
-  ["market-stock-wave-history", { path: "/api/stock-wave-history", handler: doSongStockWaveHistoryHandler }],
-  ["market-stock-wave-tickers", { path: "/api/stock-wave-tickers", handler: doSongStockWaveTickersHandler }],
-  ["market-stock-noti", { path: "/api/stock-noti", handler: doSongStockNotiDataHandler }],
-  ["market-wave-bottom-confirm-pairs", { path: "/api/wave-bottom-confirm-pairs", handler: doSongWaveBottomConfirmPairsHandler }],
+  ["wave-bottom-confirm-pairs", { path: "/api/wave-bottom-confirm-pairs", handler: secureCaptured(waveBottomConfirmPairsHandler) }],
+  ["market-stock-wave-current", { path: "/api/stock-wave-current", handler: secureCaptured(doSongStockWaveCurrentHandler) }],
+  ["market-stock-wave-history", { path: "/api/stock-wave-history", handler: secureCaptured(doSongStockWaveHistoryHandler) }],
+  ["market-stock-wave-tickers", { path: "/api/stock-wave-tickers", handler: secureCaptured(doSongStockWaveTickersHandler) }],
+  ["market-stock-noti", { path: "/api/stock-noti", handler: secureCaptured(doSongStockNotiDataHandler) }],
+  ["market-wave-bottom-confirm-pairs", { path: "/api/wave-bottom-confirm-pairs", handler: secureCaptured(doSongWaveBottomConfirmPairsHandler) }],
 ]);
 
 const ROUTE_CODES = new Map([
