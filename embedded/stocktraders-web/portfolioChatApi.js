@@ -1,8 +1,17 @@
-const PORTFOLIO_CHAT_API_URL = process.env.PORTFOLIO_CHAT_API_URL || "http://112.213.91.235:8000/api/portfolio-chat";
-const PORTFOLIO_CHAT_TIMEOUT_MS = Math.max(15_000, Number(process.env.PORTFOLIO_CHAT_TIMEOUT_MS) || 120_000);
+const PORTFOLIO_CHAT_API_URL =
+  process.env.PORTFOLIO_CHAT_API_URL ||
+  "http://112.213.91.235:8000/api/portfolio-chat";
+const PORTFOLIO_CHAT_TIMEOUT_MS = Math.max(
+  15_000,
+  Number(process.env.PORTFOLIO_CHAT_TIMEOUT_MS) || 240_000,
+);
 
 function withTimeout(options = {}) {
-  if (typeof AbortSignal === "undefined" || typeof AbortSignal.timeout !== "function") return options;
+  if (
+    typeof AbortSignal === "undefined" ||
+    typeof AbortSignal.timeout !== "function"
+  )
+    return options;
   return { ...options, signal: AbortSignal.timeout(PORTFOLIO_CHAT_TIMEOUT_MS) };
 }
 
@@ -41,7 +50,10 @@ function readJsonBody(req) {
 }
 
 export async function handlePortfolioChat(req, res, rawUrl) {
-  const url = new URL(rawUrl || req.url, `http://${req.headers.host || "localhost"}`);
+  const url = new URL(
+    rawUrl || req.url,
+    `http://${req.headers.host || "localhost"}`,
+  );
   if (url.pathname !== "/api/portfolio-chat") return false;
 
   if (req.method !== "POST") {
@@ -66,29 +78,40 @@ export async function handlePortfolioChat(req, res, rawUrl) {
       upstreamBody.portfolio = body.portfolio;
     }
 
-    const response = await fetch(PORTFOLIO_CHAT_API_URL, withTimeout({
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(upstreamBody),
-    }));
+    const response = await fetch(
+      PORTFOLIO_CHAT_API_URL,
+      withTimeout({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(upstreamBody),
+      }),
+    );
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       sendJson(res, response.status, {
         success: false,
-        error: payload.error || payload.message || `Portfolio chat failed: ${response.status}`,
+        error:
+          payload.error ||
+          payload.message ||
+          `Portfolio chat failed: ${response.status}`,
       });
       return true;
     }
 
     sendJson(res, 200, {
       answer: typeof payload.answer === "string" ? payload.answer : "",
-      conversation_id: payload.conversation_id || body.conversation_id || "portfolio-test-1",
+      conversation_id:
+        payload.conversation_id || body.conversation_id || "portfolio-test-1",
     });
   } catch (error) {
     console.error("Portfolio chat proxy failed", error);
-    const isTimeout = error?.name === "TimeoutError" || error?.name === "AbortError";
-    sendJson(res, isTimeout ? 504 : 502, { success: false, error: error.message || "Cannot call portfolio chat." });
+    const isTimeout =
+      error?.name === "TimeoutError" || error?.name === "AbortError";
+    sendJson(res, isTimeout ? 504 : 502, {
+      success: false,
+      error: error.message || "Cannot call portfolio chat.",
+    });
   }
 
   return true;
