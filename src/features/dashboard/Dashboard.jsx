@@ -676,10 +676,51 @@ function toPortfolioChatPosition(row) {
 
 function isPortfolioTickerQuestion(question) {
   const q = normalizeIndustryName(question);
-  return q.includes("mã")
-    || q.includes("ma")
-    || q.includes("cổ phiếu")
-    || q.includes("co phieu")
+  if (isDefinitionQuestion(q)) return false;
+  const asksTickerSelection = q.includes("mã nào")
+    || q.includes("ma nao")
+    || q.includes("ticker nào")
+    || q.includes("ticker nao")
+    || q.includes("cổ phiếu nào")
+    || q.includes("co phieu nao");
+  const asksList = q.includes("cung cấp")
+    || q.includes("cung cap")
+    || q.includes("danh sách")
+    || q.includes("danh sach")
+    || q.includes("liệt kê")
+    || q.includes("liet ke")
+    || q.includes("lọc")
+    || q.includes("loc")
+    || q.includes("tìm mã")
+    || q.includes("tim ma")
+    || q.includes("tìm cổ phiếu")
+    || q.includes("tim co phieu")
+    || q.includes("cho tôi")
+    || q.includes("cho toi");
+  const hasSignal = isFourKeyPortfolioQuestion(q)
+    || q.includes("chờ mua")
+    || q.includes("cho mua")
+    || q.includes("chờ bán")
+    || q.includes("cho ban");
+  return asksTickerSelection || (asksList && hasSignal) || (hasSignal && hasExplicitDateQuestion(q));
+}
+
+function isDefinitionQuestion(question) {
+  const q = normalizeIndustryName(question);
+  return q.includes("là gì")
+    || q.includes("la gi")
+    || q.includes("nghĩa là gì")
+    || q.includes("nghia la gi")
+    || q.includes("giải thích")
+    || q.includes("giai thich")
+    || q.includes("định nghĩa")
+    || q.includes("dinh nghia");
+}
+
+function isFourKeyPortfolioQuestion(question) {
+  const q = normalizeIndustryName(question);
+  return q.includes("4-key")
+    || q.includes("4 key")
     || q.includes("đúng sóng")
     || q.includes("dung song")
     || q.includes("sai sóng")
@@ -687,23 +728,43 @@ function isPortfolioTickerQuestion(question) {
     || q.includes("đúng ngành")
     || q.includes("dung nganh")
     || q.includes("sai ngành")
-    || q.includes("sai nganh")
-    || q.includes("chờ mua")
-    || q.includes("cho mua")
-    || q.includes("chờ bán")
-    || q.includes("cho ban");
+    || q.includes("sai nganh");
 }
 
-function answerIncludesTicker(answer, ticker) {
-  const normalizedTicker = String(ticker || "").trim().toUpperCase();
-  if (!normalizedTicker) return "";
-  const answerTickers = String(answer || "").toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
-  return answerTickers.includes(normalizedTicker) ? normalizedTicker : "";
+function hasExplicitDateQuestion(question) {
+  return /\b\d{1,2}\s*[/-]\s*\d{1,2}(?:\s*[/-]\s*\d{2,4})?\b/.test(String(question || ""));
+}
+
+function normalizePortfolioChatQuestion(question) {
+  return String(question || "").replace(
+    /\b(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*\/\s*(\d{2,4}))?\b/g,
+    (_, day, month, year) => (year ? `${day}-${month}-${year}` : `${day}-${month}`)
+  );
+}
+
+const NON_TICKER_ANSWER_TOKENS = new Set(["AI", "API", "HTTP", "SMDT", "KHONG", "CO", "CAC", "MA", "CUNG", "CAP", "NGAY", "DUNG", "SAI", "SONG", "NGANH", "CHO", "MUA", "BAN"]);
+
+function tickersFromAnswer(answer) {
+  return String(answer || "")
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .filter((token) => /^[A-Z][A-Z0-9]{1,5}$/.test(token) && !NON_TICKER_ANSWER_TOKENS.has(token));
+}
+
+function uniqueAnswerTickers(replies) {
+  return replies
+    .flatMap((reply) => tickersFromAnswer(reply.answer))
+    .filter(Boolean)
+    .filter((ticker, index, tickers) => tickers.indexOf(ticker) === index)
+    .join(", ");
 }
 
 function uniquePortfolioTickerAnswer(replies) {
   return replies
-    .map((reply) => answerIncludesTicker(reply.answer, reply.position?.ticker))
+    .map((reply) => {
+      const ticker = String(reply.position?.ticker || "").trim().toUpperCase();
+      return tickersFromAnswer(reply.answer).includes(ticker) ? ticker : "";
+    })
     .filter(Boolean)
     .filter((ticker, index, tickers) => tickers.indexOf(ticker) === index)
     .join(", ");
@@ -787,6 +848,7 @@ function PortfolioBox({ rows, asOfDate }) {
   };
   const sendPortfolioMsg = useCallback(async (text, panel = false) => {
     const question = text.trim();
+    const apiQuestion = normalizePortfolioChatQuestion(question);
     if (!question || chatLoading) return;
     if (panel) setPanelVal("");
     setChatOpen(true);
@@ -800,7 +862,7 @@ function PortfolioBox({ rows, asOfDate }) {
         const replies = await Promise.allSettled(
           portfolioPositions.map((position) =>
             requestPortfolioChat({
-              question,
+              question: apiQuestion,
               userId: "u1",
               conversationId: `${conversationId}-${position.ticker}`,
               position,
@@ -810,14 +872,16 @@ function PortfolioBox({ rows, asOfDate }) {
         const fulfilledReplies = replies
           .filter((reply) => reply.status === "fulfilled")
           .map((reply) => reply.value);
-        const answer = uniquePortfolioTickerAnswer(fulfilledReplies);
+        const answer = isFourKeyPortfolioQuestion(question) && !hasExplicitDateQuestion(question)
+          ? uniquePortfolioTickerAnswer(fulfilledReplies)
+          : uniqueAnswerTickers(fulfilledReplies);
         if (!answer) throw new Error("API chưa trả về mã phù hợp");
         setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: answer }]);
         return;
       }
 
       const reply = await requestPortfolioChat({
-        question,
+        question: apiQuestion,
         userId: "u1",
         conversationId,
         position: portfolioPositions[0],
