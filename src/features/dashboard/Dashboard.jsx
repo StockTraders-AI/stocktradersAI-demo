@@ -56,13 +56,6 @@ const DONUT_COLORS = {
   waitSell: "#eda100",
   sell: "#e34948",
 };
-const PORTFOLIO_CAT_LABELS = {
-  dd: "Đúng sóng đúng ngành",
-  ds: "Đúng sóng sai ngành",
-  sd: "Đúng ngành sai sóng",
-  ss: "Sai sóng sai ngành",
-};
-
 function nav(id) {
   window.dispatchEvent(new CustomEvent("st-nav", { detail: id }));
 }
@@ -681,79 +674,6 @@ function toPortfolioChatPosition(row) {
   };
 }
 
-function portfolioChatApiQuestion(question) {
-  const q = normalizeIndustryName(question);
-  const asksRightWave = q.includes("đúng sóng") || q.includes("dung song");
-  const asksIndustry = q.includes("ngành") || q.includes("nganh");
-  if (asksRightWave && !asksIndustry) return "Mã nào đúng sóng, đúng ngành?";
-  return question;
-}
-
-function isPortfolioTickerSelectionQuestion(question) {
-  const q = normalizeIndustryName(question);
-  return q.includes("đúng sóng") || q.includes("dung song") || q.includes("đúng ngành") || q.includes("dung nganh");
-}
-
-function isFourKeyQuestion(question) {
-  const q = normalizeIndustryName(question);
-  return q.includes("đúng sóng")
-    || q.includes("dung song")
-    || q.includes("sai sóng")
-    || q.includes("sai song")
-    || q.includes("đúng ngành")
-    || q.includes("dung nganh")
-    || q.includes("sai ngành")
-    || q.includes("sai nganh");
-}
-
-function isRightWaveRightIndustryQuestion(question) {
-  const q = normalizeIndustryName(question);
-  const asksRightWave = q.includes("đúng sóng") || q.includes("dung song");
-  const asksIndustry = q.includes("đúng ngành") || q.includes("dung nganh") || q.includes("ngành") || q.includes("nganh");
-  return asksRightWave && asksIndustry;
-}
-
-function portfolioSortValue(value) {
-  return Number.isFinite(value) ? value : -Infinity;
-}
-
-function portfolioQuestionCat(question) {
-  const q = normalizeIndustryName(question);
-  const hasTickerAsk = q.includes("mã nào") || q.includes("ma nao") || q.includes("mã") || q.includes("ma");
-  if (!hasTickerAsk) return null;
-
-  const asksRightWave = q.includes("đúng sóng") || q.includes("dung song");
-  const asksWrongWave = q.includes("sai sóng") || q.includes("sai song");
-  const asksRightIndustry = q.includes("đúng ngành") || q.includes("dung nganh");
-  const asksWrongIndustry = q.includes("sai ngành") || q.includes("sai nganh");
-
-  if (asksRightWave && asksRightIndustry) return "dd";
-  if (asksRightWave && asksWrongIndustry) return "ds";
-  if (asksRightIndustry && asksWrongWave) return "sd";
-  if (asksWrongWave && asksWrongIndustry) return "ss";
-  return null;
-}
-
-function answerPortfolioCatTickers(rows, cat) {
-  if (!rows.length) {
-    return "Chưa có mã hợp lệ trong Phân tích danh mục.";
-  }
-
-  const matchedRows = rows
-    .filter((row) => row.cat === cat)
-    .sort((a, b) => portfolioSortValue(b.smdt) - portfolioSortValue(a.smdt) || a.ticker.localeCompare(b.ticker));
-
-  return matchedRows.length ? matchedRows.map((row) => row.ticker).join(", ") : `Không có mã ${String(PORTFOLIO_CAT_LABELS[cat] || "").toLowerCase()}.`;
-}
-
-function answerTicker(answer, ticker) {
-  const normalizedTicker = String(ticker || "").trim().toUpperCase();
-  const normalizedAnswer = String(answer || "").trim().toUpperCase();
-  if (!normalizedTicker || !normalizedAnswer) return "";
-  const answerTickers = normalizedAnswer.split(/[^A-Z0-9]+/).filter(Boolean);
-  return answerTickers.length === 1 && answerTickers[0] === normalizedTicker ? normalizedTicker : "";
-}
-
 async function requestPortfolioChat({ question, userId, conversationId, position = null }) {
   const body = {
     question,
@@ -839,56 +759,17 @@ function PortfolioBox({ rows, asOfDate }) {
     setMsgs((prev) => [...prev, { role: "user", text: question }, { role: "typing", text: "Đang phân tích dữ liệu danh mục..." }]);
 
     try {
-      const portfolioCat = portfolioQuestionCat(question) || (isRightWaveRightIndustryQuestion(question) ? "dd" : null);
-      if (portfolioCat) {
-        const answer = answerPortfolioCatTickers(foundAnalyzed, portfolioCat);
-        setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: answer }]);
-        return;
-      }
-
-      const apiQuestion = portfolioChatApiQuestion(question);
       if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu cấu hình API portfolio chat");
-
-      if (!isFourKeyQuestion(apiQuestion)) {
-        const reply = await requestPortfolioChat({
-          question: apiQuestion,
-          userId: "u1",
-          conversationId,
-        });
-        if (!reply.answer) throw new Error("API không trả về answer");
-        if (reply.conversationId) setConversationId(reply.conversationId);
-        setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: reply.answer }]);
-        return;
-      }
-
       if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
-      const tickerSelectionQuestion = isPortfolioTickerSelectionQuestion(apiQuestion);
-      const replies = await Promise.allSettled(
-        portfolioPositions.map((position) =>
-          requestPortfolioChat({
-            question: apiQuestion,
-            userId: "u1",
-            conversationId: `${conversationId}-${position.ticker}`,
-            position,
-          })
-        )
-      );
-      const fulfilledReplies = replies
-        .filter((reply) => reply.status === "fulfilled")
-        .map((reply) => reply.value);
-      const tickerAnswer = fulfilledReplies
-        .map((reply) => answerTicker(reply.answer, reply.position.ticker))
-        .filter(Boolean)
-        .filter((answer, index, answers) => answers.indexOf(answer) === index)
-        .join(", ");
-      const answer = tickerSelectionQuestion ? tickerAnswer : tickerAnswer || fulfilledReplies
-        .map((reply) => reply.answer)
-        .filter(Boolean)
-        .filter((answer, index, answers) => answers.indexOf(answer) === index)
-        .slice(0, 1)
-        .join("");
-      if (!answer) throw new Error(tickerSelectionQuestion ? "API chưa trả về mã phù hợp" : "API không trả về answer");
-      setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: answer }]);
+      const reply = await requestPortfolioChat({
+        question,
+        userId: "u1",
+        conversationId,
+        position: portfolioPositions[0],
+      });
+      if (!reply.answer) throw new Error("API không trả về answer");
+      if (reply.conversationId) setConversationId(reply.conversationId);
+      setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: reply.answer }]);
     } catch (error) {
       setMsgs((prev) => [
         ...prev.filter((msg) => msg.role !== "typing"),
@@ -897,7 +778,7 @@ function PortfolioBox({ rows, asOfDate }) {
     } finally {
       setChatLoading(false);
     }
-  }, [chatLoading, conversationId, foundAnalyzed, portfolioPositions]);
+  }, [chatLoading, conversationId, portfolioPositions]);
   const askPortfolioMsg = useCallback((text) => {
     sendPortfolioMsg(text, true);
   }, [sendPortfolioMsg]);
