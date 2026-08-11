@@ -674,6 +674,41 @@ function toPortfolioChatPosition(row) {
   };
 }
 
+function isPortfolioTickerQuestion(question) {
+  const q = normalizeIndustryName(question);
+  return q.includes("mã")
+    || q.includes("ma")
+    || q.includes("cổ phiếu")
+    || q.includes("co phieu")
+    || q.includes("đúng sóng")
+    || q.includes("dung song")
+    || q.includes("sai sóng")
+    || q.includes("sai song")
+    || q.includes("đúng ngành")
+    || q.includes("dung nganh")
+    || q.includes("sai ngành")
+    || q.includes("sai nganh")
+    || q.includes("chờ mua")
+    || q.includes("cho mua")
+    || q.includes("chờ bán")
+    || q.includes("cho ban");
+}
+
+function answerIncludesTicker(answer, ticker) {
+  const normalizedTicker = String(ticker || "").trim().toUpperCase();
+  if (!normalizedTicker) return "";
+  const answerTickers = String(answer || "").toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  return answerTickers.includes(normalizedTicker) ? normalizedTicker : "";
+}
+
+function uniquePortfolioTickerAnswer(replies) {
+  return replies
+    .map((reply) => answerIncludesTicker(reply.answer, reply.position?.ticker))
+    .filter(Boolean)
+    .filter((ticker, index, tickers) => tickers.indexOf(ticker) === index)
+    .join(", ");
+}
+
 async function requestPortfolioChat({ question, userId, conversationId, position = null }) {
   const body = {
     question,
@@ -761,6 +796,26 @@ function PortfolioBox({ rows, asOfDate }) {
     try {
       if (!PORTFOLIO_CHAT_API_URL) throw new Error("thiếu cấu hình API portfolio chat");
       if (!portfolioPositions.length) throw new Error("chưa có mã hợp lệ trong danh mục đã phân tích");
+      if (isPortfolioTickerQuestion(question)) {
+        const replies = await Promise.allSettled(
+          portfolioPositions.map((position) =>
+            requestPortfolioChat({
+              question,
+              userId: "u1",
+              conversationId: `${conversationId}-${position.ticker}`,
+              position,
+            })
+          )
+        );
+        const fulfilledReplies = replies
+          .filter((reply) => reply.status === "fulfilled")
+          .map((reply) => reply.value);
+        const answer = uniquePortfolioTickerAnswer(fulfilledReplies);
+        if (!answer) throw new Error("API chưa trả về mã phù hợp");
+        setMsgs((prev) => [...prev.filter((msg) => msg.role !== "typing"), { role: "ai", text: answer }]);
+        return;
+      }
+
       const reply = await requestPortfolioChat({
         question,
         userId: "u1",

@@ -1,4 +1,15 @@
 {
+  "functions": {
+    "api/data.js": {
+      "maxDuration": 60
+    },
+    "api/portfolio-chat.js": {
+      "maxDuration": 60
+    },
+    "api/market/portfolio-chat.js": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

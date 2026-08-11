@@ -1,4 +1,10 @@
 const PORTFOLIO_CHAT_API_URL = process.env.PORTFOLIO_CHAT_API_URL || "http://112.213.91.235:8000/api/portfolio-chat";
+const PORTFOLIO_CHAT_TIMEOUT_MS = Math.max(15_000, Number(process.env.PORTFOLIO_CHAT_TIMEOUT_MS) || 120_000);
+
+function withTimeout(options = {}) {
+  if (typeof AbortSignal === "undefined" || typeof AbortSignal.timeout !== "function") return options;
+  return { ...options, signal: AbortSignal.timeout(PORTFOLIO_CHAT_TIMEOUT_MS) };
+}
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -60,11 +66,11 @@ export async function handlePortfolioChat(req, res, rawUrl) {
       upstreamBody.portfolio = body.portfolio;
     }
 
-    const response = await fetch(PORTFOLIO_CHAT_API_URL, {
+    const response = await fetch(PORTFOLIO_CHAT_API_URL, withTimeout({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(upstreamBody),
-    });
+    }));
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -81,7 +87,8 @@ export async function handlePortfolioChat(req, res, rawUrl) {
     });
   } catch (error) {
     console.error("Portfolio chat proxy failed", error);
-    sendJson(res, 502, { success: false, error: error.message || "Cannot call portfolio chat." });
+    const isTimeout = error?.name === "TimeoutError" || error?.name === "AbortError";
+    sendJson(res, isTimeout ? 504 : 502, { success: false, error: error.message || "Cannot call portfolio chat." });
   }
 
   return true;
