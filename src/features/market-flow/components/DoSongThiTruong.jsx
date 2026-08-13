@@ -95,12 +95,9 @@ const STOCK_WAVE_TICKERS_URL =
 const WAVE_BOTTOM_CONFIRM_PAIRS_URL =
   import.meta.env.VITE_WAVE_BOTTOM_CONFIRM_PAIRS_URL ||
   "/api/market/wave-bottom-confirm-pairs";
-const STOCK_NOTI_STREAM_URL =
-  "/api/live?c=2";
-const STOCK_WAVE_CURRENT_STREAM_URL =
-  "/api/live?c=1";
-const WAVE_BOTTOM_CONFIRM_PAIRS_STREAM_URL =
-  "/api/live?c=3";
+const STOCK_NOTI_STREAM_URL = "/api/live?c=2";
+const STOCK_WAVE_CURRENT_STREAM_URL = "/api/live?c=1";
+const WAVE_BOTTOM_CONFIRM_PAIRS_STREAM_URL = "/api/live?c=3";
 const WAVE_CHANNEL = "wave";
 const STOCK_NOTI_CHANNEL = "stock-noti";
 const EMPTY_WAVE = {
@@ -456,6 +453,19 @@ function normalizeWavePayload(payload) {
     }));
 }
 
+function isSameWaveSnapshot(a, b) {
+  if (!a || !b) return false;
+  return (
+    String(a.rawDate || "") === String(b.rawDate || "") &&
+    Number(a.cm || 0) === Number(b.cm || 0) &&
+    Number(a.mu || 0) === Number(b.mu || 0) &&
+    Number(a.cb || 0) === Number(b.cb || 0) &&
+    Number(a.ban || 0) === Number(b.ban || 0) &&
+    Number(a.tc || 0) === Number(b.tc || 0) &&
+    Number(a.tong || 0) === Number(b.tong || 0)
+  );
+}
+
 function getPreviousWaveSessions(rows, referenceDate) {
   return rows
     .filter((item) => item.rawDate && item.rawDate < referenceDate)
@@ -544,7 +554,11 @@ function getSocketStockNotiData(payload) {
 }
 
 function fetchStockWaveCurrent() {
-  return fetchDataPostWithClientCache(STOCK_WAVE_CURRENT_URL, {}, { force: true })
+  return fetchDataPostWithClientCache(
+    STOCK_WAVE_CURRENT_URL,
+    {},
+    { force: true },
+  )
     .catch(() => null)
     .then((payload) => {
       if (!payload) return null;
@@ -1487,6 +1501,7 @@ export default function DoSongThiTruong() {
   const [tickerWave, setTickerWave] = useState(EMPTY_WAVE);
   const [signalRefreshKey, setSignalRefreshKey] = useState(0);
   const [stockNotiRows, setStockNotiRows] = useState([]);
+  const latestWaveRef = useRef(EMPTY_WAVE);
   const stockNotiDateRef = useRef("");
   const selectedWaveDateRef = useRef("");
   const stockNotiRequestSeq = useRef(0);
@@ -1562,6 +1577,21 @@ export default function DoSongThiTruong() {
       ),
     [historySource, mainDonutDisplayWave, selectedMainDonutWave.rawDate],
   );
+
+  useEffect(() => {
+    latestWaveRef.current = latestWave;
+  }, [latestWave]);
+
+  function applyLatestWave(nextWave) {
+    if (!nextWave || isSameWaveSnapshot(latestWaveRef.current, nextWave)) {
+      return false;
+    }
+    latestWaveRef.current = nextWave;
+    setLatestWave(nextWave);
+    setSignalRefreshKey((key) => key + 1);
+    return true;
+  }
+
   function refreshHistoryFromTitle() {
     if (!latestWave.rawDate) return;
     if (!historyAllWaves.length) setHistoryLoading(true);
@@ -1602,8 +1632,7 @@ export default function DoSongThiTruong() {
           );
           setHistoryLoading(false);
         }
-        setLatestWave(row);
-        setSignalRefreshKey((key) => key + 1);
+        applyLatestWave(row);
       })
       .catch((error) => {
         console.error("Load stock wave current cache failed", error);
@@ -1643,8 +1672,7 @@ export default function DoSongThiTruong() {
         const rows = normalizeWavePayload(data);
         if (!rows.length) return;
 
-        setLatestWave(rows[0]);
-        setSignalRefreshKey((key) => key + 1);
+        applyLatestWave(rows[0]);
       } catch (error) {
         console.error("Parse stock-wave-current stream failed", error);
       }
