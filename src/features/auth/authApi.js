@@ -68,7 +68,11 @@ async function postJson(url, payload, replyKeys, fallbackMessage, { allowApiErro
   }
 
   if (!response.ok) {
-    throw new Error(data?.message || data?.error || `${fallbackMessage} (HTTP ${response.status}).`);
+    const error = new Error(data?.message || data?.error || `${fallbackMessage} (HTTP ${response.status}).`);
+    error.status = response.status;
+    error.data = data;
+    error.reply = readReply(data?.data || data, replyKeys);
+    throw error;
   }
 
   const reply = readReply(data, replyKeys);
@@ -516,16 +520,32 @@ export async function getAccessRights({ account }) {
     throw new Error("Không xác định được tài khoản để kiểm tra quyền truy cập.");
   }
 
-  const { data, reply } = await postJson(
-    ACCESS_RIGHTS_API_URL,
-    {
-      AccessRightsRequest: {
-        account: normalizedAccount,
+  let data;
+  let reply;
+  try {
+    ({ data, reply } = await postJson(
+      ACCESS_RIGHTS_API_URL,
+      {
+        AccessRightsRequest: {
+          account: normalizedAccount,
+        },
       },
-    },
-    REPLY_KEYS.accessRights,
-    "Tài khoản chưa có quyền truy cập.",
-  );
+      REPLY_KEYS.accessRights,
+      "Tài khoản chưa có quyền truy cập.",
+    ));
+  } catch (error) {
+    if (error?.status === 403) {
+      throw new AccessDeniedError(
+        error?.message || "Tài khoản chưa mua gói nên chưa thể xem tính năng.",
+        {
+          account: normalizedAccount,
+          reply: error.reply,
+          raw: error.data,
+        },
+      );
+    }
+    throw error;
+  }
 
   const allowed = readAccessAllowed(reply);
   if (!allowed) {
