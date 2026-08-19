@@ -13,6 +13,7 @@ import { useRealtimeSMDTBranchCrossFeed, useSMDTBranchCross } from "../../data/u
 import { useRealtimeStockSignalFeed, useStockSignal } from "../../data/useStockSignal";
 import { useRealtimeStockNotiFeed, useStockNoti } from "../../data/useStockNoti";
 import { useStockWave, useRealtimeStockWaveFeed } from "../../data/useStockWave";
+import { useMarketStockWave } from "../../data/useMarketStockWave";
 import { useTotalTrade } from "../../data/useTotalTrade";
 import { fetchDataPostWithClientCache } from "../../data/requestCache";
 import { Card, Clink, LiveFooter, Loading, Pagination } from "../../components/ui";
@@ -1542,6 +1543,7 @@ export function ModDashboard({ tradingDate }) {
   const branchCross = useSMDTBranchCross();
   const stockSignal = useStockSignal();
   const stockWave = useStockWave();
+  const marketStockWave = useMarketStockWave();
   const totalTrade = useTotalTrade();
   const tradingDateValue = toDateInputValue(tradingDate);
 
@@ -1563,7 +1565,7 @@ export function ModDashboard({ tradingDate }) {
   const smdtTickerDate = smdtTickerDatesDesc[findDateIndex(smdtTickerDatesDesc, tradingDateValue)] || topDate(smdtTicker.datesAsc);
   const stockNoti = useStockNoti(tradingDateValue || cashBranchDate || smdtTickerDate);
   const liveStockNoti = useRealtimeStockNotiFeed(stockNoti.applyTick);
-  const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt, stockSignal.updatedAt, stockNoti.updatedAt, stockWave.updatedAt, branchCross.updatedAt, totalTrade.updatedAt);
+  const updatedAt = latestUpdatedAt(smdt.updatedAt, cashBranch.updatedAt, smdtTicker.updatedAt, cashTicker.updatedAt, stockSignal.updatedAt, stockNoti.updatedAt, stockWave.updatedAt, marketStockWave.updatedAt, branchCross.updatedAt, totalTrade.updatedAt);
   const live =
     liveSmdtBranch.connected ||
     liveCashBranch.connected ||
@@ -1573,11 +1575,17 @@ export function ModDashboard({ tradingDate }) {
     liveStockNoti.connected ||
     liveStockWave.connected ||
     liveBranchCross.connected;
-  const waveLatest = useMemo(() => {
+  const legacyWaveLatest = useMemo(() => {
     if (!stockWave.rows.length) return null;
     if (!tradingDateValue) return stockWave.rows[stockWave.rows.length - 1] || null;
     return [...stockWave.rows].reverse().find((row) => toDateInputValue(row.date) <= tradingDateValue) || stockWave.rows[0] || null;
   }, [stockWave.rows, tradingDateValue]);
+  const marketWaveLatest = useMemo(() => {
+    if (!marketStockWave.rows.length) return null;
+    if (!tradingDateValue) return marketStockWave.rows[marketStockWave.rows.length - 1] || null;
+    return [...marketStockWave.rows].reverse().find((row) => toDateInputValue(row.date) <= tradingDateValue) || marketStockWave.rows[0] || null;
+  }, [marketStockWave.rows, tradingDateValue]);
+  const waveLatest = marketWaveLatest || (marketStockWave.status === "error" ? legacyWaveLatest : null);
 
   const branchSmdtRows = useMemo(() => {
     return smdt.branches
@@ -1854,7 +1862,7 @@ export function ModDashboard({ tradingDate }) {
   // Mỗi nhóm nhật ký gắn với feed sinh ra nó: ngày đang xem, phiên mới nhất feed có,
   // và mốc cập nhật thật — đủ để suy ra giờ mà không cần hằng số.
   const signalLogFeeds = useMemo(() => ({
-    wave: { date: waveLatest?.date || "", latestDate: stockWave.rows[stockWave.rows.length - 1]?.date || "", updatedAt: stockWave.updatedAt },
+    wave: { date: waveLatest?.date || "", latestDate: marketStockWave.rows[marketStockWave.rows.length - 1]?.date || stockWave.rows[stockWave.rows.length - 1]?.date || "", updatedAt: marketStockWave.updatedAt || stockWave.updatedAt },
     cashBranch: { date: cashBranchDate, latestDate: topDate(cashBranch.datesAsc), updatedAt: cashBranch.updatedAt },
     smdtBranch: { date: smdtBranchDate, latestDate: topDate(smdt.datesAsc), updatedAt: smdt.updatedAt },
     stockSignal: { date: latestStockSignalDate, latestDate: stockSignalDatesDesc[0] || "", updatedAt: stockSignal.updatedAt },
@@ -1868,6 +1876,8 @@ export function ModDashboard({ tradingDate }) {
     cashTicker.updatedAt,
     cashTickerDatesDesc,
     latestStockSignalDate,
+    marketStockWave.rows,
+    marketStockWave.updatedAt,
     smdt.datesAsc,
     smdt.updatedAt,
     smdtBranchDate,
@@ -1880,7 +1890,7 @@ export function ModDashboard({ tradingDate }) {
     stockWave.updatedAt,
     waveLatest?.date,
   ]);
-  const waveCircleLoading = stockWave.status === "loading" && !waveLatest;
+  const waveCircleLoading = marketStockWave.status === "loading" && !marketWaveLatest;
   const branchCashLoading = cashBranch.status === "loading" && !branchCashRows.length;
   const tickerCashLoading = cashTicker.status === "loading" && !cashTickerRows.length;
 

@@ -10,6 +10,7 @@
  * nhớ trình duyệt nên người có kỹ năng vẫn đọc được plaintext. */
 
 const DATA_KEY_URL = "/api/auth/data-key";
+export const AUTH_SESSION_INVALID_EVENT = "st-auth-session-invalid";
 
 const MAGIC = 0x5354; // "ST"
 const VERSION = 1;
@@ -38,6 +39,13 @@ const keyCache = new Map();
 let activeKey = null; // { epoch, expiresAt }
 let keyPromise = null;
 let secureDisabled = false;
+
+function notifyAuthSessionInvalid(code = "UNAUTHORIZED") {
+  clearSecureSession();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AUTH_SESSION_INVALID_EVENT, { detail: { code } }));
+  }
+}
 
 function subtle() {
   const api = globalThis.crypto?.subtle;
@@ -87,6 +95,7 @@ async function importKeyPair(rawKey) {
 async function requestDataKey() {
   const response = await fetch(DATA_KEY_URL, { credentials: "same-origin", cache: "no-store" });
   if (response.status === 401) {
+    notifyAuthSessionInvalid("UNAUTHORIZED");
     throw new SecureTransportError("Phiên đăng nhập đã hết hạn.", "UNAUTHORIZED");
   }
   if (!response.ok) {
@@ -216,6 +225,7 @@ export async function secureFetchJson(url, options = {}) {
   }
 
   if (!response.ok) {
+    if (response.status === 401) notifyAuthSessionInvalid("UNAUTHORIZED");
     const error = new Error(`HTTP ${response.status}`);
     error.status = response.status;
     throw error;
@@ -245,6 +255,7 @@ export async function secureFetchRaw(url, options = {}) {
     response = await run();
   }
 
+  if (response.status === 401) notifyAuthSessionInvalid("UNAUTHORIZED");
   return { response, readJson: () => readResponse(secureUrl, method, response) };
 }
 
