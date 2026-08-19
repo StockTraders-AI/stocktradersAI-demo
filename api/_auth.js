@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 
 const SESSION_COOKIE_NAME = "st_auth_session";
 const DEFAULT_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+const ACTIVE_SESSIONS_KEY = Symbol.for("stocktraders.activeAuthSessions");
+
+const activeSessions = globalThis[ACTIVE_SESSIONS_KEY] || new Map();
+globalThis[ACTIVE_SESSIONS_KEY] = activeSessions;
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -78,8 +82,34 @@ export function verifySessionToken(token) {
   }
 }
 
-export function readAuthSession(req) {
+export function readSignedAuthSession(req) {
   return verifySessionToken(readCookie(req, SESSION_COOKIE_NAME));
+}
+
+function activeSessionKey(session) {
+  return normalizeText(session?.account).toLowerCase();
+}
+
+function pruneActiveSessions(now = Date.now()) {
+  for (const [account, entry] of activeSessions.entries()) {
+    if (Number(entry?.expiresAt || 0) <= now) activeSessions.delete(account);
+  }
+}
+
+export function isActiveAuthSession(session, now = Date.now()) {
+  const account = activeSessionKey(session);
+  const sid = normalizeText(session?.sid);
+  if (!account || !sid) return true;
+
+  pruneActiveSessions(now);
+  const entry = activeSessions.get(account);
+  if (!entry) return true;
+  return entry.sid === sid;
+}
+
+export function readAuthSession(req) {
+  const session = readSignedAuthSession(req);
+  return session && isActiveAuthSession(session) ? session : null;
 }
 
 /* Định danh phiên dùng làm info cho HKDF khi suy ra khoá mã hoá dữ liệu. Session
@@ -89,15 +119,29 @@ export function getSessionId(session) {
 }
 
 export function setAuthSessionCookie(res, payload, ttlSeconds = DEFAULT_SESSION_TTL_SECONDS) {
-  const token = createSessionToken(
-    { sid: crypto.randomBytes(16).toString("base64url"), ...payload },
-    ttlSeconds,
-  );
+  const session = { sid: crypto.randomBytes(16).toString("base64url"), ...payload };
+  const token = createSessionToken(session, ttlSeconds);
+  const account = activeSessionKey(session);
+  if (account) {
+    activeSessions.set(account, {
+      sid: session.sid,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
+  }
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   res.setHeader(
     "Set-Cookie",
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${ttlSeconds}; HttpOnly; SameSite=Lax${secure}`,
   );
+}
+
+export function clearActiveAuthSession(session) {
+  const account = activeSessionKey(session);
+  const sid = normalizeText(session?.sid);
+  if (!account || !sid) return;
+
+  const entry = activeSessions.get(account);
+  if (entry?.sid === sid) activeSessions.delete(account);
 }
 
 export function clearAuthSessionCookie(res) {
@@ -134,8 +178,19 @@ export function setSameOriginCors(req, res, methods = "GET, OPTIONS") {
 }
 
 export function requireAuth(req, res) {
-  const session = readAuthSession(req);
-  if (session) return session;
-  res.status(401).json({ error: "Unauthorized" });
-  return null;
+  const session = readSignedAuthSession(req);
+  if (!session) {
+    res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+    return null;
+  }
+
+  if (!isActiveAuthSession(session)) {
+    res.status(401).json({
+      error: "Phiên đăng nhập đã bị thay thế bởi lần đăng nhập mới hơn.",
+      code: "SESSION_REPLACED",
+    });
+    return null;
+  }
+
+  return session;
 }

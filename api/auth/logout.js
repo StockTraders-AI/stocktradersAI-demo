@@ -1,9 +1,16 @@
-import { clearAuthSessionCookie, setSameOriginCors } from "../_auth.js";
+import {
+  clearActiveAuthSession,
+  clearAuthSessionCookie,
+  readSignedAuthSession,
+  setSameOriginCors,
+} from "../_auth.js";
 
 export default async function handler(req, res) {
   if (setSameOriginCors(req, res, "POST, OPTIONS")) return;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  const session = readSignedAuthSession(req);
+  if (session) clearActiveAuthSession(session);
   clearAuthSessionCookie(res);
   return res.status(200).json({ ok: true });
 }
