@@ -9,7 +9,7 @@ import { AUTH_SESSION_INVALID_EVENT, clearSecureSession, validateAuthSession } f
 const LEGACY_AUTH_SESSION_KEY = "st-auth-demo-session";
 const AUTH_USER_KEY = "st-auth-user-session";
 const AUTH_REVISION_KEY = "st-auth-session-revision";
-const AUTH_CHECK_INTERVAL_MS = 5_000;
+const AUTH_CHECK_INTERVAL_MS = 15_000;
 const LOGIN_PATH = "/dang-nhap";
 const AUTH_PATHS = new Set([LOGIN_PATH, "/dang-ky", "/quen-mat-khau"]);
 
