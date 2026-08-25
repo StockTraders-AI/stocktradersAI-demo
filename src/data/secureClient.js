@@ -259,6 +259,13 @@ export async function secureFetchRaw(url, options = {}) {
   return { response, readJson: () => readResponse(secureUrl, method, response) };
 }
 
+/* Ping chủ động để phát hiện phiên đã bị thay thế ngay cả khi màn hình đang
+ * không gọi API dữ liệu nào. */
+export async function validateAuthSession() {
+  await ensureKey({ force: true });
+  return true;
+}
+
 /* Gọi khi đăng xuất để khoá không còn nằm trong bộ nhớ. */
 export function clearSecureSession() {
   keyCache.clear();
