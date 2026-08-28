@@ -530,24 +530,30 @@ export async function upsertWaveBottomRows(rows, { cacheKey = "latest", source =
 
 export async function getWaveBottomRowsFromDb(cacheKey = "") {
   const database = await initStockDataDb();
-  let resolvedCacheKey = cacheKey;
-  if (!resolvedCacheKey) {
-    const latest = database.prepare(`
-      SELECT cache_key FROM wave_bottom_confirm_pairs
-      GROUP BY cache_key
-      ORDER BY MAX(updated_at) DESC
-      LIMIT 1
-    `).get();
-    resolvedCacheKey = latest?.cache_key || "";
+
+  if (cacheKey) {
+    // Đọc đúng 1 slot cụ thể — dùng để kiểm tra slot đó đã được tính chưa.
+    const records = database.prepare(`
+      SELECT row_json FROM wave_bottom_confirm_pairs
+      WHERE cache_key = ?
+      ORDER BY row_index ASC, confirm_wave_date ASC
+    `).all(cacheKey);
+    if (!records.length) return null;
+    return records.map((record) => parseJson(record.row_json, null)).filter(Boolean);
   }
 
-  if (!resolvedCacheKey) return null;
-
+  // Không truyền cacheKey => trả về toàn bộ lịch sử đã biết (mọi cache_key),
+  // mỗi chân sóng (pair_key) chỉ lấy đúng 1 bản ghi mới nhất của nó.
+  // Tránh việc 1 lần refresh chỉ tính 5 pairs gần nhất làm "mất" các pair cũ
+  // vốn nằm ở cache_key khác (vẫn còn nguyên trong DB, chỉ không bị đọc tới).
   const records = database.prepare(`
-    SELECT row_json FROM wave_bottom_confirm_pairs
-    WHERE cache_key = ?
-    ORDER BY row_index ASC, confirm_wave_date ASC
-  `).all(resolvedCacheKey);
+    SELECT row_json FROM wave_bottom_confirm_pairs w
+    WHERE updated_at = (
+      SELECT MAX(w2.updated_at) FROM wave_bottom_confirm_pairs w2
+      WHERE w2.pair_key = w.pair_key
+    )
+    ORDER BY confirm_wave_date ASC
+  `).all();
 
   if (!records.length) return null;
   return records.map((record) => parseJson(record.row_json, null)).filter(Boolean);

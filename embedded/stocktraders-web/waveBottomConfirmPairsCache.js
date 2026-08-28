@@ -24,6 +24,7 @@ const REFRESH_SCHEDULE = [
   { id: "1000", label: "10:00", minutes: 10 * 60 },
 ];
 const PAIRS_REQUEST = { count: 4 };
+const WAVE_BOTTOM_RECALC_COUNT = 5;
 const VNINDEX_TRADE_REAL_REQUEST = {
   TotalTradeRealRequest: { account: "stocktraders2013" },
 };
@@ -229,18 +230,22 @@ function setMemoryCache(payload, cacheKey = getCacheKey()) {
 }
 
 async function writeDailyCache(rows, cacheKey = getCacheKey()) {
-  const payload = {
-    success: true,
-    cacheVersion: CACHE_VERSION,
-    cacheKey,
-    cachedAt: new Date().toISOString(),
-    rows,
-  };
   await upsertWaveBottomRows(rows, {
     cacheKey,
     source: "api",
     calcVersion: String(CACHE_VERSION),
   });
+
+  // Trả về toàn bộ lịch sử đã merge (không chỉ 5 dòng vừa tính) để response
+  // ngay sau khi refresh khớp với dữ liệu khi load trang lại từ đầu.
+  const mergedRows = (await getWaveBottomRowsFromDb()) || rows;
+  const payload = {
+    success: true,
+    cacheVersion: CACHE_VERSION,
+    cacheKey,
+    cachedAt: new Date().toISOString(),
+    rows: mergedRows,
+  };
   return setMemoryCache(payload, cacheKey);
 }
 
@@ -831,7 +836,8 @@ function buildWaveBottomRows(
       (a, b) =>
         rowDateValue(String(a?.confirm_wave_date || "")) -
         rowDateValue(String(b?.confirm_wave_date || "")),
-    );
+    )
+    .slice(-WAVE_BOTTOM_RECALC_COUNT);
 
   return pairs.map((pair) => {
     const confirmDate = String(pair.confirm_wave_date || "");

@@ -69,7 +69,19 @@ const DATA_ROUTE_BY_PATH = new Map([
   ],
   [
     "/api/market/portfolio-chat",
-    { code: "r09", securePath: "/api/portfolio-chat" },
+    { code: "r36", securePath: "/api/market-portfolio-chat" },
+  ],
+  [
+    "/api/market/ai-key",
+    { code: "r37", securePath: "/api/market-ai-key" },
+  ],
+  [
+    "/api/market/ai-key-status",
+    { code: "r38", securePath: "/api/market-ai-key-status" },
+  ],
+  [
+    "/api/market/ai-key-delete",
+    { code: "r39", securePath: "/api/market-ai-key-delete" },
   ],
   ["/api/market/stock-noti", { code: "r34", securePath: "/api/stock-noti" }],
   [

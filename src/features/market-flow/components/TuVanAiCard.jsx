@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDataPostWithClientCache } from "../../../data/requestCache";
+import AiKeySettings from "./AiKeySettings.jsx";
 
 const PORTFOLIO_CHAT_URL =
   import.meta.env.VITE_PORTFOLIO_CHAT_URL || "/api/market/portfolio-chat";
@@ -85,7 +86,7 @@ function isAbortError(error) {
   );
 }
 
-function MsgBubble({ role, text, isPanel }) {
+function MsgBubble({ role, text, usage, isPanel }) {
   const cls = isPanel
     ? { wrap: "pmsg", bub: "pbubble", av: "pav" }
     : { wrap: "msg", bub: "bubble", av: "av" };
@@ -95,7 +96,14 @@ function MsgBubble({ role, text, isPanel }) {
   return (
     <div className={`${cls.wrap} ${role}`}>
       <div className={cls.av}>{role === "ai" ? "AI" : "B\u1ea1n"}</div>
-      <div className={cls.bub} dangerouslySetInnerHTML={{ __html: html }} />
+      <div>
+        <div className={cls.bub} dangerouslySetInnerHTML={{ __html: html }} />
+        {role === "ai" && usage?.total_tokens ? (
+          <div style={{ fontSize: 9, color: "var(--t3,#5B6478)", opacity: 0.7, marginTop: 3, textAlign: "right" }}>
+            {usage.total_tokens} token ({usage.input_tokens} in / {usage.output_tokens} out)
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -124,6 +132,7 @@ export default function TuVanAiCard() {
   const [panelVal, setPanelVal] = useState("");
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [keySettingsOpen, setKeySettingsOpen] = useState(false);
   const [panelMsgs, setPanelMsgs] = useState([]);
   const [panelSynced, setPanelSynced] = useState(false);
   const [conversationId, setConversationId] = useState(DEFAULT_CONVERSATION_ID);
@@ -195,6 +204,7 @@ export default function TuVanAiCard() {
       return {
         answer: typeof data.answer === "string" ? data.answer : "",
         conversationId: data.conversation_id,
+        usage: data.usage || null,
       };
     },
     [conversationId],
@@ -221,7 +231,7 @@ export default function TuVanAiCard() {
       setChatMessages(nextMsgs, { forcePanel: isPanel, unsyncPanel: !isPanel });
       setLoading(true);
 
-      const finishWith = (messageText) => {
+      const finishWith = (messageText, usage = null) => {
         if (
           controller.signal.aborted ||
           activeRequestRef.current.id !== requestId
@@ -231,7 +241,7 @@ export default function TuVanAiCard() {
           ...msgsDataRef.current.filter(
             (m) => !(m.role === "typing" && m.requestId === requestId),
           ),
-          { role: "ai", text: messageText },
+          { role: "ai", text: messageText, usage },
         ];
         setChatMessages(doneMsgs, { forcePanel: isPanel });
       };
@@ -244,7 +254,7 @@ export default function TuVanAiCard() {
         )
           return;
         if (result.conversationId) setConversationId(result.conversationId);
-        finishWith(result.answer);
+        finishWith(result.answer, result.usage);
       } catch (error) {
         if (
           controller.signal.aborted ||
@@ -343,6 +353,13 @@ export default function TuVanAiCard() {
             </div>
             <button
               className="dm-expand-btn"
+              onClick={() => setKeySettingsOpen(true)}
+              title="Cài đặt API key"
+            >
+              <span className="dm-expand-ic">⚙</span>
+            </button>
+            <button
+              className="dm-expand-btn"
               onClick={openPanel}
               title={TEXT.expand}
             >
@@ -357,7 +374,7 @@ export default function TuVanAiCard() {
             m.role === "typing" ? (
               <TypingIndicator key={i} isPanel={false} />
             ) : (
-              <MsgBubble key={i} role={m.role} text={m.text} isPanel={false} />
+              <MsgBubble key={i} role={m.role} text={m.text} usage={m.usage} isPanel={false} />
             ),
           )}
         </div>
@@ -579,7 +596,7 @@ export default function TuVanAiCard() {
                 m.role === "typing" ? (
                   <TypingIndicator key={i} isPanel />
                 ) : (
-                  <MsgBubble key={i} role={m.role} text={m.text} isPanel />
+                  <MsgBubble key={i} role={m.role} text={m.text} usage={m.usage} isPanel />
                 ),
               )}
             </div>
@@ -673,6 +690,10 @@ export default function TuVanAiCard() {
             </div>
           </div>
         </>
+      )}
+
+      {keySettingsOpen && (
+        <AiKeySettings userId={USER_ID} onClose={() => setKeySettingsOpen(false)} />
       )}
     </>
   );

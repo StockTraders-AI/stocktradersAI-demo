@@ -760,6 +760,11 @@ function uniqueAnswerTickers(replies) {
     .join(", ");
 }
 
+function mentionedPortfolioPosition(question, portfolioPositions) {
+  const tokens = String(question || "").toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  return portfolioPositions.find((position) => tokens.includes(String(position.ticker || "").toUpperCase())) || null;
+}
+
 function uniquePortfolioTickerAnswer(replies) {
   return replies
     .map((reply) => {
@@ -771,13 +776,14 @@ function uniquePortfolioTickerAnswer(replies) {
     .join(", ");
 }
 
-async function requestPortfolioChat({ question, userId, conversationId, position = null }) {
+async function requestPortfolioChat({ question, userId, conversationId, position = null, positions = null }) {
   const body = {
     question,
     user_id: userId,
     conversation_id: conversationId,
   };
   if (position) body.portfolio = { position };
+  else if (positions && positions.length) body.portfolio = { positions };
   const data = await fetchDataPostWithClientCache(PORTFOLIO_CHAT_API_URL, body);
   const answer = typeof data?.answer === "string" ? data.answer.trim() : "";
   return { answer, position, conversationId: data?.conversation_id };
@@ -881,11 +887,13 @@ function PortfolioBox({ rows, asOfDate }) {
         return;
       }
 
+      const mentionedPosition = mentionedPortfolioPosition(question, portfolioPositions);
       const reply = await requestPortfolioChat({
         question: apiQuestion,
         userId: "u1",
-        conversationId,
-        position: portfolioPositions[0],
+        conversationId: mentionedPosition ? `${conversationId}-${mentionedPosition.ticker}` : conversationId,
+        position: null,
+        positions: mentionedPosition ? null : portfolioPositions,
       });
       if (!reply.answer) throw new Error("API không trả về answer");
       if (reply.conversationId) setConversationId(reply.conversationId);

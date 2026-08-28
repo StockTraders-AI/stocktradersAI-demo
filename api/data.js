@@ -21,6 +21,12 @@ import stockWaveHandler from "./stock-wave.js";
 import totalTradeHandler from "./total-trade.js";
 import totalTradeRealHandler from "./total-trade-real.js";
 import waveBottomConfirmPairsHandler from "./wave-bottom-confirm-pairs.js";
+import { handleMarketPortfolioChat } from "../server/do-song/marketPortfolioChatApi.js";
+import {
+  handleAiKeySave as handleMarketAiKeySave,
+  handleAiKeyStatus as handleMarketAiKeyStatus,
+  handleAiKeyDelete as handleMarketAiKeyDelete,
+} from "../server/do-song/aiKeyApi.js";
 import { handleDoSongRecommendation } from "../embedded/stocktraders-web/doSongRecommendationDb.js";
 import {
   handleStockWaveCurrent as doSongStockWaveCurrentHandler,
@@ -52,6 +58,22 @@ function doSongStockNotiDataHandler(req, res) {
   return Promise.resolve(doSongStockNotiHandler(req, res, req.url)).finally(() => {
     req.method = method;
   });
+}
+
+function marketPortfolioChatDataHandler(req, res) {
+  return handleMarketPortfolioChat(req, res, req.url);
+}
+
+function marketAiKeySaveDataHandler(req, res) {
+  return handleMarketAiKeySave(req, res, req.url);
+}
+
+function marketAiKeyStatusDataHandler(req, res) {
+  return handleMarketAiKeyStatus(req, res, req.url);
+}
+
+function marketAiKeyDeleteDataHandler(req, res) {
+  return handleMarketAiKeyDelete(req, res, req.url);
 }
 
 function conditionSignalLatestGetHandler(req, res) {
@@ -153,6 +175,10 @@ const ROUTES = new Map([
   ["market-stock-wave-tickers", { path: "/api/stock-wave-tickers", handler: secureCaptured(doSongStockWaveTickersHandler) }],
   ["market-stock-noti", { path: "/api/stock-noti", handler: secureCaptured(doSongStockNotiDataHandler) }],
   ["market-wave-bottom-confirm-pairs", { path: "/api/wave-bottom-confirm-pairs", handler: secureCaptured(doSongWaveBottomConfirmPairsHandler) }],
+  ["market-portfolio-chat", { path: "/api/market-portfolio-chat", handler: secureCaptured(marketPortfolioChatDataHandler) }],
+  ["market-ai-key", { path: "/api/market-ai-key", handler: secureCaptured(marketAiKeySaveDataHandler) }],
+  ["market-ai-key-status", { path: "/api/market-ai-key-status", handler: secureCaptured(marketAiKeyStatusDataHandler) }],
+  ["market-ai-key-delete", { path: "/api/market-ai-key-delete", handler: secureCaptured(marketAiKeyDeleteDataHandler) }],
 ]);
 
 const ROUTE_CODES = new Map([
@@ -183,6 +209,10 @@ const ROUTE_CODES = new Map([
   ["r33", "market-stock-wave-tickers"],
   ["r34", "market-stock-noti"],
   ["r35", "market-wave-bottom-confirm-pairs"],
+  ["r36", "market-portfolio-chat"],
+  ["r37", "market-ai-key"],
+  ["r38", "market-ai-key-status"],
+  ["r39", "market-ai-key-delete"],
 ]);
 
 function sendJson(res, statusCode, payload) {

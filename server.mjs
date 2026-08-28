@@ -41,6 +41,9 @@ import marketConditionSignalLatest from "./api/market/condition-signal-latest.js
 import marketDoSongAdvice from "./api/market/do-song-advice.js";
 import marketDoSongRecommendation from "./api/market/do-song-recommendation.js";
 import marketPortfolioChat from "./api/market/portfolio-chat.js";
+import marketAiKey from "./api/market/ai-key.js";
+import marketAiKeyStatus from "./api/market/ai-key-status.js";
+import marketAiKeyDelete from "./api/market/ai-key-delete.js";
 import marketStockNoti from "./api/market/stock-noti.js";
 import marketStockWaveCurrent from "./api/market/stock-wave-current.js";
 import marketStockWaveHistory from "./api/market/stock-wave-history.js";
@@ -124,6 +127,9 @@ const apiHandlers = new Map([
   ["/api/market/do-song-advice", marketDoSongAdvice],
   ["/api/market/do-song-recommendation", marketDoSongRecommendation],
   ["/api/market/portfolio-chat", marketPortfolioChat],
+  ["/api/market/ai-key", marketAiKey],
+  ["/api/market/ai-key-status", marketAiKeyStatus],
+  ["/api/market/ai-key-delete", marketAiKeyDelete],
   ["/api/market/stock-noti", marketStockNoti],
   ["/api/market/stock-wave-current", marketStockWaveCurrent],
   ["/api/market/stock-wave-history", marketStockWaveHistory],

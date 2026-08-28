@@ -1,8 +1,7 @@
-import { danhGiaDoSong } from "./src/utils/doSongEngine.js";
+import { danhGiaDoSong, CAU_HINH } from "./src/utils/doSongEngine.js";
 import {
   getAllStockWaveRowsFromDb,
   getAllStockWaveSummaryRowsFromDb,
-  getWaveBottomRowsFromDb,
   getRecommendationDailyFromDb,
   getRecommendationTemplateFromDb,
   getRecommendationTemplatesFromDb,
@@ -16,6 +15,7 @@ import { sendJson } from "./stockWaveHistoryCache.js";
 export const RECOMMENDATION_PROMPT_VERSION = "dosong-template-v1";
 export const RECOMMENDATION_STATES = ["S0", "S1", "S4", "S5", "S6", "S7", "SN", "WAITBUY", "BUY"];
 const DISABLED_DOSONG_STATES = new Set(["s2", "s3"]);
+const WAITBUY_CHO_MUA_THRESHOLD = 60;
 const CHATWEB_API_BASE_URL = (process.env.CHATWEB_API_BASE_URL || "http://112.213.91.235:8000").replace(/\/$/, "");
 const recommendationBuildRequests = new Map();
 
@@ -79,14 +79,6 @@ function toNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
-function getFirstDateField(row, keys) {
-  for (const key of keys) {
-    const value = normalizeDateKey(row?.[key]);
-    if (value) return value;
-  }
-  return "";
-}
-
 function getRowDate(row) {
   return normalizeDateKey(row?.rawDate || row?.date || row?.tradingDate || row?.ngay || row?.tradeDate);
 }
@@ -119,32 +111,12 @@ function toDoSongInput(row) {
   };
 }
 
-function getSpecialState(selectedDate, bottomRows, waveDates) {
-  const confirmRows = (Array.isArray(bottomRows) ? bottomRows : [])
-    .map((row) => ({ row, confirmDate: getFirstDateField(row, ["confirm_wave_date", "confirmDate", "date"]) }))
-    .filter((item) => item.confirmDate);
-
-  if (confirmRows.some((item) => item.confirmDate === selectedDate)) return "BUY";
-
-  const explicitProbeKeys = [
-    "probe_wave_date",
-    "waitbuy_wave_date",
-    "prepare_wave_date",
-    "bottom_wave_date",
-    "detect_wave_date",
-    "scan_wave_date",
-    "early_wave_date",
-    "pre_confirm_wave_date",
-  ];
-  if (confirmRows.some((item) => getFirstDateField(item.row, explicitProbeKeys) === selectedDate)) return "WAITBUY";
-
-  const sortedWaveDates = [...new Set((waveDates || []).filter(Boolean))].sort();
-  const selectedIsPreviousConfirmSession = confirmRows.some((item) => {
-    const previousDate = sortedWaveDates.filter((date) => date < item.confirmDate).pop() || "";
-    return previousDate === selectedDate;
-  });
-
-  return selectedIsPreviousConfirmSession ? "WAITBUY" : "";
+function getSpecialState(input) {
+  const choMua = Number(input?.choMua) || 0;
+  const mua = Number(input?.mua) || 0;
+  if (mua >= CAU_HINH.NGUONG_XAC_NHAN) return "BUY";
+  if (choMua >= WAITBUY_CHO_MUA_THRESHOLD) return "WAITBUY";
+  return "";
 }
 
 function doSongSignalKeys(engine) {
@@ -321,10 +293,7 @@ export async function seedRecommendationTemplatesFromChatAi({ overwrite = false 
 }
 
 export async function buildRecommendationDailyStates({ from = "2025-01-01", to = "" } = {}) {
-  const [waveRows, bottomRows] = await Promise.all([
-    getAllStockWaveRowsFromDb(),
-    getWaveBottomRowsFromDb(),
-  ]);
+  const waveRows = await getAllStockWaveRowsFromDb();
   const waveInputs = (Array.isArray(waveRows) ? waveRows : [])
     .map((row) => ({ row, input: toDoSongInput(row) }))
     .filter((item) => item.input)
@@ -340,7 +309,7 @@ export async function buildRecommendationDailyStates({ from = "2025-01-01", to =
   for (const item of waveInputs) {
     const dateKey = item.input.date;
     const engine = danhGiaDoSong({ hienTai: item.input, phienTruoc, phaTruoc });
-    const specialState = getSpecialState(dateKey, bottomRows || [], waveDates);
+    const specialState = getSpecialState(item.input);
     const rawState = String(engine?.maTrangThai || "SN").toUpperCase();
     const disabled = DISABLED_DOSONG_STATES.has(rawState.toLowerCase());
     const usedEngine = disabled && nearestEnabledEngine ? nearestEnabledEngine : engine;
@@ -381,7 +350,7 @@ export async function buildRecommendationDailyStates({ from = "2025-01-01", to =
   return states;
 }
 
-function buildRealtimeRecommendationState(currentRow, summaryRows, bottomRows) {
+function buildRealtimeRecommendationState(currentRow, summaryRows) {
   const currentInput = toDoSongInput(currentRow);
   if (!currentInput?.date) return null;
   const dateKey = currentInput.date;
@@ -403,7 +372,7 @@ function buildRealtimeRecommendationState(currentRow, summaryRows, bottomRows) {
     const hienTai = toDoSongInput(row);
     if (!hienTai) continue;
     const engine = danhGiaDoSong({ hienTai, phienTruoc, phaTruoc });
-    const specialState = getSpecialState(hienTai.date, bottomRows || [], waveDates);
+    const specialState = getSpecialState(hienTai);
     const rawState = String(engine?.maTrangThai || "SN").toUpperCase();
     const disabled = DISABLED_DOSONG_STATES.has(rawState.toLowerCase());
     const usedEngine = disabled && nearestEnabledEngine ? nearestEnabledEngine : engine;
@@ -477,11 +446,8 @@ export async function upsertRealtimeChatAiRecommendation(wavePayload, { promptVe
   const dateKey = getRowDate(currentRow);
   if (!dateKey) return { saved: false, reason: "date_missing" };
 
-  const [summaryRows, bottomRows] = await Promise.all([
-    getAllStockWaveSummaryRowsFromDb(),
-    getWaveBottomRowsFromDb(),
-  ]);
-  const state = buildRealtimeRecommendationState(currentRow, summaryRows, bottomRows);
+  const summaryRows = await getAllStockWaveSummaryRowsFromDb();
+  const state = buildRealtimeRecommendationState(currentRow, summaryRows);
   if (!state) return { saved: false, reason: "state_missing", dateKey };
 
   const signal = await fetchRealtimeChatAiSignal(state);
