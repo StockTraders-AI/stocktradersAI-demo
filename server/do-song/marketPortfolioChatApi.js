@@ -87,12 +87,7 @@ export async function handleMarketPortfolioChat(req, res, rawUrl) {
       withTimeout({
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: userId,
-          message: question,
-          provider: NEW_CHAT_PROVIDER,
-          history: Array.isArray(body.history) ? body.history : [],
-        }),
+        body: JSON.stringify({ user_id: userId, message: question, provider: NEW_CHAT_PROVIDER }),
       }),
     );
 

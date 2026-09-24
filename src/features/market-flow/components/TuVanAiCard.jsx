@@ -196,13 +196,9 @@ export default function TuVanAiCard() {
 
   const fetchReply = useCallback(
     async (q, signal) => {
-      const history = msgsDataRef.current
-        .filter((m) => (m.role === "user" || m.role === "ai") && String(m.text || "").trim())
-        .slice(-8)
-        .map((m) => ({ role: m.role, text: m.text }));
       const data = await fetchDataPostWithClientCache(
         PORTFOLIO_CHAT_URL,
-        { question: q, user_id: USER_ID, conversation_id: conversationId, history },
+        { question: q, user_id: USER_ID, conversation_id: conversationId },
         { force: true, options: { signal } },
       );
       return {
@@ -276,11 +272,6 @@ export default function TuVanAiCard() {
     },
     [fetchReply, setChatMessages],
   );
-
-  const startNewChat = useCallback(() => {
-    setChatMessages([], { forcePanel: true });
-    setConversationId(DEFAULT_CONVERSATION_ID);
-  }, [setChatMessages]);
 
   const openPanel = useCallback(() => {
     if (!panelSyncedRef.current) {
@@ -360,13 +351,6 @@ export default function TuVanAiCard() {
               <span className="dm-ready-dot" />
               {TEXT.ready}
             </div>
-            <button
-              className="dm-expand-btn"
-              onClick={startNewChat}
-              title="Cuộc trò chuyện mới"
-            >
-              <span className="dm-expand-ic">＋</span>
-            </button>
             <button
               className="dm-expand-btn"
               onClick={() => setKeySettingsOpen(true)}
